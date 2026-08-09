@@ -51,8 +51,10 @@ Balances derive from posted/reconciled, non-deleted movements. Transfer movement
 | Attachment | Owner/tracker/transaction, type/size/checksum/private key/upload state |
 | CurrencyRate | Base/quote decimal rate, source, effective/fetched-or-entered timestamps |
 | ShortcutCredential | User/tracker scope, prefix/digest/scopes/expiry/use/revocation |
-| IdempotencyRecord | Principal/key/fingerprint/response reference/expiry |
-| SyncChange | Authorized sequence, entity/id/operation/version/timestamp |
+| SyncOperationReceipt | User and optional device session, operation UUID, SHA-256 request fingerprint, entity reference, safe result, 120-day expiry; unique `(user, operation_id)` |
+| SyncChange | Global sequence, tracker and optional target-user scope, entity/id, upsert/delete operation, version, timestamp |
+| SyncDeviceState | One device session, latest acknowledged sequence/time |
+| SyncRetentionState | Singleton global sequence floor; older cursors require bootstrap |
 | AuditEvent | Actor/tracker/action/target/request ID/allow-listed safe metadata |
 | ExportJob | Requester/filter/format/state/private key/expiry/safe error |
 

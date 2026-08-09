@@ -133,3 +133,43 @@ Expand the native iOS scaffold into the Milestone 3 local-first foundation: comp
 ### Next exact action
 
 Run `.github/workflows/ios-ci.yml` on a repository with hosted macOS. Fix any compiler, SwiftFormat, SwiftData, or simulator failure before marking Milestone 3 accepted. In parallel, begin Milestone 4’s Linux-verifiable server sync change log and push/pull/bootstrap APIs without claiming the pending Apple checks.
+
+## 2026-08-09 — Milestone 4 server synchronization started
+
+### Acceptance checks declared before implementation
+
+- Ordered dependent offline operations are processed independently and remain retry-safe per user and operation UUID.
+- A repeated operation/fingerprint returns the prior result without another domain write; the same operation UUID with a different fingerprint returns a structured conflict.
+- Stale base versions preserve the proposed payload and return the current server representation without blocking sibling operations.
+- Pull cursors are opaque, signed, user-bound, bounded, and retention-aware; pages include tombstones and advance only through returned sequence rows.
+- Bootstrap returns a consistent current authorized snapshot and a cursor; acknowledgements are stored only for the authenticated device session.
+- Removing a member emits a targeted server-authoritative access event while preventing that user from pulling later tracker changes.
+
+### Next exact action
+
+Add the synchronization app/models/signals, strict wire serializers, operation dispatcher, presenters, endpoints, migrations, and backend tests; then regenerate OpenAPI and run the complete backend gate before wiring the iOS synchronization actor.
+
+### Implemented server slice
+
+- Added tracker/target-user scoped monotonic `SyncChange` references emitted inside root model transactions, plus current-state presenters for trackers, memberships, accounts, categories, tags, merchants, transactions, nested movements, allocations, and tombstones.
+- Added signed version-1 cursors bound to the authenticated user, bounded authorization-filtered pull pages, full current bootstrap, device-session acknowledgement, a 90-day global retention floor, and daily Celery cleanup.
+- Added strict tracker/account/category/transaction mutation envelopes. Push keeps client UUIDs, requires ascending local sequences, processes each operation in its own savepoint, and stores a user-scoped fingerprint/result receipt for 120 days.
+- Exact replay returns duplicate without another write. A changed fingerprint conflicts. Stale versions return current server state plus the retained proposed payload while unrelated sibling operations proceed.
+- Membership changes target the affected user. A removed user receives the server-authoritative removal event but later tracker changes are filtered out.
+- Replaced syncable root bulk writes in tracker seeding/category merge with ordinary saves so they cannot bypass the change log.
+
+### Commands and outcomes
+
+- `pytest backend/tests/test_sync.py -q -x`: **8 passed locally**.
+- `make schema`: regenerated and validated the committed sync API contract without warnings.
+- `make check`: **passed locally** — 46 tests, 80.71% branch-aware coverage, Ruff, Django system checks, strict mypy over 66 source files, OpenAPI validation, and schema freshness.
+- `manage.py makemigrations --check --dry-run`: **no changes detected**.
+
+### Verification boundary
+
+- SQLite/Linux service behavior, authorization filtering, replay receipts, conflicts, cursor signing/expiry, tombstones, bootstrap, acknowledgement, and cleanup: **verified locally**.
+- PostgreSQL row-lock/concurrent duplicate races, Redis/Celery Beat execution, Docker networking, and hosted CI: **not yet verified** because Docker/remote runners are unavailable here.
+
+### Next exact action
+
+Checkpoint the verified server slice, then implement the iOS synchronization actor: snake-case wire encoding, never-synced mutation coalescing, access-token refresh, ordered push result application, retry classification/backoff, atomic pull pages, conflict persistence, bootstrap staging, and diagnostics.

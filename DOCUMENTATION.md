@@ -2,7 +2,7 @@
 
 ## Current state
 
-Milestones 0–2 are complete at the locally verifiable tier. Milestone 3 native source/tests are implemented and its Linux static privacy, localization, YAML/plist, whitespace, and syntax-tree checks pass; Swift/Xcode compilation is still unverified. Docker/PostgreSQL integration and hosted CI remain environmental checks. No production system has been contacted.
+Milestones 0–2 and the Milestone 4 server synchronization slice are complete at the locally verifiable tier. Milestone 3 native source/tests are implemented and its Linux static privacy, localization, YAML/plist, whitespace, and syntax-tree checks pass; Swift/Xcode compilation is still unverified. Docker/PostgreSQL integration and hosted CI remain environmental checks. No production system has been contacted.
 
 ## Verified
 
@@ -11,7 +11,7 @@ Milestones 0–2 are complete at the locally verifiable tier. Milestone 3 native
 - Architecture, trust boundaries, sync semantics, test categories, deployment separation, and stop conditions are documented.
 - Current official documentation still supports the core Wallet-Shortcut/API bridge and warns that Tailscale CLI syntax is version-dependent.
 - `uv.lock`, initial migrations, and the committed OpenAPI schema are reproducible and current.
-- `make check` passes: 38 tests, 82.11% branch-aware coverage, Ruff, strict mypy, Django checks, and OpenAPI validation/freshness.
+- `make check` passes: 46 tests, 80.71% branch-aware coverage, Ruff, strict mypy, Django checks, and OpenAPI validation/freshness.
 - Fresh-database migration checks, Django deployment checks with synthetic secrets, Bandit, `pip-audit`, YAML parsing, localization parity, whitespace checks, and a targeted secret scan pass locally.
 - Owner/admin/editor/viewer APIs, invitation lifecycle, derived balances, exact allocations, transfers/refunds/voids, cross-currency snapshots, revision conflicts, tombstones, category history/merge, and archive/restore flows are locally acceptance-tested.
 - The iOS source now has strict locale-aware minor-unit input, server/user-scoped SwiftData models, atomic CRUD/outbox writes with monotonic ordering, Keychain login, optional app lock, non-destructive store-failure handling, local management screens, and authored unit/UI tests.

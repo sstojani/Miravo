@@ -83,8 +83,14 @@ def merge_category(
         record.version += 1
         record.last_editor = actor
         record.save(update_fields=("version", "last_editor", "updated_at"))
-    Tracker.objects.filter(default_category=source).update(default_category=target)
-    Merchant.objects.filter(default_category=source).update(default_category=target)
+    for affected_tracker in Tracker.objects.select_for_update().filter(default_category=source):
+        affected_tracker.default_category = target
+        affected_tracker.version += 1
+        affected_tracker.save(update_fields=("default_category", "version", "updated_at"))
+    for merchant in Merchant.objects.select_for_update().filter(default_category=source):
+        merchant.default_category = target
+        merchant.version += 1
+        merchant.save(update_fields=("default_category", "version", "updated_at"))
     source.archived_at = timezone.now()
     source.version += 1
     source.save(update_fields=("archived_at", "version", "updated_at"))

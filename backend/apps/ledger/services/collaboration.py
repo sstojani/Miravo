@@ -6,6 +6,7 @@ import secrets
 from dataclasses import dataclass
 from datetime import timedelta
 from typing import Any
+from uuid import UUID
 
 from django.conf import settings
 from django.db import transaction
@@ -20,7 +21,6 @@ from apps.ledger.models import (
     Tracker,
     TrackerInvite,
     TrackerMembership,
-    normalized_label,
 )
 from apps.ledger.permissions import require_tracker_role
 from apps.users.models import User, UserManager
@@ -48,8 +48,16 @@ def request_id(request: Any | None) -> str:
 
 
 @transaction.atomic
-def create_tracker(*, owner: User, request: Any | None = None, **values: Any) -> Tracker:
+def create_tracker(
+    *,
+    owner: User,
+    tracker_id: UUID | None = None,
+    request: Any | None = None,
+    **values: Any,
+) -> Tracker:
     values["base_currency"] = normalize_currency(values.get("base_currency", "ALL"))
+    if tracker_id is not None:
+        values["id"] = tracker_id
     tracker = Tracker.objects.create(owner=owner, **values)
     TrackerMembership.objects.create(
         tracker=tracker,
@@ -58,20 +66,15 @@ def create_tracker(*, owner: User, request: Any | None = None, **values: Any) ->
         state=TrackerMembership.State.ACTIVE,
         joined_at=timezone.now(),
     )
-    Category.objects.bulk_create(
-        [
-            Category(
-                tracker=tracker,
-                kind=kind,
-                name=name,
-                normalized_name=normalized_label(name),
-                icon=icon,
-                color=color,
-                sort_order=index,
-            )
-            for index, (kind, name, icon, color) in enumerate(DEFAULT_CATEGORIES)
-        ]
-    )
+    for index, (kind, name, icon, color) in enumerate(DEFAULT_CATEGORIES):
+        Category.objects.create(
+            tracker=tracker,
+            kind=kind,
+            name=name,
+            icon=icon,
+            color=color,
+            sort_order=index,
+        )
     record_audit_event(
         actor=owner,
         tracker_id=tracker.id,

@@ -19,8 +19,9 @@ Status values: `planned`, `implemented`, `passing-local`, `passing-docker`, `pas
 | iOS store failure | Persistent store is never automatically replaced; blocking recovery state uses only temporary memory | source contract; macOS failure-injection test pending | Preserve a device container and recover | implemented |
 | Accounts | Derived balances, transfer links, cross-currency snapshots | `test_ledger_transactions.py` | Compare ledger totals | passing-local |
 | Transactions | Refund/void/allocation/audit/tombstone/revision semantics | `test_ledger_transactions.py`, `test_taxonomy_and_audit.py` | Offline quick-add scenario | passing-local |
-| Sync | Atomic outbox, duplicate-safe push, paged pull/cursor/tombstones/bootstrap | Milestone 4 server+iOS tests | Airplane-mode/reinstall scenarios | planned |
-| Conflict | Preserve both proposals and independent progress | Milestone 4 concurrent client tests | Two-client review screen | planned |
+| Sync server | Ordered per-operation push, replay/fingerprint safety, signed user-bound cursor, paging/tombstone/bootstrap/ack, retention, revocation filtering | `test_sync.py` (8 tests) | Docker/PostgreSQL concurrency smoke test | passing-local |
+| Sync iOS | Atomic outbox, coalescing of never-synced edits, retry, paged atomic apply, bootstrap staging | Milestone 4 Swift tests | Airplane-mode/reinstall scenarios | planned |
+| Conflict | Server preserves current state and local proposal while siblings progress; client review decisions remain | `test_sync.py` stale edit/receipt test | Two-client review screen | implemented |
 | Shortcut | Scopes, hash, expiry, revoke, throttle, replay, fingerprint conflict | Milestone 6 API tests | Online/queue repeated flush | planned |
 | Budgets | Posted expense only, periods/rollover/history/offline | Milestone 7 backend+iOS tests | Month boundary UI | planned |
 | Recurrence | Month-end/leap/DST/pause/skip/edit/catch-up idempotency | Milestone 7 scheduler tests | Simulated downtime | planned |

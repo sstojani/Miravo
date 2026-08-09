@@ -16,16 +16,19 @@ If step 2 fails, neither entity nor outbox persists. Undo is another auditable l
 
 - One synchronization actor sends bounded batches ordered by the durable local sequence. An immediate edit or tombstone can never sort ahead of its create merely because both share a clock tick.
 - Operations carry independent IDs and base versions. Server processing is transactional per operation and returns accepted, duplicate, rejected, unauthorized, or conflict.
+- Structural envelopes and typed payloads reject unknown fields. A per-user receipt stores the operation fingerprint/result for 120 days; exact replay is safe even after re-login, while a changed fingerprint conflicts.
+- Edits to a never-synchronized local create are coalesced into that create before transport. Server updates/deletes otherwise require an explicit positive base version.
 - Lost responses are retried with identical IDs. Validation/permission/revocation failures stop automatic retry; transient failures use exponential backoff with jitter.
 - Conflicts and permanent failures do not block unrelated operations.
 - Binary attachments use a separate checksum/idempotency queue and never ride in the mutation batch.
 
 ## Pull
 
-- Each device stores a durable opaque cursor.
+- Each device stores a durable opaque cursor signed by the server and bound to that user UUID.
 - After push and on invalidation/manual/foreground triggers, pull bounded change pages.
 - Apply a page—including tombstones—and its next cursor atomically. Never advance a cursor before page commit.
-- Change rows are filtered by current authorization; WebSockets carry only a “data changed” hint.
+- Change rows are filtered by current authorization; membership changes are additionally targeted to the affected user so access removal is delivered. WebSockets carry only a “data changed” hint.
+- Change rows contain references, not duplicate financial payload archives. Each response renders the latest current version, so repeated sequence rows are harmless versioned upserts.
 - Change/tombstone retention begins at 90 days. A cursor older than retention returns a machine-readable bootstrap-required error.
 
 ## Full bootstrap

@@ -418,14 +418,21 @@ def snapshot_transaction(record: Transaction, *, editor: User, reason: str) -> T
 
 @db_transaction.atomic
 def create_financial_transaction(
-    *, data: Mapping[str, Any], actor: User, request: Any | None = None
+    *,
+    data: Mapping[str, Any],
+    actor: User,
+    record_id: UUID | None = None,
+    request: Any | None = None,
 ) -> Transaction:
     parts = _resolve_transaction_parts(data, actor)
-    record = Transaction.objects.create(
+    create_values = {
         **parts.transaction_values,
-        creator=actor,
-        last_editor=actor,
-    )
+        "creator": actor,
+        "last_editor": actor,
+    }
+    if record_id is not None:
+        create_values["id"] = record_id
+    record = Transaction.objects.create(**create_values)
     _create_transaction_children(record, parts)
     record_audit_event(
         actor=actor,
@@ -501,6 +508,31 @@ def tombstone_transaction(
             actor=actor,
             tracker_id=locked.tracker_id,
             action="transaction.deleted",
+            target_type="transaction",
+            target_id=locked.id,
+            request_id=request_id(request),
+        )
+    return locked
+
+
+@db_transaction.atomic
+def restore_transaction(
+    *, record: Transaction, actor: User, base_version: int, request: Any | None = None
+) -> Transaction:
+    require_tracker_role(actor, record.tracker, TrackerMembership.Role.EDITOR)
+    locked = Transaction.objects.select_for_update().get(id=record.id)
+    if locked.version != base_version:
+        raise VersionConflict()
+    if locked.deleted_at is not None:
+        snapshot_transaction(locked, editor=actor, reason="restore")
+        locked.deleted_at = None
+        locked.version += 1
+        locked.last_editor = actor
+        locked.save(update_fields=("deleted_at", "version", "last_editor", "updated_at"))
+        record_audit_event(
+            actor=actor,
+            tracker_id=locked.tracker_id,
+            action="transaction.restored",
             target_type="transaction",
             target_id=locked.id,
             request_id=request_id(request),

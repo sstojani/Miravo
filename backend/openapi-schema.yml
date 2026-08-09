@@ -770,6 +770,99 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/sync/ack:
+    post:
+      operationId: sync_ack_create
+      tags:
+      - sync
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SyncAckRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SyncAckRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SyncAckRequest'
+        required: true
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncAckResponse'
+          description: ''
+  /api/v1/sync/bootstrap:
+    get:
+      operationId: sync_bootstrap_retrieve
+      tags:
+      - sync
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncBootstrapResponse'
+          description: ''
+  /api/v1/sync/pull:
+    get:
+      operationId: sync_pull_retrieve
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+          maxLength: 1024
+      - in: query
+        name: limit
+        schema:
+          type: integer
+          maximum: 500
+          minimum: 1
+          default: 100
+      tags:
+      - sync
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncPullResponse'
+          description: ''
+  /api/v1/sync/push:
+    post:
+      operationId: sync_push_create
+      tags:
+      - sync
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SyncPushRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SyncPushRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SyncPushRequest'
+        required: true
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncPushResponse'
+          description: ''
   /api/v1/tags/:
     get:
       operationId: tags_list
@@ -2005,6 +2098,32 @@ components:
       - reason
       - recorded_version
       - sort_order
+    CommandEnum:
+      enum:
+      - create
+      - update
+      - archive
+      - restore
+      - delete
+      type: string
+      description: |-
+        * `create` - create
+        * `update` - update
+        * `archive` - archive
+        * `restore` - restore
+        * `delete` - delete
+    EntityTypeEnum:
+      enum:
+      - tracker
+      - account
+      - category
+      - transaction
+      type: string
+      description: |-
+        * `tracker` - tracker
+        * `account` - account
+        * `category` - category
+        * `transaction` - transaction
     Invite:
       type: object
       description: Model serializer with strict input-field handling.
@@ -2350,6 +2469,14 @@ components:
       - currency
       - currency_exponent
       - signed_amount_minor
+    OperationEnum:
+      enum:
+      - upsert
+      - delete
+      type: string
+      description: |-
+        * `upsert` - upsert
+        * `delete` - delete
     PaginatedAccountList:
       type: object
       required:
@@ -2775,20 +2902,198 @@ components:
       description: |-
         * `active` - Active
         * `removed` - Removed
-    StatusEnum:
+    SyncAckRequest:
+      type: object
+      description: Serializer that rejects misspelled or unsupported request fields.
+      properties:
+        cursor:
+          type: string
+          minLength: 1
+          maxLength: 1024
+      required:
+      - cursor
+    SyncAckResponse:
+      type: object
+      properties:
+        protocol_version:
+          type: integer
+        cursor:
+          type: string
+        acknowledged_at:
+          type: string
+          format: date-time
+      required:
+      - acknowledged_at
+      - cursor
+      - protocol_version
+    SyncBootstrapResponse:
+      type: object
+      properties:
+        protocol_version:
+          type: integer
+        generated_at:
+          type: string
+          format: date-time
+        cursor:
+          type: string
+        data: {}
+      required:
+      - cursor
+      - data
+      - generated_at
+      - protocol_version
+    SyncChangeOutput:
+      type: object
+      properties:
+        sequence:
+          type: integer
+        entity_type:
+          type: string
+        entity_id:
+          type: string
+          format: uuid
+        tracker_id:
+          type: string
+          format: uuid
+          nullable: true
+        operation:
+          $ref: '#/components/schemas/OperationEnum'
+        version:
+          type: integer
+        changed_at:
+          type: string
+          format: date-time
+        data: {}
+      required:
+      - changed_at
+      - data
+      - entity_id
+      - entity_type
+      - operation
+      - sequence
+      - version
+    SyncOperationRequest:
+      type: object
+      description: Serializer that rejects misspelled or unsupported request fields.
+      properties:
+        operation_id:
+          type: string
+          format: uuid
+        local_sequence:
+          type: integer
+          minimum: 1
+        entity_type:
+          $ref: '#/components/schemas/EntityTypeEnum'
+        entity_id:
+          type: string
+          format: uuid
+        command:
+          $ref: '#/components/schemas/CommandEnum'
+        base_server_version:
+          type: integer
+          minimum: 1
+          nullable: true
+        payload:
+          type: object
+          additionalProperties: {}
+      required:
+      - command
+      - entity_id
+      - entity_type
+      - local_sequence
+      - operation_id
+      - payload
+    SyncOperationResult:
+      type: object
+      properties:
+        operation_id:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/SyncOperationResultStatus'
+        original_status:
+          type: string
+        replayed:
+          type: boolean
+        entity_type:
+          type: string
+        entity_id:
+          type: string
+          format: uuid
+        server_version:
+          type: integer
+          nullable: true
+        representation:
+          nullable: true
+        error:
+          nullable: true
+      required:
+      - entity_id
+      - entity_type
+      - operation_id
+      - status
+    SyncOperationResultStatus:
       enum:
-      - draft
-      - posted
-      - pending
-      - voided
-      - reconciled
+      - accepted
+      - duplicate
+      - rejected
+      - unauthorized
+      - conflict
       type: string
       description: |-
-        * `draft` - Draft
-        * `posted` - Posted
-        * `pending` - Pending
-        * `voided` - Voided
-        * `reconciled` - Reconciled
+        * `accepted` - accepted
+        * `duplicate` - duplicate
+        * `rejected` - rejected
+        * `unauthorized` - unauthorized
+        * `conflict` - conflict
+    SyncPullResponse:
+      type: object
+      properties:
+        protocol_version:
+          type: integer
+        cursor:
+          type: string
+        has_more:
+          type: boolean
+        changes:
+          type: array
+          items:
+            $ref: '#/components/schemas/SyncChangeOutput'
+      required:
+      - changes
+      - cursor
+      - has_more
+      - protocol_version
+    SyncPushRequest:
+      type: object
+      description: Serializer that rejects misspelled or unsupported request fields.
+      properties:
+        protocol_version:
+          type: integer
+          maximum: 1
+          minimum: 1
+        operations:
+          type: array
+          items:
+            $ref: '#/components/schemas/SyncOperationRequest'
+      required:
+      - operations
+      - protocol_version
+    SyncPushResponse:
+      type: object
+      properties:
+        protocol_version:
+          type: integer
+        request_id:
+          type: string
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/SyncOperationResult'
+      required:
+      - protocol_version
+      - request_id
+      - results
     Tag:
       type: object
       description: Model serializer with strict input-field handling.
@@ -3016,7 +3321,7 @@ components:
           readOnly: true
         status:
           allOf:
-          - $ref: '#/components/schemas/StatusEnum'
+          - $ref: '#/components/schemas/TransactionStatus'
           readOnly: true
         amount_minor:
           type: integer
@@ -3172,7 +3477,7 @@ components:
           readOnly: true
         status:
           allOf:
-          - $ref: '#/components/schemas/StatusEnum'
+          - $ref: '#/components/schemas/TransactionStatus'
           readOnly: true
         amount_minor:
           type: integer
@@ -3265,6 +3570,20 @@ components:
       - refund_of_id
       - source
       - status
+    TransactionStatus:
+      enum:
+      - draft
+      - posted
+      - pending
+      - voided
+      - reconciled
+      type: string
+      description: |-
+        * `draft` - Draft
+        * `posted` - Posted
+        * `pending` - Pending
+        * `voided` - Voided
+        * `reconciled` - Reconciled
     TransactionWriteRequest:
       type: object
       description: Serializer that rejects misspelled or unsupported request fields.
@@ -3280,7 +3599,7 @@ components:
           default: manual
         status:
           allOf:
-          - $ref: '#/components/schemas/StatusEnum'
+          - $ref: '#/components/schemas/TransactionStatus'
           default: posted
         amount_minor:
           type: integer

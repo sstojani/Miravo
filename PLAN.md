@@ -49,10 +49,14 @@ Acceptance: a clean clone starts the development stack, creates an owner, authen
 
 ## Milestone 4 — Synchronization and collaboration transport
 
-- [ ] Server change log, push/pull/ack/bootstrap, cursor retention, tombstones, and staging recovery.
+- [x] Server change log, signed user-bound cursors, push/pull/ack/bootstrap, 90-day retention, tombstones, and cleanup task.
+- [x] Prove ordered dependent pushes, per-operation transactions, replay safety, mismatched fingerprints, partial rejection, authorization revocation, paging, cursor expiry, and bootstrap in backend tests.
+- [ ] iOS bootstrap staging/reconciliation that preserves unsent mutations.
 - [ ] iOS atomic outbox, ordered batching, retry/backoff, pull paging, attachment queue scaffold, and diagnostics.
 - [ ] Structured conflicts and keep-server/keep-mine/review flows.
 - [ ] Foreground WebSocket invalidation that is optional for correctness.
+
+Server-slice acceptance: an authenticated device can push an ordered offline tracker/account/category/transaction batch; retrying the same operation never creates another financial record; changing a reused operation fingerprint conflicts; one rejected operation does not roll back accepted siblings; pulls are bounded and authorization-filtered; membership removal reaches the removed user without leaking later tracker changes; tombstones and current server representations carry versions; an expired cursor requires bootstrap; and acknowledgements are bound to the authenticated device session.
 
 ## Milestone 5 — Complete core app experience
 

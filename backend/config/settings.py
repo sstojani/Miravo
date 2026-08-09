@@ -97,6 +97,7 @@ INSTALLED_APPS = [
     "apps.users",
     "apps.audit",
     "apps.ledger",
+    "apps.sync",
 ]
 
 MIDDLEWARE = [
@@ -216,9 +217,11 @@ SPECTACULAR_SETTINGS = {
     "COMPONENT_SPLIT_REQUEST": True,
     "ENUM_NAME_OVERRIDES": {
         "TransactionKind": "apps.ledger.models.Transaction.Kind",
+        "TransactionStatus": "apps.ledger.models.Transaction.Status",
         "CategoryKind": "apps.ledger.models.Category.Kind",
         "MembershipRole": "apps.ledger.models.TrackerMembership.Role",
         "InviteRole": "apps.ledger.models.TrackerInvite.Role",
+        "SyncOperationResultStatus": "apps.sync.serializers.SYNC_OPERATION_RESULT_STATUSES",
     },
 }
 
@@ -237,6 +240,25 @@ JWT_ALGORITHM = "HS256"
 JWT_ISSUER = "project-ledger-api"
 JWT_AUDIENCE = "project-ledger-ios"
 
+SYNC_RETENTION_DAYS = env_int("PROJECT_LEDGER_SYNC_RETENTION_DAYS", 90)
+SYNC_OPERATION_RECEIPT_DAYS = env_int("PROJECT_LEDGER_SYNC_OPERATION_RECEIPT_DAYS", 120)
+SYNC_MAX_PUSH_OPERATIONS = env_int("PROJECT_LEDGER_SYNC_MAX_PUSH_OPERATIONS", 100)
+SYNC_DEFAULT_PULL_LIMIT = env_int("PROJECT_LEDGER_SYNC_DEFAULT_PULL_LIMIT", 100)
+SYNC_MAX_PULL_LIMIT = env_int("PROJECT_LEDGER_SYNC_MAX_PULL_LIMIT", 500)
+MINIMUM_SYNC_RETENTION_DAYS = 90
+MAXIMUM_SYNC_PUSH_OPERATIONS = 500
+MAXIMUM_SYNC_PULL_LIMIT = 1000
+if SYNC_RETENTION_DAYS < MINIMUM_SYNC_RETENTION_DAYS:
+    raise ImproperlyConfigured("PROJECT_LEDGER_SYNC_RETENTION_DAYS must be at least 90")
+if SYNC_OPERATION_RECEIPT_DAYS < SYNC_RETENTION_DAYS:
+    raise ImproperlyConfigured(
+        "PROJECT_LEDGER_SYNC_OPERATION_RECEIPT_DAYS must cover the sync retention window"
+    )
+if not 1 <= SYNC_MAX_PUSH_OPERATIONS <= MAXIMUM_SYNC_PUSH_OPERATIONS:
+    raise ImproperlyConfigured("PROJECT_LEDGER_SYNC_MAX_PUSH_OPERATIONS must be between 1 and 500")
+if not 1 <= SYNC_DEFAULT_PULL_LIMIT <= SYNC_MAX_PULL_LIMIT <= MAXIMUM_SYNC_PULL_LIMIT:
+    raise ImproperlyConfigured("Synchronization pull limits are invalid")
+
 CELERY_BROKER_URL = env("PROJECT_LEDGER_CELERY_BROKER_URL", REDIS_URL or "memory://")
 CELERY_RESULT_BACKEND = os.getenv("PROJECT_LEDGER_CELERY_RESULT_BACKEND") or None
 CELERY_TASK_SERIALIZER = "json"
@@ -246,6 +268,12 @@ CELERY_TIMEZONE = "UTC"
 CELERY_TASK_ACKS_LATE = True
 CELERY_TASK_REJECT_ON_WORKER_LOST = True
 CELERY_WORKER_PREFETCH_MULTIPLIER = 1
+CELERY_BEAT_SCHEDULE = {
+    "prune-sync-history": {
+        "task": "apps.sync.tasks.prune_sync_history",
+        "schedule": 86_400.0,
+    }
+}
 
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 USE_X_FORWARDED_HOST = True

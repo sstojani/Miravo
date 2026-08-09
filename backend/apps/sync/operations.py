@@ -1,0 +1,508 @@
+from __future__ import annotations
+
+import hashlib
+import json
+from dataclasses import dataclass
+from datetime import date, datetime, timedelta
+from decimal import Decimal
+from typing import Any, cast
+from uuid import UUID
+
+from django.conf import settings
+from django.core.exceptions import ObjectDoesNotExist
+from django.db import transaction
+from django.utils import timezone
+from rest_framework import serializers, status
+from rest_framework.exceptions import APIException, NotFound
+
+from apps.audit.services import record_audit_event
+from apps.ledger.models import Account, Category, Tracker, TrackerMembership, Transaction
+from apps.ledger.permissions import require_tracker_role
+from apps.ledger.serializers import (
+    AccountSerializer,
+    CategorySerializer,
+    TransactionWriteSerializer,
+)
+from apps.ledger.services.collaboration import create_tracker, request_id
+from apps.ledger.services.taxonomy import snapshot_category
+from apps.ledger.services.transactions import (
+    VersionConflict,
+    create_financial_transaction,
+    replace_financial_transaction,
+    restore_transaction,
+    tombstone_transaction,
+)
+from apps.sync.models import SyncChange, SyncOperationReceipt
+from apps.sync.presenters import json_safe, serialize_instance
+from apps.users.models import DeviceSession, User
+
+
+@dataclass(frozen=True)
+class OperationVersionMismatchError(Exception):
+    base_version: int
+    current: dict[str, Any]
+    proposed: dict[str, Any]
+
+
+def _canonical(value: Any) -> Any:
+    if isinstance(value, UUID):
+        return str(value)
+    if isinstance(value, (datetime, date)):
+        return value.isoformat()
+    if isinstance(value, Decimal):
+        return str(value)
+    if isinstance(value, dict):
+        return {str(key): _canonical(item) for key, item in sorted(value.items())}
+    if isinstance(value, (list, tuple)):
+        return [_canonical(item) for item in value]
+    return value
+
+
+def operation_fingerprint(operation: dict[str, Any]) -> str:
+    material = {
+        "entity_type": operation["entity_type"],
+        "entity_id": operation["entity_id"],
+        "command": operation["command"],
+        "base_server_version": operation.get("base_server_version"),
+        "payload": operation["payload"],
+    }
+    encoded = json.dumps(
+        _canonical(material),
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=True,
+    ).encode()
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _ensure_available(model: type[Any], entity_id: UUID) -> None:
+    if model.objects.filter(id=entity_id).exists():
+        raise serializers.ValidationError(
+            {"entity_id": "This client entity ID is already in use."},
+            code="entity_id_unavailable",
+        )
+
+
+def _require_version(
+    *, instance: Any, expected: int, entity_type: str, actor: User, proposed: dict[str, Any]
+) -> None:
+    if instance.version != expected:
+        current = serialize_instance(entity_type, instance.id, actor) or {
+            "id": str(instance.id),
+            "version": instance.version,
+        }
+        raise OperationVersionMismatchError(expected, current, json_safe(proposed))
+
+
+def _tracker_values(payload: dict[str, Any]) -> dict[str, Any]:
+    return {
+        field: payload[field]
+        for field in ("name", "description", "icon", "color", "base_currency", "sort_order")
+    }
+
+
+def _account_values(payload: dict[str, Any]) -> dict[str, Any]:
+    return {
+        field: payload.get(field)
+        for field in (
+            "tracker_id",
+            "name",
+            "type",
+            "currency",
+            "opening_balance_minor",
+            "opening_date",
+            "color",
+            "icon",
+            "include_in_net_worth",
+            "credit_limit_minor",
+        )
+    }
+
+
+def _category_values(payload: dict[str, Any]) -> dict[str, Any]:
+    return {
+        field: payload.get(field)
+        for field in ("tracker_id", "parent_id", "kind", "name", "icon", "color", "sort_order")
+    }
+
+
+def _transaction_values(payload: dict[str, Any]) -> dict[str, Any]:
+    result: dict[str, Any] = {
+        "tracker_id": payload["tracker_id"],
+        "kind": payload["kind"],
+        "source": payload["source"],
+        "status": payload["status"],
+        "amount_minor": payload["amount_minor"],
+        "currency": payload["currency"],
+        "account_id": payload["account_id"],
+        "account_amount_minor": payload["account_amount_minor"],
+        "category_allocations": [],
+        "merchant": payload.get("merchant", ""),
+        "payee": "",
+        "note": payload.get("note", ""),
+        "occurred_at": payload["occurred_at"],
+    }
+    if payload.get("destination_account_id") is not None:
+        result["destination_account_id"] = payload["destination_account_id"]
+    if payload.get("destination_amount_minor") is not None:
+        result["destination_amount_minor"] = payload["destination_amount_minor"]
+    if payload.get("category_id") is not None:
+        result["category_allocations"] = [
+            {
+                "category_id": payload["category_id"],
+                "amount_minor": payload["amount_minor"],
+            }
+        ]
+    return result
+
+
+def _audit(*, actor: User, instance: Any, action: str, request: Any) -> None:
+    record_audit_event(
+        actor=actor,
+        tracker_id=instance.id if isinstance(instance, Tracker) else instance.tracker_id,
+        action=action,
+        target_type=instance._meta.model_name,
+        target_id=instance.id,
+        request_id=request_id(request),
+    )
+
+
+def _apply_tracker(operation: dict[str, Any], actor: User, request: Any) -> Tracker:
+    entity_id = operation["entity_id"]
+    payload = operation["payload"]
+    command = operation["command"]
+    if command == "create":
+        _ensure_available(Tracker, entity_id)
+        values = _tracker_values(payload)
+        if payload.get("archived_at") is not None:
+            values["archived_at"] = timezone.now()
+        return create_tracker(
+            owner=actor,
+            tracker_id=entity_id,
+            request=request,
+            **values,
+        )
+
+    tracker = Tracker.objects.select_for_update().get(id=entity_id)
+    minimum_role = (
+        TrackerMembership.Role.OWNER if command == "delete" else TrackerMembership.Role.ADMIN
+    )
+    require_tracker_role(actor, tracker, minimum_role)
+    _require_version(
+        instance=tracker,
+        expected=operation["base_server_version"],
+        entity_type=SyncChange.EntityType.TRACKER,
+        actor=actor,
+        proposed=payload,
+    )
+    if command == "update":
+        values = _tracker_values(payload)
+        if values["base_currency"] != tracker.base_currency and tracker.transactions.exists():
+            raise serializers.ValidationError(
+                {"base_currency": "Base currency cannot change after transactions exist."}
+            )
+        for field, value in values.items():
+            setattr(tracker, field, value)
+        tracker.version += 1
+        tracker.save()
+        _audit(actor=actor, instance=tracker, action="tracker.updated", request=request)
+    elif command == "archive" and tracker.archived_at is None:
+        tracker.archived_at = timezone.now()
+        tracker.version += 1
+        tracker.save(update_fields=("archived_at", "version", "updated_at"))
+        _audit(actor=actor, instance=tracker, action="tracker.archived", request=request)
+    elif command == "restore" and tracker.archived_at is not None:
+        tracker.archived_at = None
+        tracker.version += 1
+        tracker.save(update_fields=("archived_at", "version", "updated_at"))
+        _audit(actor=actor, instance=tracker, action="tracker.restored", request=request)
+    elif command == "delete" and tracker.deleted_at is None:
+        now = timezone.now()
+        tracker.archived_at = now
+        tracker.deleted_at = now
+        tracker.version += 1
+        tracker.save(update_fields=("archived_at", "deleted_at", "version", "updated_at"))
+        _audit(actor=actor, instance=tracker, action="tracker.deleted", request=request)
+    return tracker
+
+
+def _apply_account(operation: dict[str, Any], actor: User, request: Any) -> Account:
+    entity_id = operation["entity_id"]
+    payload = operation["payload"]
+    command = operation["command"]
+    values = _account_values(payload)
+    if command == "create":
+        _ensure_available(Account, entity_id)
+        tracker = Tracker.objects.get(id=payload["tracker_id"], deleted_at__isnull=True)
+        require_tracker_role(actor, tracker, TrackerMembership.Role.EDITOR)
+        serializer = AccountSerializer(data=values)
+        serializer.is_valid(raise_exception=True)
+        account = cast(
+            Account,
+            serializer.save(
+                id=entity_id,
+                archived_at=timezone.now() if payload.get("archived_at") is not None else None,
+            ),
+        )
+        _audit(actor=actor, instance=account, action="account.created", request=request)
+        return account
+
+    account = Account.objects.select_related("tracker").select_for_update().get(id=entity_id)
+    require_tracker_role(actor, account.tracker, TrackerMembership.Role.EDITOR)
+    _require_version(
+        instance=account,
+        expected=operation["base_server_version"],
+        entity_type=SyncChange.EntityType.ACCOUNT,
+        actor=actor,
+        proposed=payload,
+    )
+    if payload["tracker_id"] != account.tracker_id:
+        raise serializers.ValidationError({"tracker_id": "An account cannot change tracker."})
+    if command == "update":
+        if payload["currency"] != account.currency and account.movements.exists():
+            raise serializers.ValidationError(
+                {"currency": "Currency cannot change after movements exist."}
+            )
+        serializer = AccountSerializer(account, data=values)
+        serializer.is_valid(raise_exception=True)
+        account = cast(Account, serializer.save(version=account.version + 1))
+        _audit(actor=actor, instance=account, action="account.updated", request=request)
+    elif command in ("archive", "delete") and account.archived_at is None:
+        account.archived_at = timezone.now()
+        account.version += 1
+        account.save(update_fields=("archived_at", "version", "updated_at"))
+        _audit(actor=actor, instance=account, action="account.archived", request=request)
+    elif command == "restore" and account.archived_at is not None:
+        account.archived_at = None
+        account.version += 1
+        account.save(update_fields=("archived_at", "version", "updated_at"))
+        _audit(actor=actor, instance=account, action="account.restored", request=request)
+    return account
+
+
+def _apply_category(operation: dict[str, Any], actor: User, request: Any) -> Category:
+    entity_id = operation["entity_id"]
+    payload = operation["payload"]
+    command = operation["command"]
+    values = _category_values(payload)
+    if command == "create":
+        _ensure_available(Category, entity_id)
+        tracker = Tracker.objects.get(id=payload["tracker_id"], deleted_at__isnull=True)
+        require_tracker_role(actor, tracker, TrackerMembership.Role.EDITOR)
+        serializer = CategorySerializer(data=values)
+        serializer.is_valid(raise_exception=True)
+        category = cast(
+            Category,
+            serializer.save(
+                id=entity_id,
+                archived_at=timezone.now() if payload.get("archived_at") is not None else None,
+            ),
+        )
+        _audit(actor=actor, instance=category, action="category.created", request=request)
+        return category
+
+    category = (
+        Category.objects.select_related("tracker", "parent").select_for_update().get(id=entity_id)
+    )
+    if category.tracker is None:
+        raise serializers.ValidationError({"entity_id": "Global categories are read only."})
+    require_tracker_role(actor, category.tracker, TrackerMembership.Role.EDITOR)
+    _require_version(
+        instance=category,
+        expected=operation["base_server_version"],
+        entity_type=SyncChange.EntityType.CATEGORY,
+        actor=actor,
+        proposed=payload,
+    )
+    if payload["tracker_id"] != category.tracker_id:
+        raise serializers.ValidationError({"tracker_id": "A category cannot change tracker."})
+    if command == "update":
+        snapshot_category(category, editor=actor, reason="update")
+        serializer = CategorySerializer(category, data=values)
+        serializer.is_valid(raise_exception=True)
+        category = cast(Category, serializer.save(version=category.version + 1))
+        _audit(actor=actor, instance=category, action="category.updated", request=request)
+    elif command in ("archive", "delete") and category.archived_at is None:
+        snapshot_category(category, editor=actor, reason="archive")
+        category.archived_at = timezone.now()
+        category.version += 1
+        category.save(update_fields=("archived_at", "version", "updated_at"))
+        _audit(actor=actor, instance=category, action="category.archived", request=request)
+    elif command == "restore" and category.archived_at is not None:
+        snapshot_category(category, editor=actor, reason="restore")
+        category.archived_at = None
+        category.version += 1
+        category.save(update_fields=("archived_at", "version", "updated_at"))
+        _audit(actor=actor, instance=category, action="category.restored", request=request)
+    return category
+
+
+def _apply_transaction(operation: dict[str, Any], actor: User, request: Any) -> Transaction:
+    entity_id = operation["entity_id"]
+    payload = operation["payload"]
+    command = operation["command"]
+    if command == "create":
+        _ensure_available(Transaction, entity_id)
+        serializer = TransactionWriteSerializer(data=_transaction_values(payload))
+        serializer.is_valid(raise_exception=True)
+        return create_financial_transaction(
+            data=serializer.validated_data,
+            actor=actor,
+            record_id=entity_id,
+            request=request,
+        )
+
+    record = Transaction.objects.select_related("tracker").select_for_update().get(id=entity_id)
+    require_tracker_role(actor, record.tracker, TrackerMembership.Role.EDITOR)
+    _require_version(
+        instance=record,
+        expected=operation["base_server_version"],
+        entity_type=SyncChange.EntityType.TRANSACTION,
+        actor=actor,
+        proposed=payload,
+    )
+    if command == "update":
+        serializer = TransactionWriteSerializer(data=_transaction_values(payload))
+        serializer.is_valid(raise_exception=True)
+        return replace_financial_transaction(
+            record=record,
+            data=serializer.validated_data,
+            actor=actor,
+            base_version=operation["base_server_version"],
+            request=request,
+        )
+    if command == "delete":
+        return tombstone_transaction(
+            record=record,
+            actor=actor,
+            base_version=operation["base_server_version"],
+            request=request,
+        )
+    if command == "restore":
+        return restore_transaction(
+            record=record,
+            actor=actor,
+            base_version=operation["base_server_version"],
+            request=request,
+        )
+    raise serializers.ValidationError({"command": "Unsupported transaction command."})
+
+
+def apply_operation(operation: dict[str, Any], actor: User, request: Any) -> Any:
+    handler = {
+        SyncChange.EntityType.TRACKER: _apply_tracker,
+        SyncChange.EntityType.ACCOUNT: _apply_account,
+        SyncChange.EntityType.CATEGORY: _apply_category,
+        SyncChange.EntityType.TRANSACTION: _apply_transaction,
+    }[operation["entity_type"]]
+    return handler(operation, actor, request)
+
+
+def _base_result(operation: dict[str, Any], status_value: str) -> dict[str, Any]:
+    return {
+        "operation_id": str(operation["operation_id"]),
+        "status": status_value,
+        "entity_type": operation["entity_type"],
+        "entity_id": str(operation["entity_id"]),
+    }
+
+
+def _api_error_result(operation: dict[str, Any], exc: APIException) -> dict[str, Any]:
+    result_status = (
+        "unauthorized"
+        if exc.status_code
+        in (status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND)
+        else "conflict"
+        if exc.status_code == status.HTTP_409_CONFLICT
+        else "rejected"
+    )
+    codes = exc.get_codes()
+    error_code = codes if isinstance(codes, str) else "validation_error"
+    result = _base_result(operation, result_status)
+    result["error"] = {
+        "code": error_code,
+        "message": str(exc.detail) if isinstance(exc.detail, str) else "Operation rejected.",
+        "details": json_safe(exc.detail),
+    }
+    return result
+
+
+def _version_error_result(
+    operation: dict[str, Any], exc: OperationVersionMismatchError
+) -> dict[str, Any]:
+    result = _base_result(operation, "conflict")
+    result["server_version"] = exc.current.get("version")
+    result["representation"] = exc.current
+    result["error"] = {
+        "code": "version_conflict",
+        "message": "The record changed after the supplied base version.",
+        "details": {
+            "base_version": exc.base_version,
+            "current": exc.current,
+            "proposed": exc.proposed,
+        },
+    }
+    return result
+
+
+@transaction.atomic
+def process_operation(
+    *,
+    operation: dict[str, Any],
+    actor: User,
+    device_session: DeviceSession,
+    request: Any,
+) -> dict[str, Any]:
+    fingerprint = operation_fingerprint(operation)
+    receipt, created = SyncOperationReceipt.objects.get_or_create(
+        user=actor,
+        operation_id=operation["operation_id"],
+        defaults={
+            "device_session": device_session,
+            "request_fingerprint": fingerprint,
+            "entity_type": operation["entity_type"],
+            "entity_id": operation["entity_id"],
+            "expires_at": timezone.now() + timedelta(days=settings.SYNC_OPERATION_RECEIPT_DAYS),
+        },
+    )
+    if not created:
+        if receipt.request_fingerprint != fingerprint:
+            result = _base_result(operation, "conflict")
+            result["error"] = {
+                "code": "idempotency_fingerprint_mismatch",
+                "message": "This operation ID was already used for a different request.",
+                "details": None,
+            }
+            return result
+        if receipt.state != SyncOperationReceipt.State.COMPLETED:
+            raise RuntimeError("A committed synchronization receipt is incomplete")
+        replay = dict(receipt.result)
+        replay["replayed"] = True
+        if replay.get("status") == "accepted":
+            replay["original_status"] = "accepted"
+            replay["status"] = "duplicate"
+        return replay
+
+    try:
+        with transaction.atomic():
+            instance = apply_operation(operation, actor, request)
+        representation = serialize_instance(operation["entity_type"], instance.id, actor)
+        result = _base_result(operation, "accepted")
+        result["server_version"] = instance.version
+        result["representation"] = representation
+    except OperationVersionMismatchError as exc:
+        result = _version_error_result(operation, exc)
+    except VersionConflict as exc:
+        result = _api_error_result(operation, exc)
+    except APIException as exc:
+        result = _api_error_result(operation, exc)
+    except ObjectDoesNotExist:
+        result = _api_error_result(
+            operation,
+            NotFound("The referenced entity or tracker is unavailable."),
+        )
+
+    receipt.state = SyncOperationReceipt.State.COMPLETED
+    receipt.result = json_safe(result)
+    receipt.save(update_fields=("state", "result", "updated_at"))
+    return cast(dict[str, Any], receipt.result)

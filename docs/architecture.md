@@ -35,7 +35,8 @@ The app’s SwiftData store is the immediate UI source. Django is the durable mu
 - `apps.users`: identity, profiles, device sessions, access JWT validation, rotating refresh credentials.
 - `apps.audit`: append-only safe security/administrative audit events.
 - Milestone 2 domain apps: trackers, ledger, taxonomy, currency.
-- Later apps: sync, shortcuts, planning, sharing, attachments, analytics/exports.
+- `sync`: transactional reference change log, strict offline command transport, signed cursors, per-user operation receipts, bootstrap, acknowledgement, and retention cleanup.
+- Later apps: shortcuts, planning, sharing, attachments, analytics/exports.
 
 Core financial changes are performed by domain services inside database transactions. REST serializers validate transport shapes; models/constraints protect persistence invariants; views coordinate permissions and service calls.
 
