@@ -56,7 +56,7 @@ Foreground sockets authenticate the same short-lived device-bound access JWT as 
 ### Implemented local foundation
 
 - Every local entity and outbox record carries a scope composed from the normalized server origin and the authenticated JWT user UUID. Queries never expose another scope after an account/server change.
-- Tracker, account, category, transaction, and outbox changes execute through a main-actor repository and one `ModelContext.save()`. Failure rolls back the entity and mutation together.
+- Tracker, account, category, transaction, derived movement/allocation, conversion snapshot, and outbox changes execute through a main-actor repository and one rollback-guarded `ModelContext.save()`. Any enqueue or save failure rolls the complete local command back.
 - `SyncCursor.nextOutboxSequence` allocates a monotonically increasing per-scope sequence in the same store transaction. Push order therefore does not depend on timestamp precision or random UUID order.
 - Server/auth preferences contain only public URL, normalized last email, scope, and device identifier. Access/refresh credentials are non-synchronizing Keychain items with `AfterFirstUnlockThisDeviceOnly` accessibility; passwords are transient.
 - Release uses a strict ATS plist and HTTPS-only URL policy. Debug alone has a local-network ATS exception, further constrained in code to loopback hosts.

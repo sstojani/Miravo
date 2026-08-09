@@ -2,7 +2,7 @@
 
 Last updated: 2026-08-09. A checked item is complete; its verification tier is recorded in `IMPLEMENT.md`. Items are not checked merely because scaffolding exists.
 
-Current focus: **Milestone 5 — Complete core app experience**, after completing Milestone 4 source work at the locally verifiable tier. The server protocol, authenticated sequence-only WebSocket invalidation, native sync engine, durable attachment-transfer queue scaffold, connectivity-return hint, and best-effort background scheduling are implemented. All Swift/Xcode compile/runtime claims still require the macOS workflow; PostgreSQL/Redis Docker and hosted CI verification remain explicit external checks.
+Current focus: **Milestone 5 — Complete core app experience**. The first source-level slice now includes atomic offline transfer/refund commands, explicit reporting conversion snapshots, duplicate/undo, combined local transaction filters/search, grouped currency-safe day totals, and related tests. Role-aware tag/collaborator UI and 50,000-record native performance validation remain. All Swift/Xcode compile/runtime claims still require the macOS workflow; PostgreSQL/Redis Docker and hosted CI verification remain explicit external checks.
 
 ## Milestone 0 — Discovery and durable project plan
 
@@ -62,7 +62,7 @@ Current acceptance: an authenticated device can push an ordered offline tracker/
 
 ## Milestone 5 — Complete core app experience
 
-- [ ] Overview, fast amount-first quick add, transaction detail/list/filter/search, transfers, refunds, and undo.
+- [x] Overview, fast amount-first quick add, transaction detail/list/filter/search, transfers, refunds, and undo (source implemented; macOS/device verification pending).
 - [ ] Tracker/account/category/tag/collaborator settings and role-aware states.
 - [ ] Complete English/Albanian strings, accessibility, empty/loading/offline/error/permission/conflict states, and 50k-record performance checks.
 

@@ -27,6 +27,18 @@ enum TransactionSource: String, Codable, CaseIterable, Sendable {
     case receiptScan = "receipt_scan"
     case imported = "import"
     case server
+
+    var displayName: String {
+        switch self {
+        case .manual: String(localized: "Manual")
+        case .shortcut: String(localized: "Shortcut")
+        case .recurring: String(localized: "Recurring")
+        case .installment: String(localized: "Installment")
+        case .receiptScan: String(localized: "Receipt scan")
+        case .imported: String(localized: "Imported")
+        case .server: String(localized: "Server")
+        }
+    }
 }
 
 enum TransactionStatus: String, Codable, CaseIterable, Sendable {
@@ -35,9 +47,19 @@ enum TransactionStatus: String, Codable, CaseIterable, Sendable {
     case pending
     case voided
     case reconciled
+
+    var displayName: String {
+        switch self {
+        case .draft: String(localized: "Draft")
+        case .posted: String(localized: "Posted")
+        case .pending: String(localized: "Pending")
+        case .voided: String(localized: "Voided")
+        case .reconciled: String(localized: "Reconciled")
+        }
+    }
 }
 
-enum LocalSyncState: String, Codable, Sendable {
+enum LocalSyncState: String, Codable, CaseIterable, Sendable {
     case pending
     case syncing
     case synced

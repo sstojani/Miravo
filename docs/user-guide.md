@@ -8,7 +8,15 @@ Configure the HTTPS server URL and sign in with the invited/owner account. The c
 
 ## Fast entry
 
-Open Quick Add, choose expense or income, and enter the amount. Tracker, account, category, currency, and date use local defaults; merchant/payee and note are optional. Save commits the transaction and ordered outbox mutation locally without a network request. Transfer, settlement, tags, receipts, and splits arrive in their scheduled milestones.
+Open Quick Add, choose expense, income, or transfer, and enter the amount. Tracker, source account, category, currency, and date use local defaults; merchant/payee and note are optional. A transfer also chooses a destination account. Cross-currency transfers retain both amounts; when neither account uses the tracker's base currency, enter the explicit base-currency amount rather than relying on a guessed rate.
+
+Save commits the transaction, derived account movements, optional category allocation, conversion snapshot, and ordered outbox mutation locally without a network request. The confirmation bar offers Undo for eight seconds; Undo records a normal recoverable deletion and never waits for synchronization.
+
+Open an expense's detail screen to record a linked full or partial refund. A refund adds money back to the selected account while keeping its relationship to the historical expense. Settlement, tags, receipts, and splits arrive in their scheduled milestones.
+
+## Finding transactions
+
+Transaction search covers merchant/payee, note, tracker, source or destination account, category, currency, and locale-formatted amount. It is debounced so typing does not trigger network work. Filters for tracker, account, category, type, source, status, sync state, currency, and date range combine; Clear Filters resets them predictably. Results are grouped by local day, and each day shows separate per-currency net totals so unlike currencies are never added together.
 
 ## Sync status
 

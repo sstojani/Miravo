@@ -54,14 +54,15 @@ struct LocalLedgerRepository {
         tracker.defaultAccountID = account.id
         tracker.defaultCategoryID = category.id
 
-        context.insert(tracker)
-        context.insert(account)
-        context.insert(category)
-        try enqueue(tracker, command: .create)
-        try enqueue(account, command: .create)
-        try enqueue(category, command: .create)
-        try enqueue(tracker, command: .update)
-        try saveOrRollback()
+        try commit {
+            context.insert(tracker)
+            context.insert(account)
+            context.insert(category)
+            try enqueue(tracker, command: .create)
+            try enqueue(account, command: .create)
+            try enqueue(category, command: .create)
+            try enqueue(tracker, command: .update)
+        }
         return tracker
     }
 
@@ -80,26 +81,30 @@ struct LocalLedgerRepository {
             baseCurrencyCode: currencyCode.uppercased(),
             baseCurrencyExponent: currencyExponent
         )
-        context.insert(tracker)
-        try enqueue(tracker, command: .create)
-        try saveOrRollback()
+        try commit {
+            context.insert(tracker)
+            try enqueue(tracker, command: .create)
+        }
         return tracker
     }
 
     func renameTracker(_ tracker: LocalTracker, name: String) throws {
         try validateAccess(to: tracker, scopeKey: tracker.scopeKey)
-        tracker.name = try validatedName(name)
-        touch(tracker)
-        try enqueue(tracker, command: .update)
-        try saveOrRollback()
+        let cleanName = try validatedName(name)
+        try commit {
+            tracker.name = cleanName
+            touch(tracker)
+            try enqueue(tracker, command: .update)
+        }
     }
 
     func setTrackerArchived(_ tracker: LocalTracker, archived: Bool) throws {
         try validateAccess(to: tracker, scopeKey: tracker.scopeKey)
-        tracker.archivedAt = archived ? .now : nil
-        touch(tracker)
-        try enqueue(tracker, command: archived ? .archive : .restore)
-        try saveOrRollback()
+        try commit {
+            tracker.archivedAt = archived ? .now : nil
+            touch(tracker)
+            try enqueue(tracker, command: archived ? .archive : .restore)
+        }
     }
 
     @discardableResult
@@ -122,26 +127,30 @@ struct LocalLedgerRepository {
             currencyCode: currencyCode.uppercased(),
             currencyExponent: currencyExponent
         )
-        context.insert(account)
-        try enqueue(account, command: .create)
-        try saveOrRollback()
+        try commit {
+            context.insert(account)
+            try enqueue(account, command: .create)
+        }
         return account
     }
 
     func renameAccount(_ account: LocalAccount, name: String) throws {
         try validateTrackerAccess(id: account.trackerID, scopeKey: account.scopeKey)
-        account.name = try validatedName(name)
-        touch(account)
-        try enqueue(account, command: .update)
-        try saveOrRollback()
+        let cleanName = try validatedName(name)
+        try commit {
+            account.name = cleanName
+            touch(account)
+            try enqueue(account, command: .update)
+        }
     }
 
     func setAccountArchived(_ account: LocalAccount, archived: Bool) throws {
         try validateTrackerAccess(id: account.trackerID, scopeKey: account.scopeKey)
-        account.archivedAt = archived ? .now : nil
-        touch(account)
-        try enqueue(account, command: archived ? .archive : .restore)
-        try saveOrRollback()
+        try commit {
+            account.archivedAt = archived ? .now : nil
+            touch(account)
+            try enqueue(account, command: archived ? .archive : .restore)
+        }
     }
 
     @discardableResult
@@ -158,26 +167,30 @@ struct LocalLedgerRepository {
             kind: kind,
             name: try validatedName(name)
         )
-        context.insert(category)
-        try enqueue(category, command: .create)
-        try saveOrRollback()
+        try commit {
+            context.insert(category)
+            try enqueue(category, command: .create)
+        }
         return category
     }
 
     func renameCategory(_ category: LocalCategory, name: String) throws {
         try validateTrackerAccess(id: category.trackerID, scopeKey: category.scopeKey)
-        category.name = try validatedName(name)
-        touch(category)
-        try enqueue(category, command: .update)
-        try saveOrRollback()
+        let cleanName = try validatedName(name)
+        try commit {
+            category.name = cleanName
+            touch(category)
+            try enqueue(category, command: .update)
+        }
     }
 
     func setCategoryArchived(_ category: LocalCategory, archived: Bool) throws {
         try validateTrackerAccess(id: category.trackerID, scopeKey: category.scopeKey)
-        category.archivedAt = archived ? .now : nil
-        touch(category)
-        try enqueue(category, command: archived ? .archive : .restore)
-        try saveOrRollback()
+        try commit {
+            category.archivedAt = archived ? .now : nil
+            touch(category)
+            try enqueue(category, command: archived ? .archive : .restore)
+        }
     }
 
     @discardableResult
@@ -190,9 +203,13 @@ struct LocalLedgerRepository {
         money: Money,
         merchant: String,
         note: String = "",
-        occurredAt: Date = .now
+        occurredAt: Date = .now,
+        destinationAccount: LocalAccount? = nil,
+        destinationMoney: Money? = nil,
+        refundOf: LedgerTransaction? = nil,
+        baseMoney: Money? = nil
     ) throws -> LedgerTransaction {
-        guard kind == .expense || kind == .income else {
+        guard [.expense, .income, .transfer, .refund].contains(kind) else {
             throw LocalLedgerError.invalidTransactionKind
         }
         guard money.minorUnits > 0 else { throw MoneyError.nonPositiveAmount }
@@ -204,22 +221,61 @@ struct LocalLedgerRepository {
             throw LocalLedgerError.invalidReference
         }
         try validate(category: category, tracker: tracker, scopeKey: scopeKey, kind: kind)
+        if kind == .transfer, category != nil {
+            throw LocalLedgerError.invalidReference
+        }
+        let destinationAmountMinor = try validatedDestinationAmount(
+            kind: kind,
+            sourceAccount: account,
+            sourceMoney: money,
+            destinationAccount: destinationAccount,
+            destinationMoney: destinationMoney,
+            tracker: tracker,
+            scopeKey: scopeKey
+        )
+        try validateRefund(
+            refundOf,
+            kind: kind,
+            tracker: tracker,
+            scopeKey: scopeKey
+        )
+        let conversion = try ReportingConversionSnapshot.resolved(
+            original: money,
+            baseCurrencyCode: tracker.baseCurrencyCode,
+            baseCurrencyExponent: tracker.baseCurrencyExponent,
+            manualBaseMoney: baseMoney,
+            effectiveAt: occurredAt
+        )
 
         let transaction = LedgerTransaction(
             scopeKey: scopeKey,
             trackerID: tracker.id,
             accountID: account.id,
+            destinationAccountID: destinationAccount?.id,
             categoryID: category?.id,
             kind: kind,
             money: money,
+            destinationAmountMinor: destinationAmountMinor,
             merchant: merchant.trimmingCharacters(in: .whitespacesAndNewlines),
             note: note.trimmingCharacters(in: .whitespacesAndNewlines),
             occurredAt: occurredAt
         )
-        context.insert(transaction)
-        insertChildren(for: transaction, account: account, category: category)
-        try enqueue(transaction, command: .create)
-        try saveOrRollback()
+        transaction.baseAmountMinor = conversion.baseAmountMinor
+        transaction.baseCurrencyCode = conversion.baseCurrencyCode
+        transaction.rateSnapshot = conversion.rateSnapshot
+        transaction.rateSource = conversion.rateSource
+        transaction.rateEffectiveAt = conversion.effectiveAt
+        transaction.refundOfID = refundOf?.id
+        try commit {
+            context.insert(transaction)
+            try insertChildren(
+                for: transaction,
+                account: account,
+                destinationAccount: destinationAccount,
+                category: category
+            )
+            try enqueue(transaction, command: .create)
+        }
         return transaction
     }
 
@@ -231,7 +287,10 @@ struct LocalLedgerRepository {
         money: Money,
         merchant: String,
         note: String,
-        occurredAt: Date
+        occurredAt: Date,
+        destinationAccount: LocalAccount? = nil,
+        destinationMoney: Money? = nil,
+        baseMoney: Money? = nil
     ) throws {
         guard money.minorUnits > 0 else { throw MoneyError.nonPositiveAmount }
         try validate(tracker: tracker, scopeKey: transaction.scopeKey)
@@ -250,29 +309,72 @@ struct LocalLedgerRepository {
             scopeKey: transaction.scopeKey,
             kind: transaction.kind
         )
-        transaction.accountID = account.id
-        transaction.categoryID = category?.id
-        transaction.amountMinor = money.minorUnits
-        transaction.accountAmountMinor = money.minorUnits
-        transaction.currencyCode = money.currencyCode
-        transaction.currencyExponent = money.exponent
-        transaction.merchant = merchant.trimmingCharacters(in: .whitespacesAndNewlines)
-        transaction.note = note.trimmingCharacters(in: .whitespacesAndNewlines)
-        transaction.occurredAt = occurredAt
-        transaction.updatedAt = .now
-        transaction.syncStateRaw = LocalSyncState.pending.rawValue
-        try replaceChildren(for: transaction, account: account, category: category)
-        try enqueue(transaction, command: .update)
-        try saveOrRollback()
+        if transaction.kind == .transfer, category != nil {
+            throw LocalLedgerError.invalidReference
+        }
+        let destinationAmountMinor = try validatedDestinationAmount(
+            kind: transaction.kind,
+            sourceAccount: account,
+            sourceMoney: money,
+            destinationAccount: destinationAccount,
+            destinationMoney: destinationMoney,
+            tracker: tracker,
+            scopeKey: transaction.scopeKey
+        )
+        let refundOf = try refundReference(
+            id: transaction.refundOfID,
+            scopeKey: transaction.scopeKey
+        )
+        try validateRefund(
+            refundOf,
+            kind: transaction.kind,
+            tracker: tracker,
+            scopeKey: transaction.scopeKey
+        )
+        let conversion = try ReportingConversionSnapshot.resolved(
+            original: money,
+            baseCurrencyCode: tracker.baseCurrencyCode,
+            baseCurrencyExponent: tracker.baseCurrencyExponent,
+            manualBaseMoney: baseMoney,
+            effectiveAt: occurredAt
+        )
+        try commit {
+            transaction.accountID = account.id
+            transaction.destinationAccountID = destinationAccount?.id
+            transaction.categoryID = category?.id
+            transaction.amountMinor = money.minorUnits
+            transaction.accountAmountMinor = money.minorUnits
+            transaction.destinationAmountMinor = destinationAmountMinor
+            transaction.currencyCode = money.currencyCode
+            transaction.currencyExponent = money.exponent
+            transaction.baseAmountMinor = conversion.baseAmountMinor
+            transaction.baseCurrencyCode = conversion.baseCurrencyCode
+            transaction.rateSnapshot = conversion.rateSnapshot
+            transaction.rateSource = conversion.rateSource
+            transaction.rateEffectiveAt = conversion.effectiveAt
+            transaction.merchant = merchant.trimmingCharacters(in: .whitespacesAndNewlines)
+            transaction.note = note.trimmingCharacters(in: .whitespacesAndNewlines)
+            transaction.occurredAt = occurredAt
+            transaction.updatedAt = .now
+            transaction.syncStateRaw = LocalSyncState.pending.rawValue
+            try replaceChildren(
+                for: transaction,
+                account: account,
+                destinationAccount: destinationAccount,
+                category: category
+            )
+            try enqueue(transaction, command: .update)
+        }
     }
 
     func setTransactionDeleted(_ transaction: LedgerTransaction, deleted: Bool) throws {
         try validateTrackerAccess(id: transaction.trackerID, scopeKey: transaction.scopeKey)
-        transaction.deletedAt = deleted ? .now : nil
-        transaction.updatedAt = .now
-        transaction.syncStateRaw = LocalSyncState.pending.rawValue
-        try enqueue(transaction, command: deleted ? .delete : .restore)
-        try saveOrRollback()
+        try commit {
+            transaction.deletedAt = deleted ? .now : nil
+            transaction.updatedAt = .now
+            transaction.syncStateRaw = LocalSyncState.pending.rawValue
+            try enqueue(transaction, command: deleted ? .delete : .restore)
+        }
     }
 
     @discardableResult
@@ -297,7 +399,12 @@ struct LocalLedgerRepository {
             note: transaction.note,
             occurredAt: .now
         )
-        context.insert(copy)
+        copy.baseAmountMinor = transaction.baseAmountMinor
+        copy.baseCurrencyCode = transaction.baseCurrencyCode
+        copy.rateSnapshot = transaction.rateSnapshot
+        copy.rateSource = transaction.rateSource
+        copy.rateEffectiveAt = transaction.rateEffectiveAt
+        copy.refundOfID = transaction.refundOfID
         let accountID = copy.accountID
         let scopeKey = copy.scopeKey
         let account = try context.fetch(
@@ -314,10 +421,31 @@ struct LocalLedgerRepository {
         } else {
             nil
         }
+        let destinationAccount = if let destinationAccountID = copy.destinationAccountID {
+            try context.fetch(
+                FetchDescriptor<LocalAccount>(
+                    predicate: #Predicate {
+                        $0.id == destinationAccountID && $0.scopeKey == scopeKey
+                    }
+                )
+            ).first
+        } else {
+            nil
+        }
         guard let account else { throw LocalLedgerError.invalidReference }
-        insertChildren(for: copy, account: account, category: category)
-        try enqueue(copy, command: .create)
-        try saveOrRollback()
+        if copy.destinationAccountID != nil, destinationAccount == nil {
+            throw LocalLedgerError.invalidReference
+        }
+        try commit {
+            context.insert(copy)
+            try insertChildren(
+                for: copy,
+                account: account,
+                destinationAccount: destinationAccount,
+                category: category
+            )
+            try enqueue(copy, command: .create)
+        }
         return copy
     }
 
@@ -384,6 +512,72 @@ struct LocalLedgerRepository {
         guard category.archivedAt == nil else { throw LocalLedgerError.archivedReference }
     }
 
+    private func validatedDestinationAmount(
+        kind: TransactionKind,
+        sourceAccount: LocalAccount,
+        sourceMoney: Money,
+        destinationAccount: LocalAccount?,
+        destinationMoney: Money?,
+        tracker: LocalTracker,
+        scopeKey: String
+    ) throws -> Int64? {
+        guard kind == .transfer else {
+            guard destinationAccount == nil, destinationMoney == nil else {
+                throw LocalLedgerError.invalidReference
+            }
+            return nil
+        }
+        guard let destinationAccount, let destinationMoney else {
+            throw LocalLedgerError.invalidReference
+        }
+        try validate(account: destinationAccount, tracker: tracker, scopeKey: scopeKey)
+        guard destinationAccount.id != sourceAccount.id,
+              destinationMoney.minorUnits > 0,
+              destinationMoney.currencyCode == destinationAccount.currencyCode,
+              destinationMoney.exponent == destinationAccount.currencyExponent
+        else {
+            throw LocalLedgerError.invalidReference
+        }
+        if sourceAccount.currencyCode == destinationAccount.currencyCode,
+           (destinationMoney.minorUnits != sourceMoney.minorUnits ||
+               destinationMoney.exponent != sourceMoney.exponent) {
+            throw LocalLedgerError.invalidReference
+        }
+        return destinationMoney.minorUnits
+    }
+
+    private func validateRefund(
+        _ refundOf: LedgerTransaction?,
+        kind: TransactionKind,
+        tracker: LocalTracker,
+        scopeKey: String
+    ) throws {
+        guard kind == .refund else {
+            guard refundOf == nil else { throw LocalLedgerError.invalidReference }
+            return
+        }
+        guard let refundOf else { return }
+        guard refundOf.scopeKey == scopeKey,
+              refundOf.trackerID == tracker.id,
+              refundOf.kind == .expense,
+              refundOf.deletedAt == nil
+        else {
+            throw LocalLedgerError.invalidReference
+        }
+    }
+
+    private func refundReference(id: UUID?, scopeKey: String) throws -> LedgerTransaction? {
+        guard let id else { return nil }
+        guard let transaction = try context.fetch(
+            FetchDescriptor<LedgerTransaction>(
+                predicate: #Predicate { $0.id == id && $0.scopeKey == scopeKey }
+            )
+        ).first else {
+            throw LocalLedgerError.invalidReference
+        }
+        return transaction
+    }
+
     private func touch(_ tracker: LocalTracker) {
         tracker.updatedAt = .now
         tracker.syncStateRaw = LocalSyncState.pending.rawValue
@@ -402,11 +596,12 @@ struct LocalLedgerRepository {
     private func insertChildren(
         for transaction: LedgerTransaction,
         account: LocalAccount,
+        destinationAccount: LocalAccount?,
         category: LocalCategory?
-    ) {
-        let signedAmount = transaction.kind == .income
-            ? transaction.accountAmountMinor
-            : -transaction.accountAmountMinor
+    ) throws {
+        let incomingKinds: Set<TransactionKind> = [.income, .refund]
+        let signedAmount = incomingKinds.contains(transaction.kind)
+            ? transaction.accountAmountMinor : -transaction.accountAmountMinor
         context.insert(
             LocalAccountMovement(
                 scopeKey: transaction.scopeKey,
@@ -417,6 +612,24 @@ struct LocalLedgerRepository {
                 currencyExponent: account.currencyExponent
             )
         )
+        if let destinationAccount {
+            guard transaction.kind == .transfer,
+                  let destinationAmountMinor = transaction.destinationAmountMinor,
+                  destinationAmountMinor > 0
+            else {
+                throw LocalLedgerError.invalidReference
+            }
+            context.insert(
+                LocalAccountMovement(
+                    scopeKey: transaction.scopeKey,
+                    transactionID: transaction.id,
+                    accountID: destinationAccount.id,
+                    signedAmountMinor: destinationAmountMinor,
+                    currencyCode: destinationAccount.currencyCode,
+                    currencyExponent: destinationAccount.currencyExponent
+                )
+            )
+        }
         if let category {
             context.insert(
                 LocalCategoryAllocation(
@@ -433,6 +646,7 @@ struct LocalLedgerRepository {
     private func replaceChildren(
         for transaction: LedgerTransaction,
         account: LocalAccount,
+        destinationAccount: LocalAccount?,
         category: LocalCategory?
     ) throws {
         let transactionID = transaction.id
@@ -453,7 +667,12 @@ struct LocalLedgerRepository {
         )
         for movement in movements { context.delete(movement) }
         for allocation in allocations { context.delete(allocation) }
-        insertChildren(for: transaction, account: account, category: category)
+        try insertChildren(
+            for: transaction,
+            account: account,
+            destinationAccount: destinationAccount,
+            category: category
+        )
     }
 
     private func enqueue(_ tracker: LocalTracker, command: LocalMutationCommand) throws {
@@ -549,9 +768,15 @@ struct LocalLedgerRepository {
             destinationAmountMinor: transaction.destinationAmountMinor,
             currency: transaction.currencyCode,
             currencyExponent: transaction.currencyExponent,
+            baseAmountMinor: transaction.baseAmountMinor,
+            baseCurrency: transaction.baseCurrencyCode,
+            rateSnapshot: transaction.rateSnapshot,
+            rateSource: transaction.rateSource,
+            rateEffectiveAt: transaction.rateEffectiveAt,
             merchant: transaction.merchant,
             note: transaction.note,
             occurredAt: transaction.occurredAt,
+            refundOfID: transaction.refundOfID,
             deletedAt: transaction.deletedAt
         )
         try insertOutbox(
@@ -607,8 +832,9 @@ struct LocalLedgerRepository {
         return allocated
     }
 
-    private func saveOrRollback() throws {
+    private func commit(_ changes: () throws -> Void) throws {
         do {
+            try changes()
             try context.save()
         } catch {
             context.rollback()

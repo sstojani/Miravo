@@ -5,6 +5,79 @@ enum MoneyError: Error, Equatable {
     case nonPositiveAmount
     case tooManyFractionDigits
     case outOfRange
+    case conversionRequired
+}
+
+struct ReportingConversionSnapshot: Equatable, Sendable {
+    let baseAmountMinor: Int64
+    let baseCurrencyCode: String
+    let rateSnapshot: String
+    let rateSource: String
+    let effectiveAt: Date
+
+    static func resolved(
+        original: Money,
+        baseCurrencyCode: String,
+        baseCurrencyExponent: Int,
+        manualBaseMoney: Money?,
+        effectiveAt: Date
+    ) throws -> ReportingConversionSnapshot {
+        let normalizedBase = baseCurrencyCode.uppercased()
+        if original.currencyCode == normalizedBase {
+            guard original.exponent == baseCurrencyExponent,
+                  manualBaseMoney == nil || manualBaseMoney == original
+            else {
+                throw MoneyError.invalidAmount
+            }
+            return ReportingConversionSnapshot(
+                baseAmountMinor: original.minorUnits,
+                baseCurrencyCode: normalizedBase,
+                rateSnapshot: "1",
+                rateSource: "identity",
+                effectiveAt: effectiveAt
+            )
+        }
+
+        guard let manualBaseMoney,
+              manualBaseMoney.minorUnits > 0,
+              manualBaseMoney.currencyCode == normalizedBase,
+              manualBaseMoney.exponent == baseCurrencyExponent,
+              original.minorUnits > 0
+        else {
+            throw MoneyError.conversionRequired
+        }
+        let originalMajor = NSDecimalNumber(
+            mantissa: UInt64(original.minorUnits),
+            exponent: Int16(-original.exponent),
+            isNegative: false
+        )
+        let baseMajor = NSDecimalNumber(
+            mantissa: UInt64(manualBaseMoney.minorUnits),
+            exponent: Int16(-manualBaseMoney.exponent),
+            isNegative: false
+        )
+        let rounding = NSDecimalNumberHandler(
+            roundingMode: .plain,
+            scale: 12,
+            raiseOnExactness: false,
+            raiseOnOverflow: false,
+            raiseOnUnderflow: false,
+            raiseOnDivideByZero: true
+        )
+        let rate = baseMajor.dividing(by: originalMajor, withBehavior: rounding)
+        guard rate != .notANumber,
+              rate.compare(.zero) == .orderedDescending
+        else {
+            throw MoneyError.invalidAmount
+        }
+        return ReportingConversionSnapshot(
+            baseAmountMinor: manualBaseMoney.minorUnits,
+            baseCurrencyCode: normalizedBase,
+            rateSnapshot: rate.stringValue,
+            rateSource: "manual",
+            effectiveAt: effectiveAt
+        )
+    }
 }
 
 struct Money: Equatable, Sendable {

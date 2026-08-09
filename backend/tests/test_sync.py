@@ -95,9 +95,15 @@ def _transaction_payload(
         "destination_amount_minor": None,
         "currency": "ALL",
         "currency_exponent": 2,
+        "base_amount_minor": amount,
+        "base_currency": "ALL",
+        "rate_snapshot": "1.000000000000",
+        "rate_source": "identity",
+        "rate_effective_at": "2026-08-09T12:30:00+02:00",
         "merchant": merchant,
         "note": "Saved offline",
         "occurred_at": "2026-08-09T12:30:00+02:00",
+        "refund_of_id": None,
         "deleted_at": None,
     }
 
@@ -573,6 +579,116 @@ def test_sync_payload_rejects_unknown_financial_fields(
     assert response.status_code == 400
     assert response.data["error"]["code"] == "validation_error"
     assert not Tracker.objects.filter(id=tracker_id).exists()
+
+
+def test_sync_transfer_and_linked_refund_preserve_movements(
+    user: User,
+    client_for_user: Callable[[User, str], APIClient],
+) -> None:
+    client = client_for_user(user, "Valid-Test-Password-8274!")
+    tracker = _create_rest_tracker(client, "Movement tracker")
+    source = _create_rest_account(client, tracker["id"], "Cash")
+    destination = _create_rest_account(client, tracker["id"], "Savings")
+    assert source.status_code == 201, source.data
+    assert destination.status_code == 201, destination.data
+    category = Category.objects.get(tracker_id=tracker["id"], name="Groceries")
+    original = client.post(
+        "/api/v1/transactions/",
+        {
+            "tracker_id": tracker["id"],
+            "kind": "expense",
+            "amount_minor": 1_000,
+            "currency": "ALL",
+            "account_id": source.data["id"],
+            "category_allocations": [{"category_id": str(category.id), "amount_minor": 1_000}],
+            "merchant": "Original shop",
+            "occurred_at": "2026-08-09T12:30:00+02:00",
+        },
+        format="json",
+    )
+    assert original.status_code == 201, original.data
+
+    transfer_id, refund_id = uuid4(), uuid4()
+    transfer_payload = _transaction_payload(
+        transfer_id,
+        UUID(str(tracker["id"])),
+        UUID(str(source.data["id"])),
+        category.id,
+        amount=400,
+        merchant="Move to savings",
+    )
+    transfer_payload.update(
+        {
+            "kind": "transfer",
+            "category_id": None,
+            "destination_account_id": destination.data["id"],
+            "destination_amount_minor": 400,
+        }
+    )
+    refund_payload = _transaction_payload(
+        refund_id,
+        UUID(str(tracker["id"])),
+        UUID(str(source.data["id"])),
+        category.id,
+        amount=250,
+        merchant="Original shop",
+    )
+    refund_payload.update(
+        {
+            "kind": "refund",
+            "refund_of_id": original.data["id"],
+        }
+    )
+
+    response = _push(
+        client,
+        [
+            _operation(
+                sequence=1,
+                entity_type="transaction",
+                entity_id=transfer_id,
+                payload=transfer_payload,
+            ),
+            _operation(
+                sequence=2,
+                entity_type="transaction",
+                entity_id=refund_id,
+                payload=refund_payload,
+            ),
+        ],
+    )
+    assert response.status_code == 200, response.data
+    assert [item["status"] for item in response.data["results"]] == ["accepted", "accepted"]
+    transfer = Transaction.objects.get(id=transfer_id)
+    refund = Transaction.objects.get(id=refund_id)
+    assert set(transfer.movements.values_list("signed_amount_minor", flat=True)) == {-400, 400}
+    assert refund.refund_of_id == UUID(str(original.data["id"]))
+    assert refund.movements.get().signed_amount_minor == 250
+
+    mismatched_id = uuid4()
+    mismatched_payload = _transaction_payload(
+        mismatched_id,
+        UUID(str(tracker["id"])),
+        UUID(str(source.data["id"])),
+        category.id,
+        amount=100,
+        merchant="Wrong reporting currency",
+    )
+    mismatched_payload["base_currency"] = "EUR"
+    mismatched = _push(
+        client,
+        [
+            _operation(
+                sequence=3,
+                entity_type="transaction",
+                entity_id=mismatched_id,
+                payload=mismatched_payload,
+            )
+        ],
+    )
+    assert mismatched.status_code == 200, mismatched.data
+    assert mismatched.data["results"][0]["status"] == "rejected"
+    assert not Transaction.objects.filter(id=mismatched_id).exists()
 
 
 def test_retention_task_prunes_old_changes_and_advances_floor(

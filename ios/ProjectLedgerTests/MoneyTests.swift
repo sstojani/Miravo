@@ -73,4 +73,37 @@ struct MoneyTests {
             )
         }
     }
+
+    @Test func createsDeterministicManualReportingSnapshot() throws {
+        let original = try Money(minorUnits: 1_250, currencyCode: "EUR", exponent: 2)
+        let base = try Money(minorUnits: 125_000, currencyCode: "ALL", exponent: 2)
+        let timestamp = Date(timeIntervalSince1970: 1_786_276_200)
+
+        let snapshot = try ReportingConversionSnapshot.resolved(
+            original: original,
+            baseCurrencyCode: "ALL",
+            baseCurrencyExponent: 2,
+            manualBaseMoney: base,
+            effectiveAt: timestamp
+        )
+
+        #expect(snapshot.baseAmountMinor == 125_000)
+        #expect(snapshot.baseCurrencyCode == "ALL")
+        #expect(snapshot.rateSnapshot == "100")
+        #expect(snapshot.rateSource == "manual")
+        #expect(snapshot.effectiveAt == timestamp)
+    }
+
+    @Test func neverInventsMissingReportingRate() throws {
+        let original = try Money(minorUnits: 1_250, currencyCode: "EUR", exponent: 2)
+        #expect(throws: MoneyError.conversionRequired) {
+            try ReportingConversionSnapshot.resolved(
+                original: original,
+                baseCurrencyCode: "ALL",
+                baseCurrencyExponent: 2,
+                manualBaseMoney: nil,
+                effectiveAt: .now
+            )
+        }
+    }
 }

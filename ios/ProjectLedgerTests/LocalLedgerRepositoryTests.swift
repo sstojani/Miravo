@@ -181,6 +181,168 @@ struct LocalLedgerRepositoryTests {
         #expect(try context.fetch(FetchDescriptor<OutboxMutation>()).count == before)
     }
 
+    @Test func outboxFailureRollsBackTransactionAndFinancialChildrenTogether() throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let repository = LocalLedgerRepository(context: context)
+        let tracker = try repository.bootstrapDefaults(scopeKey: scope)
+        let account = try #require(context.fetch(FetchDescriptor<LocalAccount>()).first)
+        let category = try #require(context.fetch(FetchDescriptor<LocalCategory>()).first)
+        let cursor = try #require(context.fetch(FetchDescriptor<SyncCursor>()).first)
+        cursor.nextOutboxSequence = Int64.max
+        try context.save()
+
+        #expect(throws: MoneyError.outOfRange) {
+            try repository.createTransaction(
+                scopeKey: scope,
+                tracker: tracker,
+                account: account,
+                category: category,
+                kind: .expense,
+                money: Money(minorUnits: 100, currencyCode: "ALL", exponent: 2),
+                merchant: "Must roll back"
+            )
+        }
+        #expect(try context.fetch(FetchDescriptor<LedgerTransaction>()).isEmpty)
+        #expect(try context.fetch(FetchDescriptor<LocalAccountMovement>()).isEmpty)
+        #expect(try context.fetch(FetchDescriptor<LocalCategoryAllocation>()).isEmpty)
+    }
+
+    @Test func sameCurrencyTransferCreatesBalancedLinkedMovementsAndDuplicatesSafely() throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let repository = LocalLedgerRepository(context: context)
+        let tracker = try repository.bootstrapDefaults(scopeKey: scope)
+        let source = try #require(context.fetch(FetchDescriptor<LocalAccount>()).first)
+        let destination = try repository.createAccount(
+            scopeKey: scope,
+            tracker: tracker,
+            name: "Savings",
+            type: .savings,
+            currencyCode: "ALL",
+            currencyExponent: 2
+        )
+        let money = try Money(minorUnits: 2_500, currencyCode: "ALL", exponent: 2)
+
+        let transfer = try repository.createTransaction(
+            scopeKey: scope,
+            tracker: tracker,
+            account: source,
+            category: nil,
+            kind: .transfer,
+            money: money,
+            merchant: "Move to savings",
+            destinationAccount: destination,
+            destinationMoney: money
+        )
+        let duplicate = try repository.duplicate(transfer)
+        let movements = try context.fetch(FetchDescriptor<LocalAccountMovement>())
+        let originalMovements = movements.filter { $0.transactionID == transfer.id }
+        let duplicateMovements = movements.filter { $0.transactionID == duplicate.id }
+
+        #expect(transfer.destinationAccountID == destination.id)
+        #expect(transfer.destinationAmountMinor == 2_500)
+        #expect(Set(originalMovements.map(\.signedAmountMinor)) == Set([-2_500, 2_500]))
+        #expect(Set(duplicateMovements.map(\.signedAmountMinor)) == Set([-2_500, 2_500]))
+        #expect(try context.fetch(FetchDescriptor<LocalCategoryAllocation>()).isEmpty)
+    }
+
+    @Test func crossCurrencyTransferStoresBothAmountsAndExplicitBaseSnapshot() throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let repository = LocalLedgerRepository(context: context)
+        let tracker = try repository.bootstrapDefaults(scopeKey: scope)
+        let destination = try #require(context.fetch(FetchDescriptor<LocalAccount>()).first)
+        let source = try repository.createAccount(
+            scopeKey: scope,
+            tracker: tracker,
+            name: "Euro account",
+            type: .checking,
+            currencyCode: "EUR",
+            currencyExponent: 2
+        )
+        let sourceMoney = try Money(minorUnits: 1_000, currencyCode: "EUR", exponent: 2)
+        let destinationMoney = try Money(
+            minorUnits: 100_000,
+            currencyCode: "ALL",
+            exponent: 2
+        )
+
+        let transfer = try repository.createTransaction(
+            scopeKey: scope,
+            tracker: tracker,
+            account: source,
+            category: nil,
+            kind: .transfer,
+            money: sourceMoney,
+            merchant: "Convert to cash",
+            destinationAccount: destination,
+            destinationMoney: destinationMoney,
+            baseMoney: destinationMoney
+        )
+        let movements = try context.fetch(FetchDescriptor<LocalAccountMovement>())
+            .filter { $0.transactionID == transfer.id }
+        let mutation = try #require(
+            context.fetch(FetchDescriptor<OutboxMutation>())
+                .first { $0.entityID == transfer.id }
+        )
+        let rawPayload = try #require(
+            JSONSerialization.jsonObject(with: mutation.payloadJSON) as? [String: Any]
+        )
+
+        #expect(transfer.amountMinor == 1_000)
+        #expect(transfer.destinationAmountMinor == 100_000)
+        #expect(transfer.baseAmountMinor == 100_000)
+        #expect(transfer.rateSnapshot == "100")
+        #expect(Set(movements.map(\.signedAmountMinor)) == Set([-1_000, 100_000]))
+        #expect(rawPayload["base_amount_minor"] as? Int == 100_000)
+        #expect(rawPayload["rate_snapshot"] as? String == "100")
+    }
+
+    @Test func linkedPartialRefundAddsMoneyAndCarriesOriginalID() throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let repository = LocalLedgerRepository(context: context)
+        let tracker = try repository.bootstrapDefaults(scopeKey: scope)
+        let account = try #require(context.fetch(FetchDescriptor<LocalAccount>()).first)
+        let category = try #require(context.fetch(FetchDescriptor<LocalCategory>()).first)
+        let expense = try repository.createTransaction(
+            scopeKey: scope,
+            tracker: tracker,
+            account: account,
+            category: category,
+            kind: .expense,
+            money: Money(minorUnits: 500, currencyCode: "ALL", exponent: 2),
+            merchant: "Shop"
+        )
+
+        let refund = try repository.createTransaction(
+            scopeKey: scope,
+            tracker: tracker,
+            account: account,
+            category: category,
+            kind: .refund,
+            money: Money(minorUnits: 200, currencyCode: "ALL", exponent: 2),
+            merchant: "Shop refund",
+            refundOf: expense
+        )
+        let movement = try #require(
+            context.fetch(FetchDescriptor<LocalAccountMovement>())
+                .first { $0.transactionID == refund.id }
+        )
+        let mutation = try #require(
+            context.fetch(FetchDescriptor<OutboxMutation>())
+                .first { $0.entityID == refund.id }
+        )
+        let rawPayload = try #require(
+            JSONSerialization.jsonObject(with: mutation.payloadJSON) as? [String: Any]
+        )
+
+        #expect(refund.refundOfID == expense.id)
+        #expect(movement.signedAmountMinor == 200)
+        #expect(rawPayload["refund_of_id"] as? String == expense.id.uuidString)
+    }
+
     private func makeContainer() throws -> ModelContainer {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
         return try ModelContainer(

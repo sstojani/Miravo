@@ -257,3 +257,43 @@ Commit this recovery-focused checkpoint, then finish Milestone 4 with the separa
 ### Next exact action
 
 Begin Milestone 5 with a coherent offline vertical slice: transfer entry and linked local movements, then refund/duplicate/undo polish and transaction filter expansion. Keep the existing server command boundary authoritative and run the macOS workflow immediately when a remote repository becomes available.
+
+## 2026-08-09 — Milestone 5 core ledger interaction checkpoint
+
+### Acceptance checks established
+
+- Expense, income, transfer, and refund commands validate every account/category/tracker reference before mutation. Their transaction, derived movement/allocation rows, conversion snapshot, and ordered outbox command either commit together or roll back together.
+- A same-currency transfer creates equal negative/positive movements; a cross-currency transfer preserves both integer amounts and requires an explicit tracker-base amount when neither side supplies it. No rate is invented.
+- A refund adds money to its account, may retain the original expense UUID, and synchronizes that relationship. Duplicate preserves linked transfer/refund semantics; Quick Add undo creates a normal recoverable tombstone without waiting for the network.
+- Search is debounced and local. Tracker, source/destination account, category, amount, currency, type, source, status, sync state, and bounded date facets combine deterministically. Day totals never combine currencies.
+- Every bootstrap page returns the exact same opaque target cursor token, even when signing time advances during a large recovery.
+
+### Material work
+
+- Added decimal-only `ReportingConversionSnapshot` resolution. Identity conversions store rate `1`; non-base transactions require a positive explicit base amount and store a 12-place decimal manual rate, source, and effective timestamp.
+- Expanded the local repository and strict outbox payload with destination-account/amount, reporting conversion fields, and `refund_of_id`. Transfer movements are linked and balanced; refunds use a positive primary movement. The backend sync command now carries these fields, rejects a claimed base currency that differs from the tracker, and verifies the 12-place rate equals base major units divided by original major units.
+- Wrapped every local tracker/account/category/transaction mutation and its outbox work in one rollback boundary. An authored test forces outbox-sequence overflow after child insertion and asserts that no partial financial row survives.
+- Added transfer entry/edit/detail for same- and cross-currency accounts, linked partial-refund entry, duplicate synchronization, and an eight-second nonblocking local undo banner.
+- Replaced the narrow list type toggle with combined tracker/account/category/type/source/status/sync-state/currency/date filters and a 250 ms debounced search over related names, notes, merchants, locale amount text, and currency. Lists group by local day and display per-currency net totals without binary floating point.
+- Added explicit non-color source/status/synchronization markers, targeted empty/deleted/filter-reset states, and VoiceOver filter state. Added English and Albanian strings for all implemented UI copy.
+- Fixed paginated bootstrap recovery by generating one normal cursor on the first page, embedding it in each signed bootstrap continuation, revalidating its user/sequence on decode, and returning it verbatim on every page.
+
+### Commands and outcomes
+
+- `pytest backend/tests/test_sync.py -q`: **10 passed locally**, including multi-page fixed-cursor recovery and sync-created transfer/refund movements.
+- `make schema`: regenerated and validated the committed OpenAPI schema after extending transaction conversion input.
+- `make check`: **passed locally** — 51 tests, 82.45% branch-aware coverage, Ruff format/lint, Django system checks, strict mypy over 69 backend/config source files, OpenAPI validation, and schema freshness.
+- `ios/check-localizations.sh`: **passed locally** — 249 literal UI keys covered; English/Albanian keys and format placeholders match.
+- `manage.py makemigrations --check --dry-run`, `python3 ios/check-project-contract.py`, YAML/plist parsing, the targeted tracked-source secret scan, and `git diff --check`: **passed locally**.
+- Parsed all 58 Swift source/test files with `tree-sitter-swift` 0.7.1 after excluding conditional directives and that parser version's unsupported iOS 18 `#Unique` grammar: **no remaining syntax-tree errors or missing nodes**.
+
+### Verification boundary
+
+- Django/SQLite financial sync semantics, base-currency/rate consistency rejection, fixed bootstrap cursor behavior, OpenAPI freshness, and the complete backend gate: **verified locally on Linux**.
+- Native source syntax, localization parity, privacy/transport project contract, and authored deterministic money/repository/filter tests: **verified only at the Linux static/source level**.
+- Swift 6 type/concurrency checking, SwiftFormat, SwiftData rollback/runtime behavior, simulator tests, 50,000-record performance, accessibility UI behavior, and device undo/transfer/refund interaction: **not yet verified** because macOS/Xcode are unavailable.
+- Docker/PostgreSQL/Redis, hosted Actions, real server/Funnel, signing, and physical iPhone behavior remain unverified and were not contacted.
+
+### Next exact action
+
+Continue Milestone 5 with synchronized tags and role-aware tracker/member controls, then build deterministic 50,000-record performance fixtures and complete the core accessibility/state audit. Run the existing macOS workflow as soon as a repository runner is available and fix all compile/runtime findings before upgrading native verification.

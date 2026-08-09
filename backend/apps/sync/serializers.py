@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import Any
 
 from django.conf import settings
@@ -106,9 +107,20 @@ class TransactionMutationPayloadSerializer(StrictSerializer):
     )
     currency = serializers.CharField(min_length=3, max_length=3)
     currency_exponent = serializers.IntegerField(min_value=0, max_value=6)
+    base_amount_minor = serializers.IntegerField(min_value=1, required=False)
+    base_currency = serializers.CharField(min_length=3, max_length=3, required=False)
+    rate_snapshot = serializers.DecimalField(
+        max_digits=28,
+        decimal_places=12,
+        min_value=Decimal("0.000000000001"),
+        required=False,
+    )
+    rate_source = serializers.CharField(max_length=80, required=False)
+    rate_effective_at = serializers.DateTimeField(required=False)
     merchant = serializers.CharField(max_length=160, allow_blank=True, default="")
     note = serializers.CharField(max_length=5000, allow_blank=True, default="")
     occurred_at = serializers.DateTimeField()
+    refund_of_id = serializers.UUIDField(required=False, allow_null=True)
     deleted_at = serializers.DateTimeField(required=False, allow_null=True)
 
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
@@ -119,6 +131,21 @@ class TransactionMutationPayloadSerializer(StrictSerializer):
             raise serializers.ValidationError(
                 {"currency_exponent": "Does not match the currency's minor-unit exponent."}
             )
+        conversion_fields = (
+            "base_amount_minor",
+            "base_currency",
+            "rate_snapshot",
+            "rate_source",
+            "rate_effective_at",
+        )
+        supplied = [field for field in conversion_fields if field in attrs]
+        missing = [field for field in conversion_fields if field not in attrs]
+        if supplied and missing:
+            raise serializers.ValidationError(
+                dict.fromkeys(missing, "Conversion snapshot fields must be supplied together.")
+            )
+        if "base_currency" in attrs:
+            attrs["base_currency"] = normalize_currency(attrs["base_currency"])
         return attrs
 
 

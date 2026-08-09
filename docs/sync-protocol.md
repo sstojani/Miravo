@@ -36,7 +36,7 @@ The current native attachment boundary persists a compound scoped attachment UUI
 ## Full bootstrap
 
 1. Preserve unsent outbox commands and locally referenced files.
-2. The server fixes an upper change-log sequence on the first request and returns UUID-ordered pages using a signed, user-bound bootstrap cursor.
+2. The server fixes an upper change-log sequence and signs one normal target cursor on the first request. Every UUID-ordered page carries that exact opaque token inside its signed, user-bound bootstrap continuation; it is not re-signed between pages.
 3. Persist each page under a local bootstrap generation without changing the visible ledger or normal pull cursor.
 4. Require every page to retain the same target cursor; decode all typed records and validate core tracker/account/category/transaction relationships.
 5. Publish the reconciled snapshot and final pull cursor in one SwiftData save, retaining every entity with a queued local mutation.

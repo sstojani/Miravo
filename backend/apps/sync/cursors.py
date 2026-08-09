@@ -34,6 +34,7 @@ class InvalidBootstrapCursor(APIException):
 @dataclass(frozen=True)
 class BootstrapCursorState:
     upper_sequence: int
+    target_cursor: str
     entity_index: int
     last_id: UUID | None
 
@@ -71,6 +72,7 @@ def encode_bootstrap_cursor(*, user: User, state: BootstrapCursorState) -> str:
             "v": 1,
             "u": str(user.id),
             "s": state.upper_sequence,
+            "c": state.target_cursor,
             "i": state.entity_index,
             "l": str(state.last_id) if state.last_id else None,
         },
@@ -89,16 +91,22 @@ def decode_bootstrap_cursor(*, user: User, cursor: str) -> BootstrapCursorState:
             or isinstance(payload.get("s"), bool)
             or not isinstance(payload.get("s"), int)
             or payload["s"] < 0
+            or not isinstance(payload.get("c"), str)
+            or not payload["c"]
             or isinstance(payload.get("i"), bool)
             or not isinstance(payload.get("i"), int)
             or payload["i"] < 0
         ):
             raise InvalidBootstrapCursor()
+        target_sequence = decode_cursor(user=user, cursor=payload["c"])
+        if target_sequence != payload["s"]:
+            raise InvalidBootstrapCursor()
         last_id = UUID(payload["l"]) if payload.get("l") else None
         return BootstrapCursorState(
             upper_sequence=int(payload["s"]),
+            target_cursor=payload["c"],
             entity_index=int(payload["i"]),
             last_id=last_id,
         )
-    except (signing.BadSignature, ValueError, TypeError) as exc:
+    except (signing.BadSignature, InvalidSyncCursor, ValueError, TypeError) as exc:
         raise InvalidBootstrapCursor() from exc

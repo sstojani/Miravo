@@ -408,6 +408,7 @@ class TransactionWriteSerializer(StrictSerializer):
     note = serializers.CharField(max_length=5000, required=False, allow_blank=True, default="")
     occurred_at = serializers.DateTimeField()
     base_amount_minor = serializers.IntegerField(min_value=1, required=False)
+    base_currency = serializers.CharField(min_length=3, max_length=3, required=False)
     rate_snapshot = serializers.DecimalField(
         max_digits=28, decimal_places=12, min_value=Decimal("0.000000000001"), required=False
     )
@@ -418,6 +419,9 @@ class TransactionWriteSerializer(StrictSerializer):
     base_version = serializers.IntegerField(min_value=1, required=False, write_only=True)
 
     def validate_currency(self, value: str) -> str:
+        return normalize_currency(value)
+
+    def validate_base_currency(self, value: str) -> str:
         return normalize_currency(value)
 
 

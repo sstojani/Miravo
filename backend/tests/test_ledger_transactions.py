@@ -266,11 +266,15 @@ def test_cross_currency_reporting_requires_explicit_snapshot(
     payload.update(
         {
             "base_amount_minor": 125_000,
-            "rate_snapshot": "100.000000000000",
+            "rate_snapshot": "99.000000000000",
             "rate_source": "manual",
             "rate_effective_at": "2026-08-09T10:30:00Z",
         }
     )
+    inconsistent = client.post("/api/v1/transactions/", payload, format="json")
+    assert inconsistent.status_code == 400
+    assert "rate_snapshot" in inconsistent.data["error"]["details"]
+    payload["rate_snapshot"] = "100.000000000000"
     created = client.post("/api/v1/transactions/", payload, format="json")
     assert created.status_code == 201, created.data
     assert created.data["base_currency"] == "ALL"

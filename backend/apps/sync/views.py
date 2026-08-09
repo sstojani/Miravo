@@ -134,8 +134,10 @@ class SyncBootstrapView(APIView):
             if state.upper_sequence > current_max_sequence():
                 raise InvalidBootstrapCursor("The bootstrap cursor is ahead of server history.")
         else:
+            upper_sequence = current_max_sequence()
             state = BootstrapCursorState(
-                upper_sequence=current_max_sequence(),
+                upper_sequence=upper_sequence,
+                target_cursor=encode_cursor(user=actor, sequence=upper_sequence),
                 entity_index=0,
                 last_id=None,
             )
@@ -151,6 +153,7 @@ class SyncBootstrapView(APIView):
                 user=actor,
                 state=BootstrapCursorState(
                     upper_sequence=state.upper_sequence,
+                    target_cursor=state.target_cursor,
                     entity_index=page.next_entity_index,
                     last_id=page.next_last_id,
                 ),
@@ -159,7 +162,7 @@ class SyncBootstrapView(APIView):
             {
                 "protocol_version": 1,
                 "generated_at": timezone.now(),
-                "cursor": encode_cursor(user=actor, sequence=state.upper_sequence),
+                "cursor": state.target_cursor,
                 "bootstrap_cursor": next_bootstrap_cursor,
                 "has_more": page.has_more,
                 "data": page.data,

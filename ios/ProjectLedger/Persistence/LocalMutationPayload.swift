@@ -78,8 +78,14 @@ struct TransactionMutationPayload: Codable, Sendable {
     let destinationAmountMinor: Int64?
     let currency: String
     let currencyExponent: Int
+    let baseAmountMinor: Int64
+    let baseCurrency: String
+    let rateSnapshot: String
+    let rateSource: String
+    let rateEffectiveAt: Date
     let merchant: String
     let note: String
     let occurredAt: Date
+    let refundOfID: UUID?
     let deletedAt: Date?
 }

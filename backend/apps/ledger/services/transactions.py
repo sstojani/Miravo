@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal, localcontext
 from typing import Any
 from uuid import UUID
 
@@ -55,6 +55,11 @@ def account_balance_minor(account: Account) -> int:
 
 def _validate_base_conversion(data: Mapping[str, Any], tracker: Tracker) -> dict[str, Any]:
     currency = normalize_currency(str(data["currency"]))
+    supplied_base_currency = data.get("base_currency")
+    if supplied_base_currency is not None and supplied_base_currency != tracker.base_currency:
+        raise serializers.ValidationError(
+            {"base_currency": "Must match the tracker's base currency."}
+        )
     amount_minor = int(data["amount_minor"])
     if amount_minor <= 0:
         raise serializers.ValidationError({"amount_minor": "Amount must be positive."})
@@ -78,13 +83,27 @@ def _validate_base_conversion(data: Mapping[str, Any], tracker: Tracker) -> dict
         raise serializers.ValidationError(
             dict.fromkeys(missing, "Required when transaction and tracker currencies differ.")
         )
-    if int(data["base_amount_minor"]) <= 0 or Decimal(data["rate_snapshot"]) <= 0:
+    base_amount_minor = int(data["base_amount_minor"])
+    supplied_rate = Decimal(data["rate_snapshot"])
+    if base_amount_minor <= 0 or supplied_rate <= 0:
         raise serializers.ValidationError(
             {"rate_snapshot": "Converted amount and rate must be positive."}
         )
+    with localcontext() as decimal_context:
+        decimal_context.prec = 50
+        original_major = Decimal(amount_minor).scaleb(-currency_exponent(currency))
+        base_major = Decimal(base_amount_minor).scaleb(-currency_exponent(tracker.base_currency))
+        expected_rate = (base_major / original_major).quantize(
+            Decimal("0.000000000001"),
+            rounding=ROUND_HALF_UP,
+        )
+    if supplied_rate != expected_rate:
+        raise serializers.ValidationError(
+            {"rate_snapshot": "Must equal the base amount divided by the original amount."}
+        )
     result.update(
-        base_amount_minor=int(data["base_amount_minor"]),
-        rate_snapshot=Decimal(data["rate_snapshot"]),
+        base_amount_minor=base_amount_minor,
+        rate_snapshot=supplied_rate,
         rate_source=str(data["rate_source"]),
         rate_effective_at=data["rate_effective_at"],
     )

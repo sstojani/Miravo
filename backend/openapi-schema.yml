@@ -3670,6 +3670,10 @@ components:
         base_amount_minor:
           type: integer
           minimum: 1
+        base_currency:
+          type: string
+          minLength: 3
+          maxLength: 3
         rate_snapshot:
           type: string
           format: decimal

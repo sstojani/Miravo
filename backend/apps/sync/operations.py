@@ -145,7 +145,17 @@ def _transaction_values(payload: dict[str, Any]) -> dict[str, Any]:
         "payee": "",
         "note": payload.get("note", ""),
         "occurred_at": payload["occurred_at"],
+        "refund_of_id": payload.get("refund_of_id"),
     }
+    for field in (
+        "base_amount_minor",
+        "base_currency",
+        "rate_snapshot",
+        "rate_source",
+        "rate_effective_at",
+    ):
+        if field in payload:
+            result[field] = payload[field]
     if payload.get("destination_account_id") is not None:
         result["destination_account_id"] = payload["destination_account_id"]
     if payload.get("destination_amount_minor") is not None:
