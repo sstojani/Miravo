@@ -1,0 +1,91 @@
+name: ProjectLedger
+
+options:
+  minimumXcodeGenVersion: 2.46.0
+  createIntermediateGroups: true
+  deploymentTarget:
+    iOS: "18.0"
+
+configs:
+  Debug: debug
+  Release: release
+
+settings:
+  base:
+    APP_DISPLAY_NAME: Project Ledger
+    CURRENT_PROJECT_VERSION: 1
+    DEVELOPMENT_LANGUAGE: en
+    GENERATE_INFOPLIST_FILE: false
+    IPHONEOS_DEPLOYMENT_TARGET: "18.0"
+    MARKETING_VERSION: 0.1.0
+    PRODUCT_BUNDLE_IDENTIFIER: com.example.projectledger
+    SWIFT_STRICT_CONCURRENCY: complete
+    SWIFT_VERSION: "6.0"
+    TARGETED_DEVICE_FAMILY: "1"
+  configs:
+    Debug:
+      ENABLE_TESTABILITY: true
+      SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG
+    Release:
+      DEBUG_INFORMATION_FORMAT: dwarf-with-dsym
+      SWIFT_COMPILATION_MODE: wholemodule
+
+targets:
+  ProjectLedger:
+    type: application
+    platform: iOS
+    sources:
+      - path: ProjectLedger
+    resources:
+      - path: Resources
+    settings:
+      base:
+        INFOPLIST_FILE: ProjectLedger/Info.plist
+        PRODUCT_NAME: ProjectLedger
+
+  ProjectLedgerTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: ProjectLedgerTests
+    dependencies:
+      - target: ProjectLedger
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: true
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.projectledger.tests
+
+  ProjectLedgerUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: ProjectLedgerUITests
+    dependencies:
+      - target: ProjectLedger
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: true
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.projectledger.uitests
+        TEST_TARGET_NAME: ProjectLedger
+
+schemes:
+  ProjectLedger:
+    build:
+      targets:
+        ProjectLedger: all
+        ProjectLedgerTests: [test]
+        ProjectLedgerUITests: [test]
+    test:
+      gatherCoverageData: true
+      coverageTargets:
+        - ProjectLedger
+      targets:
+        - name: ProjectLedgerTests
+          parallelizable: true
+        - name: ProjectLedgerUITests
+          parallelizable: false
+    run:
+      config: Debug
+    archive:
+      config: Release
+

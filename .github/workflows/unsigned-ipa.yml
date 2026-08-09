@@ -1,0 +1,120 @@
+name: Build unsigned IPA
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+env:
+  XCODEGEN_VERSION: 2.46.0
+  XCODE_PATH: /Applications/Xcode_16.4.app
+  EXPECTED_BUNDLE_ID: com.example.projectledger
+  EXPECTED_MINIMUM_IOS: "18.0"
+
+jobs:
+  unsigned-device-build:
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select and report toolchain
+        run: |
+          sudo xcode-select --switch "$XCODE_PATH"
+          sw_vers
+          xcodebuild -version
+          swift --version
+
+      - name: Install pinned XcodeGen
+        run: |
+          brew install mint
+          mint install "yonaskolb/XcodeGen@$XCODEGEN_VERSION"
+          echo "$HOME/.mint/bin" >> "$GITHUB_PATH"
+          test "$("$HOME/.mint/bin/xcodegen" --version)" = "Version: $XCODEGEN_VERSION"
+
+      - name: Generate a clean project
+        working-directory: ios
+        run: |
+          xcodegen generate --spec project.yml
+          git diff --exit-code -- .
+
+      - name: Build unsigned Release app for a physical device
+        working-directory: ios
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project ProjectLedger.xcodeproj \
+            -scheme ProjectLedger \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath DerivedData \
+            CONFIGURATION_BUILD_DIR="$PWD/build/Release-iphoneos" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY='' \
+            build | xcbeautify
+
+      - name: Verify and package UNSIGNED artifact
+        working-directory: ios
+        run: |
+          set -Eeuo pipefail
+          app="$PWD/build/Release-iphoneos/ProjectLedger.app"
+          info="$app/Info.plist"
+          executable="$app/ProjectLedger"
+          artifacts="$PWD/artifacts"
+          stage="$PWD/unsigned-stage"
+
+          test -d "$app"
+          test -f "$executable"
+          test "$(plutil -extract CFBundleIdentifier raw "$info")" = "$EXPECTED_BUNDLE_ID"
+          test "$(plutil -extract MinimumOSVersion raw "$info")" = "$EXPECTED_MINIMUM_IOS"
+          test -n "$(plutil -extract CFBundleShortVersionString raw "$info")"
+          test -n "$(plutil -extract CFBundleVersion raw "$info")"
+          test -n "$(plutil -extract NSCameraUsageDescription raw "$info")"
+          test -n "$(plutil -extract NSPhotoLibraryUsageDescription raw "$info")"
+          test -f "$app/PrivacyInfo.xcprivacy"
+          lipo -archs "$executable" | grep -qw arm64
+          codesign -d --entitlements :- "$app" >/tmp/project-ledger-entitlements.plist 2>/dev/null || true
+
+          mkdir -p "$artifacts" "$stage/Payload"
+          ditto "$app" "$stage/Payload/ProjectLedger.app"
+          (cd "$stage" && ditto -c -k --keepParent Payload "$artifacts/ProjectLedger-UNSIGNED.ipa")
+          unzip -t "$artifacts/ProjectLedger-UNSIGNED.ipa"
+          unzip -l "$artifacts/ProjectLedger-UNSIGNED.ipa" | grep -q 'Payload/ProjectLedger.app/Info.plist'
+
+          version="$(plutil -extract CFBundleShortVersionString raw "$info")"
+          build_number="$(plutil -extract CFBundleVersion raw "$info")"
+          architectures="$(lipo -archs "$executable")"
+          jq -n \
+            --arg label "UNSIGNED" \
+            --arg commit "$GITHUB_SHA" \
+            --arg build_date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --arg macos "$(sw_vers -productVersion)" \
+            --arg xcode "$(xcodebuild -version | tr '\n' ' ')" \
+            --arg swift "$(swift --version | head -n1)" \
+            --arg bundle_id "$EXPECTED_BUNDLE_ID" \
+            --arg version "$version" \
+            --arg build_number "$build_number" \
+            --arg minimum_ios "$EXPECTED_MINIMUM_IOS" \
+            --arg architectures "$architectures" \
+            '{label:$label,commit:$commit,build_date:$build_date,macos:$macos,xcode:$xcode,swift:$swift,bundle_id:$bundle_id,version:$version,build_number:$build_number,minimum_ios:$minimum_ios,architectures:$architectures,code_signing:false,special_entitlements_required:false}' \
+            >"$artifacts/build-manifest.json"
+
+          (cd "$artifacts" && shasum -a 256 ProjectLedger-UNSIGNED.ipa >ProjectLedger-UNSIGNED.ipa.sha256)
+          dsym="$PWD/build/Release-iphoneos/ProjectLedger.app.dSYM"
+          if [[ -d "$dsym" ]]; then
+            ditto -c -k --keepParent "$dsym" "$artifacts/ProjectLedger.app.dSYM.zip"
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ProjectLedger-UNSIGNED-${{ github.sha }}
+          path: ios/artifacts/
+          if-no-files-found: error
+          retention-days: 30
+

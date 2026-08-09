@@ -1,0 +1,68 @@
+name: Backend CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:17.6-bookworm
+        env:
+          POSTGRES_DB: projectledger_test
+          POSTGRES_USER: projectledger
+          POSTGRES_PASSWORD: test-only-password
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U projectledger -d projectledger_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7.4.5-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PROJECT_LEDGER_ENV: test
+      PROJECT_LEDGER_SECRET_KEY: ci-only-secret-key-not-for-production-000000000000000000
+      PROJECT_LEDGER_JWT_SIGNING_KEY: ci-only-jwt-key-not-for-production-0000000000000000000
+      PROJECT_LEDGER_REFRESH_TOKEN_PEPPER: ci-only-pepper-not-for-production-00000000000000000000
+      PROJECT_LEDGER_DATABASE_URL: postgresql://projectledger:test-only-password@127.0.0.1:5432/projectledger_test
+      PROJECT_LEDGER_REDIS_URL: redis://127.0.0.1:6379/0
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.11.33"
+          enable-cache: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13.15"
+      - run: uv sync --all-groups --frozen
+      - run: uv run python backend/manage.py makemigrations --check --dry-run
+      - run: uv run python backend/manage.py migrate --noinput
+      - run: uv run ruff format --check backend
+      - run: uv run ruff check backend
+      - run: uv run mypy backend/config backend/apps
+      - run: uv run pytest backend --cov=backend/apps --cov=backend/config --cov-report=xml --cov-report=term-missing
+      - run: uv run python backend/manage.py spectacular --file /tmp/openapi-schema.yml --validate
+      - run: diff -u backend/openapi-schema.yml /tmp/openapi-schema.yml
+      - run: docker build -f backend/Dockerfile -t project-ledger-api:${{ github.sha }} .
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backend-test-artifacts
+          path: |
+            coverage.xml
+            /tmp/openapi-schema.yml
+

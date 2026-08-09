@@ -1,0 +1,82 @@
+name: iOS CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  XCODEGEN_VERSION: 2.46.0
+  XCODE_PATH: /Applications/Xcode_16.4.app
+  SIMULATOR_DESTINATION: platform=iOS Simulator,name=iPhone 16,OS=18.5
+
+jobs:
+  simulator:
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select and report toolchain
+        run: |
+          sudo xcode-select --switch "$XCODE_PATH"
+          sw_vers
+          xcodebuild -version
+          swift --version
+
+      - name: Install pinned XcodeGen
+        run: |
+          brew install mint
+          mint install "yonaskolb/XcodeGen@$XCODEGEN_VERSION"
+          echo "$HOME/.mint/bin" >> "$GITHUB_PATH"
+          test "$("$HOME/.mint/bin/xcodegen" --version)" = "Version: $XCODEGEN_VERSION"
+
+      - name: Validate source resources
+        run: |
+          plutil -lint ios/ProjectLedger/Info.plist ios/Resources/PrivacyInfo.xcprivacy
+          chmod +x ios/check-localizations.sh
+          ios/check-localizations.sh
+          swiftformat --lint ios/ProjectLedger ios/ProjectLedgerTests ios/ProjectLedgerUITests
+
+      - name: Generate project and prove generation did not alter sources
+        working-directory: ios
+        run: |
+          xcodegen generate --spec project.yml
+          git diff --exit-code -- .
+          xcodebuild -project ProjectLedger.xcodeproj -list
+
+      - name: Scan application source for production-secret patterns
+        run: |
+          if rg -n --hidden --glob '*.swift' --glob '*.plist' \
+            '(-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----|sk-[A-Za-z0-9]{20,}|postgres(ql)?://[^[:space:]]+:[^[:space:]]+@)' \
+            ios/ProjectLedger ios/Resources; then
+            echo "Potential secret pattern found in iOS source." >&2
+            exit 1
+          fi
+
+      - name: Build and test simulator app
+        working-directory: ios
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project ProjectLedger.xcodeproj \
+            -scheme ProjectLedger \
+            -configuration Debug \
+            -destination "$SIMULATOR_DESTINATION" \
+            -derivedDataPath DerivedData \
+            -resultBundlePath DerivedData/ProjectLedgerTests.xcresult \
+            CODE_SIGNING_ALLOWED=NO \
+            test | xcbeautify
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ios-test-results
+          path: |
+            ios/DerivedData/ProjectLedgerTests.xcresult
+            ios/DerivedData/Logs
+          retention-days: 14
+

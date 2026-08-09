@@ -1,0 +1,69 @@
+# Architecture
+
+## System context
+
+```mermaid
+flowchart TD
+    I["iPhone SwiftUI app"] -->|"HTTPS API and optional WebSocket"| F["Tailscale Funnel"]
+    S["Apple Transaction Shortcut"] -->|"Scoped HTTPS API"| F
+    F --> P["Loopback-only Caddy"]
+    P --> A["Django ASGI API"]
+    A --> D[("PostgreSQL")]
+    A --> R[("Redis")]
+    A --> M["Private media/export storage"]
+    R --> W["Celery worker and Beat"]
+```
+
+The app’s SwiftData store is the immediate UI source. Django is the durable multi-device, collaboration, authorization, and backup authority. A user action succeeds locally after the domain write and outbox mutation commit together; networking is a later reconciliation step.
+
+## Trust boundaries
+
+| Boundary | Publicly reachable | Authentication | Sensitive state |
+|---|---:|---|---|
+| Tailscale Funnel hostname | Yes | TLS transport only; not application auth | None |
+| Caddy loopback service | Only through Funnel/local host | Path allow/deny and security headers | No credentials persisted |
+| `/api/v1` Django API | Selected routes | Bearer access JWT or narrow Shortcut token | Authorization/domain services |
+| Private admin | No | Tailnet/SSH plus Django staff session/CSRF | Administrative controls |
+| PostgreSQL | No | Internal service credential | Financial/account/audit metadata |
+| Redis | No | Internal network and service configuration | Queues/cache/invalidation only |
+| Private media/exports | No raw directory | Authenticated API or expiring grant | Receipts and reports |
+| iOS local container | Device-local | iOS Data Protection; optional Face ID UI lock | Synced data, outbox, files, Keychain tokens |
+
+## Backend boundaries
+
+- `apps.common`: UUID/timestamp primitives, request context, error envelope, safe logs, health/config.
+- `apps.users`: identity, profiles, device sessions, access JWT validation, rotating refresh credentials.
+- `apps.audit`: append-only safe security/administrative audit events.
+- Milestone 2 domain apps: trackers, ledger, taxonomy, currency.
+- Later apps: sync, shortcuts, planning, sharing, attachments, analytics/exports.
+
+Core financial changes are performed by domain services inside database transactions. REST serializers validate transport shapes; models/constraints protect persistence invariants; views coordinate permissions and service calls.
+
+## Native iOS boundaries
+
+- **App/UI:** SwiftUI feature views, navigation, accessibility, localized presentation.
+- **Domain:** money/currency types, commands, calculations, validation, conflict decisions.
+- **Persistence:** SwiftData models, atomic local writes/outbox, cursor and attachment queues.
+- **Networking:** URLSession DTOs, Keychain-backed session refresh, reachability hint, retry policy.
+- **Synchronization actor:** one serialized coordinator per local store; push then pull; independent conflicts.
+- **Platform services:** Vision OCR, camera/files, LocalAuthentication, best-effort BackgroundTasks.
+
+No view binds directly to a remote response. WebSockets carry invalidation hints only; they never contain authoritative financial payloads.
+
+## Deployment request path
+
+1. Funnel terminates the public `*.ts.net` TLS request and forwards only to loopback.
+2. Caddy applies size/path/header policy and proxies allowed `/api/v1/*` routes to the API network.
+3. Django assigns a request ID, authenticates, authorizes the object/action, validates input, and executes a transactional service.
+4. PostgreSQL commits durable domain/audit/change-log state.
+5. Celery handles explicitly asynchronous jobs; Redis is never a durable financial source of truth.
+
+## Failure model
+
+- iOS network failure leaves committed local data and a retryable outbox entry.
+- A lost push response is safe because operation and domain IDs are idempotent.
+- A partial push returns per-operation results; unrelated operations continue.
+- Cursor expiry triggers staged bootstrap without discarding unsent mutations.
+- Redis/WebSocket/Celery outage cannot invalidate already posted ledger state; readiness and queued work expose the degradation.
+- Restore is performed into isolation and verified before any production recovery decision.
+

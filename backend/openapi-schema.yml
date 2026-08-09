@@ -1,0 +1,258 @@
+openapi: 3.0.3
+info:
+  title: Project Ledger API
+  version: 1.0.0
+  description: Versioned API for the Project Ledger offline-first finance application.
+paths:
+  /api/v1/auth/login:
+    post:
+      operationId: auth_login_create
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+          description: ''
+  /api/v1/auth/logout:
+    post:
+      operationId: auth_logout_create
+      tags:
+      - auth
+      security:
+      - accessToken: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/auth/refresh:
+    post:
+      operationId: auth_refresh_create
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RefreshRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RefreshRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+          description: ''
+  /api/v1/auth/sessions:
+    get:
+      operationId: auth_sessions_list
+      tags:
+      - auth
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Session'
+          description: ''
+  /api/v1/auth/sessions/{session_id}:
+    delete:
+      operationId: auth_sessions_destroy
+      parameters:
+      - in: path
+        name: session_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - auth
+      security:
+      - accessToken: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/config/public:
+    get:
+      operationId: public_config
+      tags:
+      - config
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/health/live:
+    get:
+      operationId: health_live
+      tags:
+      - health
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/health/ready:
+    get:
+      operationId: health_ready
+      tags:
+      - health
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+components:
+  schemas:
+    LoginRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          minLength: 1
+          maxLength: 254
+        password:
+          type: string
+          writeOnly: true
+          minLength: 1
+          maxLength: 1024
+        device_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+        device_name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        app_version:
+          type: string
+          default: ''
+          maxLength: 32
+      required:
+      - device_id
+      - device_name
+      - email
+      - password
+    RefreshRequest:
+      type: object
+      properties:
+        refresh_token:
+          type: string
+          writeOnly: true
+          minLength: 1
+          maxLength: 512
+      required:
+      - refresh_token
+    Session:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        device_id:
+          type: string
+        device_name:
+          type: string
+        platform:
+          type: string
+        app_version:
+          type: string
+        last_seen_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        revoked_at:
+          type: string
+          format: date-time
+          nullable: true
+        current:
+          type: boolean
+      required:
+      - app_version
+      - created_at
+      - current
+      - device_id
+      - device_name
+      - id
+      - last_seen_at
+      - platform
+      - revoked_at
+    TokenResponse:
+      type: object
+      properties:
+        access_token:
+          type: string
+        access_token_expires_at:
+          type: string
+          format: date-time
+        refresh_token:
+          type: string
+        refresh_token_expires_at:
+          type: string
+          format: date-time
+        token_type:
+          type: string
+        session_id:
+          type: string
+          format: uuid
+      required:
+      - access_token
+      - access_token_expires_at
+      - refresh_token
+      - refresh_token_expires_at
+      - session_id
+      - token_type
+  securitySchemes:
+    accessToken:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Short-lived Project Ledger access token bound to a device session.

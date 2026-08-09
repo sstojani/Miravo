@@ -1,0 +1,27 @@
+"Overview" = "Përmbledhje";
+"Transactions" = "Transaksionet";
+"Add" = "Shto";
+"Plans" = "Planet";
+"Insights" = "Analizat";
+"Settings" = "Cilësimet";
+"This feature is scheduled in the implementation plan." = "Kjo veçori është planifikuar në planin e zbatimit.";
+"This month" = "Këtë muaj";
+"Local-first foundation" = "Bazë që funksionon fillimisht lokalisht";
+"Records save on this iPhone before any network request." = "Regjistrimet ruhen në këtë iPhone përpara çdo kërkese në rrjet.";
+"Recent transactions" = "Transaksionet e fundit";
+"No transactions yet" = "Ende nuk ka transaksione";
+"Use Add to save the first offline expense." = "Përdor Shto për të ruajtur shpenzimin e parë pa internet.";
+"No transactions" = "Nuk ka transaksione";
+"Transactions saved offline will appear here." = "Transaksionet e ruajtura pa internet do të shfaqen këtu.";
+"Expense" = "Shpenzim";
+"Amount" = "Shuma";
+"Expense amount" = "Shuma e shpenzimit";
+"Merchant (optional)" = "Tregtari (opsionale)";
+"Save offline" = "Ruaj pa internet";
+"Quick add" = "Shtim i shpejtë";
+"Saved on this iPhone" = "U ruajt në këtë iPhone";
+"OK" = "Në rregull";
+"Synchronization can happen later without blocking this entry." = "Sinkronizimi mund të kryhet më vonë pa e bllokuar këtë regjistrim.";
+"Use no more than two decimal places." = "Përdor jo më shumë se dy shifra dhjetore.";
+"Enter a valid positive amount." = "Vendos një shumë pozitive të vlefshme.";
+

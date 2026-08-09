@@ -1,0 +1,17 @@
+[Unit]
+Description=Project Ledger encrypted backup
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=projectledger
+Group=projectledger
+WorkingDirectory=/opt/project-ledger
+EnvironmentFile=/etc/project-ledger/backup.env
+ExecStart=/opt/project-ledger/infra/backup/backup.sh
+PrivateTmp=true
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/var/backups/projectledger
+

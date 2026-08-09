@@ -1,0 +1,54 @@
+# Offline synchronization protocol
+
+The local database drives every ordinary app view. Remote responses update local state; views do not wait on them.
+
+## Local mutation transaction
+
+1. Validate the command locally using the currency exponent and domain rules.
+2. In one SwiftData transaction, mutate the client-generated UUID entity and append an outbox operation.
+3. The outbox records operation ID/idempotency key, entity/type, command, changed fields, base server version, creation time, attempt state, and dependency IDs.
+4. Commit, update UI, and dismiss without a network spinner.
+5. Ask the synchronization actor to run if appropriate.
+
+If step 2 fails, neither entity nor outbox persists. Undo is another auditable local command; delete becomes a tombstone.
+
+## Push
+
+- One synchronization actor sends bounded, stable-order batches.
+- Operations carry independent IDs and base versions. Server processing is transactional per operation and returns accepted, duplicate, rejected, unauthorized, or conflict.
+- Lost responses are retried with identical IDs. Validation/permission/revocation failures stop automatic retry; transient failures use exponential backoff with jitter.
+- Conflicts and permanent failures do not block unrelated operations.
+- Binary attachments use a separate checksum/idempotency queue and never ride in the mutation batch.
+
+## Pull
+
+- Each device stores a durable opaque cursor.
+- After push and on invalidation/manual/foreground triggers, pull bounded change pages.
+- Apply a page—including tombstones—and its next cursor atomically. Never advance a cursor before page commit.
+- Change rows are filtered by current authorization; WebSockets carry only a “data changed” hint.
+- Change/tombstone retention begins at 90 days. A cursor older than retention returns a machine-readable bootstrap-required error.
+
+## Full bootstrap
+
+1. Preserve unsent outbox commands and locally referenced files.
+2. Download bounded bootstrap pages into a staging store/snapshot.
+3. Validate counts, relationships, currency values, and final cursor.
+4. Atomically replace/reconcile synchronized state while retaining unsent commands.
+5. Rebase/replay those commands against downloaded versions, producing conflicts where required.
+
+A bootstrap failure leaves the prior local store/cursor usable.
+
+## Conflict rules
+
+- Security/membership/role data is server-authoritative.
+- Delete on a newer version defeats an older edit, but the local proposal is retained for review.
+- The server merges only provably non-overlapping field changes.
+- Overlapping financial edits return base information when retained, current server representation, proposed local changes, and changed-field metadata.
+- UI offers keep server, submit mine as a new update, and meaningful field review. The decision is audited.
+
+## Triggers and diagnostics
+
+Attempt on login/bootstrap, launch/foreground, local change, pull-to-refresh, active connectivity return, periodic active timer, best-effort BackgroundTasks, and WebSocket invalidation. Correctness never assumes a precise background or Wi-Fi event.
+
+The UI always exposes last success, current state, pending/failed/conflict counts, and manual retry. States are pending, syncing, synced, failed, and conflicted.
+

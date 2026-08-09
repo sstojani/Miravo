@@ -1,0 +1,102 @@
+[project]
+name = "project-ledger"
+version = "0.1.0"
+description = "Self-hosted, offline-first personal finance application"
+readme = "README.md"
+requires-python = ">=3.12,<3.15"
+license = { text = "Proprietary" }
+dependencies = [
+  "argon2-cffi>=25.1.0,<26",
+  "celery>=5.6.3,<5.7",
+  "channels>=4.3.1,<5",
+  "channels-redis>=4.3.0,<5",
+  "dj-database-url>=3.0.1,<4",
+  "django>=5.2.17,<5.3",
+  "django-cors-headers>=4.7.0,<5",
+  "djangorestframework>=3.18.0,<3.19",
+  "drf-spectacular>=0.28.0,<0.30",
+  "psycopg[binary]>=3.2.9,<4",
+  "pyjwt>=2.10.1,<3",
+  "redis>=6.2.0,<7",
+  "uvicorn[standard]>=0.35.0,<0.40",
+  "whitenoise>=6.9.0,<7",
+]
+
+[dependency-groups]
+dev = [
+  "bandit>=1.8.6,<2",
+  "django-stubs>=5.2.2,<6",
+  "djangorestframework-stubs>=3.16.4,<4",
+  "factory-boy>=3.3.3,<4",
+  "mypy>=1.16.1,<2",
+  "pip-audit>=2.9.0,<3",
+  "pytest>=9.0.3,<10",
+  "pytest-cov>=6.2.1,<8",
+  "pytest-django>=4.11.1,<5",
+  "ruff>=0.12.3,<1",
+  "types-pyjwt>=1.7.1,<2",
+]
+
+[tool.uv]
+default-groups = ["dev"]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings"
+pythonpath = ["backend"]
+testpaths = ["backend/tests", "backend/apps"]
+addopts = "--strict-config --strict-markers --disable-warnings"
+markers = [
+  "postgres: requires PostgreSQL semantics",
+  "integration: crosses a process or external service boundary",
+]
+
+[tool.coverage.run]
+branch = true
+source = ["backend/apps", "backend/config"]
+omit = ["*/migrations/*", "*/tests/*", "*/manage.py"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+fail_under = 75
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["backend"]
+exclude = ["backend/**/migrations/*.py"]
+
+[tool.ruff.lint]
+select = [
+  "A", "ASYNC", "B", "BLE", "C4", "DJ", "E", "F", "I", "N", "PERF",
+  "PIE", "PL", "RUF", "S", "SIM", "T20", "UP", "W",
+]
+ignore = [
+  "DJ001",
+  "PLR0913",
+  "RUF012",
+  "S101",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"backend/config/settings.py" = ["F405"]
+"backend/tests/**/*.py" = ["PLR2004", "S105", "S106"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.mypy]
+python_version = "3.12"
+mypy_path = "backend"
+plugins = ["mypy_django_plugin.main", "mypy_drf_plugin.main"]
+strict = true
+warn_unreachable = true
+exclude = "backend/.*/migrations/"
+
+[tool.django-stubs]
+django_settings_module = "config.settings"
+
+[[tool.mypy.overrides]]
+module = ["celery", "celery.*", "channels", "channels.*", "channels_redis", "channels_redis.*"]
+ignore_missing_imports = true

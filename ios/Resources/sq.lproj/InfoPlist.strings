@@ -1,0 +1,4 @@
+"NSCameraUsageDescription" = "Fotografo një faturë që zgjedh ta bashkëngjitësh me një transaksion.";
+"NSFaceIDUsageDescription" = "Blloko në mënyrë opsionale qasjen te të dhënat financiare të ruajtura lokalisht.";
+"NSPhotoLibraryUsageDescription" = "Zgjidh një faturë që dëshiron ta bashkëngjitësh me një transaksion.";
+

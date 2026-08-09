@@ -1,0 +1,42 @@
+name: Dependency audit
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  python-audit:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.11.33"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13.15"
+      - run: uv sync --all-groups --frozen
+      - run: uv run pip-audit
+      - run: uv run bandit -q -r backend/apps backend/config
+
+  container-audit:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -f backend/Dockerfile -t project-ledger-api:audit .
+      - uses: aquasecurity/trivy-action@0.32.0
+        with:
+          image-ref: project-ledger-api:audit
+          format: table
+          exit-code: "1"
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+

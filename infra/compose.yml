@@ -1,0 +1,135 @@
+name: project-ledger
+
+x-app: &app
+  build:
+    context: ..
+    dockerfile: backend/Dockerfile
+  image: project-ledger-api:0.1.0
+  env_file:
+    - ../.env
+  restart: unless-stopped
+  init: true
+  stop_grace_period: 30s
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  networks:
+    - application
+    - data
+  depends_on:
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+  deploy:
+    resources:
+      limits:
+        memory: 768M
+
+services:
+  proxy:
+    image: caddy:2.10.2-alpine
+    restart: unless-stopped
+    init: true
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "127.0.0.1:${PROJECT_LEDGER_LOOPBACK_PORT:-8080}:8080"
+    volumes:
+      - ./proxy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    tmpfs:
+      - /tmp:size=16m,noexec,nosuid,nodev
+    networks:
+      - application
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8080/api/v1/health/live"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  api:
+    <<: *app
+    volumes:
+      - private_media:/var/lib/projectledger/media
+      - private_exports:/var/lib/projectledger/exports
+
+  worker:
+    <<: *app
+    command: ["celery", "-A", "config", "worker", "--loglevel=INFO", "--concurrency=2"]
+    healthcheck:
+      disable: true
+    volumes:
+      - private_media:/var/lib/projectledger/media
+      - private_exports:/var/lib/projectledger/exports
+
+  beat:
+    <<: *app
+    command: ["celery", "-A", "config", "beat", "--loglevel=INFO", "--schedule=/tmp/celerybeat-schedule"]
+    healthcheck:
+      disable: true
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  postgres:
+    image: postgres:17.6-bookworm
+    restart: unless-stopped
+    stop_grace_period: 60s
+    env_file:
+      - ../.env
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    shm_size: 256mb
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
+  redis:
+    image: redis:7.4.5-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--save", "60", "1", "--maxmemory-policy", "noeviction"]
+    volumes:
+      - redis_data:/data
+    networks:
+      - data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+
+networks:
+  application:
+  data:
+    internal: true
+
+volumes:
+  postgres_data:
+  redis_data:
+  private_media:
+  private_exports:
+  caddy_data:
+  caddy_config:
+

@@ -1,0 +1,27 @@
+"Overview" = "Overview";
+"Transactions" = "Transactions";
+"Add" = "Add";
+"Plans" = "Plans";
+"Insights" = "Insights";
+"Settings" = "Settings";
+"This feature is scheduled in the implementation plan." = "This feature is scheduled in the implementation plan.";
+"This month" = "This month";
+"Local-first foundation" = "Local-first foundation";
+"Records save on this iPhone before any network request." = "Records save on this iPhone before any network request.";
+"Recent transactions" = "Recent transactions";
+"No transactions yet" = "No transactions yet";
+"Use Add to save the first offline expense." = "Use Add to save the first offline expense.";
+"No transactions" = "No transactions";
+"Transactions saved offline will appear here." = "Transactions saved offline will appear here.";
+"Expense" = "Expense";
+"Amount" = "Amount";
+"Expense amount" = "Expense amount";
+"Merchant (optional)" = "Merchant (optional)";
+"Save offline" = "Save offline";
+"Quick add" = "Quick add";
+"Saved on this iPhone" = "Saved on this iPhone";
+"OK" = "OK";
+"Synchronization can happen later without blocking this entry." = "Synchronization can happen later without blocking this entry.";
+"Use no more than two decimal places." = "Use no more than two decimal places.";
+"Enter a valid positive amount." = "Enter a valid positive amount.";
+

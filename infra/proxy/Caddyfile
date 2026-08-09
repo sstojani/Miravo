@@ -1,0 +1,38 @@
+{
+    admin off
+    auto_https off
+    log {
+        output stdout
+        format json
+    }
+}
+
+:8080 {
+    encode zstd gzip
+
+    header {
+        -Server
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "no-referrer"
+        Permissions-Policy "camera=(), microphone=(), geolocation=()"
+        Content-Security-Policy "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+        Cache-Control "no-store"
+    }
+
+    request_body {
+        max_size 16MB
+    }
+
+    @private path /internal/* /admin* /metrics* /debug* /media/* /never-serve-raw-media/* /api/schema* /static/*
+    respond @private 404
+
+    @api path /api/v1/*
+    reverse_proxy @api api:8000 {
+        header_up X-Forwarded-Proto https
+        header_up X-Forwarded-Host {host}
+    }
+
+    respond 404
+}
+

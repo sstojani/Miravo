@@ -1,0 +1,27 @@
+services:
+  api:
+    command: ["python", "manage.py", "runserver", "0.0.0.0:8000"]
+    environment:
+      PROJECT_LEDGER_ENV: development
+      PROJECT_LEDGER_DEBUG: "true"
+    volumes:
+      - ../backend:/app/backend
+      - private_media:/var/lib/projectledger/media
+      - private_exports:/var/lib/projectledger/exports
+
+  worker:
+    environment:
+      PROJECT_LEDGER_ENV: development
+      PROJECT_LEDGER_DEBUG: "true"
+    volumes:
+      - ../backend:/app/backend
+      - private_media:/var/lib/projectledger/media
+      - private_exports:/var/lib/projectledger/exports
+
+  beat:
+    environment:
+      PROJECT_LEDGER_ENV: development
+      PROJECT_LEDGER_DEBUG: "true"
+    volumes:
+      - ../backend:/app/backend
+

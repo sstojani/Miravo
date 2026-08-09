@@ -1,0 +1,4 @@
+"NSCameraUsageDescription" = "Capture a receipt that you choose to attach to a transaction.";
+"NSFaceIDUsageDescription" = "Optionally lock access to your locally stored financial information.";
+"NSPhotoLibraryUsageDescription" = "Select a receipt that you choose to attach to a transaction.";
+
