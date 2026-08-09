@@ -124,7 +124,12 @@ class TransactionParts:
 
 def _get_account(tracker: Tracker, account_id: UUID, field: str) -> Account:
     try:
-        return Account.objects.get(id=account_id, tracker=tracker, deleted_at__isnull=True)
+        return Account.objects.get(
+            id=account_id,
+            tracker=tracker,
+            archived_at__isnull=True,
+            deleted_at__isnull=True,
+        )
     except Account.DoesNotExist as exc:
         raise serializers.ValidationError(
             {field: "Account does not belong to this tracker."}
@@ -338,6 +343,10 @@ def _resolve_transaction_parts(
         "external_event_id": data.get("external_event_id"),
         "refund_of": refund_of,
     }
+    if "card_label" in data:
+        transaction_values["card_label"] = str(data["card_label"])
+    if "needs_review" in data:
+        transaction_values["needs_review"] = bool(data["needs_review"])
     outgoing_kinds = (
         Transaction.Kind.EXPENSE,
         Transaction.Kind.TRANSFER,
@@ -416,6 +425,8 @@ def snapshot_transaction(record: Transaction, *, editor: User, reason: str) -> T
         rate_effective_at=record.rate_effective_at,
         merchant=record.merchant,
         payee=record.payee,
+        card_label=record.card_label,
+        needs_review=record.needs_review,
         occurred_at=record.occurred_at,
         external_event_id=record.external_event_id,
         refund_of=record.refund_of,

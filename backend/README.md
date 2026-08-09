@@ -30,6 +30,9 @@ Useful endpoints:
 - `GET /api/v1/audit-events/?tracker_id=<UUID>` for owner/admin audit review
 - `POST /api/v1/sync/push`, `GET /api/v1/sync/pull`, `POST /api/v1/sync/ack`, and `GET /api/v1/sync/bootstrap`
 - `WSS /api/v1/sync/events` with an access-token `Authorization` header for sequence-only foreground invalidation
+- `GET/POST /api/v1/shortcut/credentials` and `DELETE /api/v1/shortcut/credentials/{id}` with the ordinary access JWT
+- `GET /api/v1/shortcut/context`, `/categories`, and `/accounts` with a scoped Shortcut bearer token
+- `POST /api/v1/shortcut/transactions` and `/transactions/batch` for duplicate-safe capture
 
 The OpenAPI source is generated at `backend/openapi-schema.yml`. The schema endpoint and Django Admin are intentionally denied by the public reverse proxy.
 
@@ -44,6 +47,8 @@ Access tokens are JWTs with a short expiry and a device-session ID. Refresh cred
 Never copy real tokens into issues, tests, logs, screenshots, or documentation.
 
 Tracker invitations use a separate pepper and store only an HMAC digest. The raw invite value appears only in the create response, is email-bound, expiring, one-time, and revocable.
+
+Shortcut credentials use another independent pepper and store only a public prefix plus HMAC digest. The raw high-entropy value appears only in the create response. Tokens may be tracker-restricted, carry only the three narrow read/create scopes, expire by default after 90 days, are audited at create/revoke, and are throttled by authentication attempt, token, and user. Capture idempotency is user-scoped and retained for 120 days by default, so rotating a token cannot duplicate an already accepted event. See `docs/api.md` and `docs/shortcut-setup.md`.
 
 ## Financial write behavior
 

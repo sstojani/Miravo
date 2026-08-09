@@ -89,7 +89,6 @@ The WebSocket requires `Authorization: Bearer <access-token>`; credentials are n
 - Participants, splits, simplified balances, settlements.
 - Budgets/periods, recurring rules/occurrences/subscriptions, installments/schedule/payments.
 - Currency rates, analytics, audit history, export jobs/expiring downloads.
-- Narrow Shortcut context/categories/accounts/transaction/batch routes.
 
 Collection endpoints use bounded cursor pagination, explicit filters/order, and stable error codes. Authorization returns 404 where revealing object existence would be inappropriate.
 
@@ -97,9 +96,26 @@ Collection endpoints use bounded cursor pagination, explicit filters/order, and 
 
 Access JWT claims include issuer, audience, `typ=access`, user `sub`, device-session `sid`, unique `jti`, issued time, and expiry. Every authenticated request confirms the user and session remain active. No master API credential exists in the app.
 
-## Shortcut transport subset
+## Implemented in Milestone 6 (Shortcut server surface)
 
-The eventual Shortcut request is versioned and accepts only capture data, never card numbers/CVV/payment credentials:
+Credential management uses the ordinary short-lived access JWT. Capture routes use only a distinct Shortcut bearer token; an access JWT or refresh credential is not accepted there.
+
+| Method/path | Authentication | Purpose |
+|---|---|---|
+| `GET /shortcut/credentials` | Access JWT | List only the caller's safe credential metadata; never return a raw token or digest |
+| `POST /shortcut/credentials` | Access JWT | Create a named credential, optionally tracker-restricted; raw token appears in this response only |
+| `DELETE /shortcut/credentials/{id}` | Access JWT | Immediately and idempotently revoke one of the caller's credentials |
+| `GET /shortcut/context` | Shortcut token | Return protocol version, safe credential metadata, and up to 100 currently authorized active trackers/defaults |
+| `GET /shortcut/categories?tracker_id=…` | Shortcut token with `categories:read` | Active expense categories for one authorized tracker |
+| `GET /shortcut/accounts?tracker_id=…` | Shortcut token with `accounts:read` | Active accounts and currency exponents for one authorized tracker |
+| `POST /shortcut/transactions` | Shortcut token with `transactions:create` | Create one posted expense through the authoritative ledger command service |
+| `POST /shortcut/transactions/batch` | Shortcut token with `transactions:create` | Process a bounded queue with independent created/duplicate/rejected results |
+
+The supported scopes are exactly `categories:read`, `accounts:read`, and `transactions:create`. A tracker-restricted credential infers its tracker for the read routes; an unrestricted credential must pass `tracker_id`. Current membership and role are checked on every request. Default configuration expires credentials after 90 days, retains idempotency receipts for 120 days, limits a batch to 50 items, and applies authentication-attempt, per-token, and per-user throttles. Creation and revocation are audited. The raw `pls.<prefix>.<secret>` token is high entropy, HMAC-SHA-256 protected with a pepper independent of every other credential family, and never stored.
+
+### Capture request
+
+The versioned capture shape accepts only capture data, never card numbers, CVV, cryptograms, or payment credentials:
 
 ```json
 {
@@ -119,4 +135,20 @@ The eventual Shortcut request is versioned and accepts only capture data, never 
 }
 ```
 
-`Authorization: Bearer <shortcut-token>` and `Idempotency-Key: <same UUID>` are required. Same key/fingerprint returns the existing result; same key/different fingerprint is a conflict.
+Unknown fields are rejected. `card_label` is only a display label; text that resembles a valid payment-card number is rejected in it, the merchant, and the note. The resulting read representation uses the internal source value `shortcut`.
+
+`Authorization: Bearer <shortcut-token>` and a UUID `Idempotency-Key` are required for the single route. Use the same UUID for `event_id` and the header. A first creation returns HTTP 201 with `status=created`; the same user/key/fingerprint or duplicate tracker event returns HTTP 200 with `status=duplicate` and the existing transaction. Reusing a key with a different canonical payload returns HTTP 409 `idempotency_key_conflict`. Idempotency is user-scoped, so rotating the credential cannot create another record for an acknowledged event.
+
+If the transaction currency differs from the account currency, provide `account_amount_minor`. If it differs from the tracker base currency, also provide the complete `base_amount_minor`, `base_currency`, `rate_snapshot`, `rate_source`, and `rate_effective_at` snapshot. The normal financial service validates the claimed conversion; no rate is inferred.
+
+The batch request is:
+
+```json
+{
+  "transactions": [
+    {"event_id": "UUID", "client_payload_version": 1, "source": "apple_wallet_shortcut"}
+  ]
+}
+```
+
+Each full item uses its own `event_id` as the idempotency key. The HTTP response is successful when the envelope was processed and contains one ordered `created`, `duplicate`, or `rejected` result per item. A queue flush removes only `created` and `duplicate` items. An expired/revoked credential or request throttle terminates the request instead of disguising the failure as an item rejection. Checked-in complete examples are in `docs/examples/shortcut-transaction.json` and `docs/examples/shortcut-batch.json`.

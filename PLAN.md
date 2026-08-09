@@ -2,7 +2,7 @@
 
 Last updated: 2026-08-09. A checked item is complete; its verification tier is recorded in `IMPLEMENT.md`. Items are not checked merely because scaffolding exists.
 
-Current focus: **Milestone 6 — Shortcut automation**. Milestone 5 source now includes atomic transfer/refund commands, tags, combined local discovery, role-aware controls, tracker presentation/defaults/reordering, explicit unavailable/offline/pending/failed/conflict states, complete implemented-screen English/Albanian resources, a source accessibility audit, and an authored deterministic 50,000-record regression check. Swift compilation, simulator accessibility/performance, Docker, and hosted CI remain explicit external checks.
+Current focus: **Milestone 6 — Shortcut automation**. The server now has locally tested, independently keyed scoped credentials plus narrow context/category/account/single/batch capture routes, transactional user-scoped idempotency, throttling, audit, revocation, and checked-in setup samples. The native token/default-management screen and physical-iPhone online/offline-queue verification are next. Swift compilation, simulator accessibility/performance, Docker, and hosted CI remain explicit external checks.
 
 ## Milestone 0 — Discovery and durable project plan
 
@@ -68,9 +68,9 @@ Current acceptance: an authenticated device can push an ordered offline tracker/
 
 ## Milestone 6 — Shortcut automation
 
-- [ ] Scoped hashed Shortcut credentials, context/category/account/create/batch endpoints, throttles, audit, revoke, replay and mismatch tests.
+- [x] Scoped hashed Shortcut credentials, context/category/account/create/batch endpoints, throttles, audit, revoke, replay and mismatch tests (server behavior verified locally; PostgreSQL/Redis/hosted CI pending).
 - [ ] App token/default management screen.
-- [ ] Verified manual online and queued/offline Shortcut construction guides and sample requests.
+- [ ] Verified manual online and queued/offline Shortcut construction guides and sample requests (contract and JSON samples authored; current-iPhone execution pending).
 
 ## Milestone 7 — Budgets, recurring/subscriptions, and installments
 

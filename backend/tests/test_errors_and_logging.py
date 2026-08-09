@@ -9,11 +9,15 @@ from apps.common.logging import RedactingFilter, SafeJsonFormatter, redact
 
 
 def test_redaction_removes_common_credentials() -> None:
-    value = "Authorization: Bearer abc.def.ghi password=secret refresh_token=raw-token"
+    value = (
+        "Authorization: Bearer abc.def.ghi password=secret refresh_token=raw-token "
+        "shortcut_token=pls.must-not-appear"
+    )
     result = redact(value)
     assert "abc.def.ghi" not in result
     assert "secret" not in result
     assert "raw-token" not in result
+    assert "must-not-appear" not in result
 
 
 def test_json_formatter_includes_request_id_without_sensitive_payload() -> None:

@@ -11,7 +11,8 @@ from apps.common.context import request_id_context
 _REDACTIONS = (
     re.compile(r"(?i)bearer\s+[A-Za-z0-9._~+/=-]+"),
     re.compile(
-        r"(?i)(authorization|cookie|password|refresh[_ -]?token|access[_ -]?token)"
+        r"(?i)(authorization|cookie|password|refresh[_ -]?token|access[_ -]?token|"
+        r"shortcut[_ -]?token)"
         r"\s*[:=]\s*[^\s,;]+"
     ),
 )

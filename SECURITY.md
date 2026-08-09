@@ -6,11 +6,13 @@ Project Ledger stores sensitive financial and identity data. Report suspected vu
 
 - Non-development traffic is HTTPS-only and authenticated except deliberate liveness/public-config routes.
 - Passwords use Argon2. Access JWTs are short lived. Refresh credentials rotate, are stored as keyed hashes, and revoke the device session on reuse.
-- Tracker invitation credentials are independent, email-bound, expiring, HMAC-hashed, revocable, and shown once. Shortcut credentials will use a separate scoped credential family.
+- Tracker invitation credentials are independent, email-bound, expiring, HMAC-hashed, revocable, and shown once.
+- Shortcut credentials use their own secret pepper and high-entropy token family. Only a prefix and HMAC-SHA-256 digest are stored; the raw token is shown once, can be tracker-restricted, carries explicit read/create scopes, expires by default, and is immediately revocable. The narrow routes apply client-attempt, per-token, and per-user throttles.
 - iOS secrets belong only in Keychain. The IPA contains public configuration only.
 - iOS access/refresh credentials use a non-synchronizing Keychain item with `AfterFirstUnlockThisDeviceOnly` accessibility and no custom access group; a password is never persisted.
 - Cached iOS entities are partitioned by normalized server origin and authenticated user UUID. Sign-out hides the scope without destructively deleting possibly unsynchronized records.
 - Synchronization cursors are signed and bound to the authenticated user. Operation replay receipts are user-scoped, fingerprint-protected, database-private, and expire after 120 days; their financial response/proposal content is never emitted to logs.
+- Shortcut capture receipts are likewise user-scoped and fingerprint-protected for 120 days. A repeated event ID returns the existing transaction, while reuse of one idempotency key with another normalized payload is rejected. Token rotation cannot create a second user-scoped event.
 - Tracker changes are filtered through current active membership. Membership revocation events are targeted only to the affected user so a removed device learns to hide data without receiving later tracker mutations.
 - Release URL validation and ATS permit HTTPS only. The Debug-only ATS exception is constrained in code to loopback, and redirects are refused for credential-bearing requests.
 - The privacy manifest declares linked app-functionality data accurately, declares no tracking domains, and records only the CA92.1 app-owned UserDefaults required reason.

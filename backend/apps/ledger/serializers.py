@@ -406,6 +406,8 @@ class TransactionWriteSerializer(StrictSerializer):
     merchant = serializers.CharField(max_length=160, required=False, allow_blank=True, default="")
     payee = serializers.CharField(max_length=160, required=False, allow_blank=True, default="")
     note = serializers.CharField(max_length=5000, required=False, allow_blank=True, default="")
+    card_label = serializers.CharField(max_length=120, required=False, allow_blank=True)
+    needs_review = serializers.BooleanField(required=False)
     occurred_at = serializers.DateTimeField()
     base_amount_minor = serializers.IntegerField(min_value=1, required=False)
     base_currency = serializers.CharField(min_length=3, max_length=3, required=False)
@@ -483,6 +485,8 @@ class TransactionReadSerializer(StrictModelSerializer):
             "merchant",
             "payee",
             "note",
+            "card_label",
+            "needs_review",
             "occurred_at",
             "captured_at",
             "external_event_id",
@@ -554,6 +558,8 @@ class TransactionRevisionSerializer(StrictModelSerializer):
             "rate_effective_at",
             "merchant_id",
             "payee",
+            "card_label",
+            "needs_review",
             "occurred_at",
             "external_event_id",
             "refund_of_id",

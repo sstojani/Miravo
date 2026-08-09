@@ -770,6 +770,183 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/shortcut/accounts:
+    get:
+      operationId: shortcut_accounts_retrieve
+      parameters:
+      - in: query
+        name: tracker_id
+        schema:
+          type: string
+          format: uuid
+      tags:
+      - shortcut
+      security:
+      - shortcutToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShortcutAccountList'
+          description: ''
+  /api/v1/shortcut/categories:
+    get:
+      operationId: shortcut_categories_retrieve
+      parameters:
+      - in: query
+        name: tracker_id
+        schema:
+          type: string
+          format: uuid
+      tags:
+      - shortcut
+      security:
+      - shortcutToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShortcutCategoryList'
+          description: ''
+  /api/v1/shortcut/context:
+    get:
+      operationId: shortcut_context_retrieve
+      tags:
+      - shortcut
+      security:
+      - shortcutToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShortcutContext'
+          description: ''
+  /api/v1/shortcut/credentials:
+    get:
+      operationId: shortcut_credentials_list
+      tags:
+      - shortcut
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ShortcutCredential'
+          description: ''
+    post:
+      operationId: shortcut_credentials_create
+      tags:
+      - shortcut
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ShortcutCredentialCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ShortcutCredentialCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ShortcutCredentialCreateRequest'
+        required: true
+      security:
+      - accessToken: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShortcutCredentialCreated'
+          description: ''
+  /api/v1/shortcut/credentials/{credential_id}:
+    delete:
+      operationId: shortcut_credentials_destroy
+      parameters:
+      - in: path
+        name: credential_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - shortcut
+      security:
+      - accessToken: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/shortcut/transactions:
+    post:
+      operationId: shortcut_transactions_create
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - shortcut
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ShortcutTransactionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ShortcutTransactionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ShortcutTransactionRequest'
+        required: true
+      security:
+      - shortcutToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShortcutTransactionResult'
+          description: ''
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShortcutTransactionResult'
+          description: ''
+  /api/v1/shortcut/transactions/batch:
+    post:
+      operationId: shortcut_transactions_batch_create
+      tags:
+      - shortcut
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ShortcutBatchRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ShortcutBatchRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ShortcutBatchRequest'
+        required: true
+      security:
+      - shortcutToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShortcutBatchResult'
+          description: ''
   /api/v1/sync/ack:
     post:
       operationId: sync_ack_create
@@ -2855,6 +3032,16 @@ components:
           maxLength: 512
       required:
       - refresh_token
+    ScopesEnum:
+      enum:
+      - categories:read
+      - accounts:read
+      - transactions:create
+      type: string
+      description: |-
+        * `categories:read` - categories:read
+        * `accounts:read` - accounts:read
+        * `transactions:create` - transactions:create
     Session:
       type: object
       properties:
@@ -2891,24 +3078,453 @@ components:
       - last_seen_at
       - platform
       - revoked_at
-    SourceEnum:
+    ShortcutAccount:
+      type: object
+      description: Serializer that rejects misspelled or unsupported request fields.
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        type:
+          type: string
+        currency:
+          type: string
+        currency_exponent:
+          type: integer
+        is_default:
+          type: boolean
+      required:
+      - currency
+      - currency_exponent
+      - id
+      - is_default
+      - name
+      - type
+    ShortcutAccountList:
+      type: object
+      description: Serializer that rejects misspelled or unsupported request fields.
+      properties:
+        tracker_id:
+          type: string
+          format: uuid
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/ShortcutAccount'
+      required:
+      - results
+      - tracker_id
+    ShortcutBatchItemError:
+      type: object
+      description: Serializer that rejects misspelled or unsupported request fields.
+      properties:
+        code:
+          type: string
+        details: {}
+      required:
+      - code
+    ShortcutBatchItemResult:
+      type: object
+      description: Serializer that rejects misspelled or unsupported request fields.
+      properties:
+        event_id:
+          type: string
+          format: uuid
+          nullable: true
+        status:
+          $ref: '#/components/schemas/ShortcutBatchItemResultStatusEnum'
+        transaction:
+          $ref: '#/components/schemas/TransactionRead'
+        error:
+          $ref: '#/components/schemas/ShortcutBatchItemError'
+      required:
+      - event_id
+      - status
+    ShortcutBatchItemResultStatusEnum:
       enum:
-      - manual
-      - shortcut
-      - recurring
-      - installment
-      - receipt_scan
-      - import
-      - server
+      - created
+      - duplicate
+      - rejected
       type: string
       description: |-
-        * `manual` - Manual
-        * `shortcut` - Shortcut
-        * `recurring` - Recurring
-        * `installment` - Installment
-        * `receipt_scan` - Receipt scan
-        * `import` - Import
-        * `server` - Server
+        * `created` - created
+        * `duplicate` - duplicate
+        * `rejected` - rejected
+    ShortcutBatchRequest:
+      type: object
+      description: Serializer that rejects misspelled or unsupported request fields.
+      properties:
+        transactions:
+          type: array
+          items: {}
+      required:
+      - transactions
+    ShortcutBatchResult:
+      type: object
+      description: Serializer that rejects misspelled or unsupported request fields.
+      properties:
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/ShortcutBatchItemResult'
+      required:
+      - results
+    ShortcutCategory:
+      type: object
+      description: Serializer that rejects misspelled or unsupported request fields.
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        parent_id:
+          type: string
+          format: uuid
+          nullable: true
+        icon:
+          type: string
+        color:
+          type: string
+        is_default:
+          type: boolean
+      required:
+      - color
+      - icon
+      - id
+      - is_default
+      - name
+      - parent_id
+    ShortcutCategoryList:
+      type: object
+      description: Serializer that rejects misspelled or unsupported request fields.
+      properties:
+        tracker_id:
+          type: string
+          format: uuid
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/ShortcutCategory'
+      required:
+      - results
+      - tracker_id
+    ShortcutContext:
+      type: object
+      description: Serializer that rejects misspelled or unsupported request fields.
+      properties:
+        protocol_version:
+          type: integer
+        credential:
+          $ref: '#/components/schemas/ShortcutContextCredential'
+        trackers:
+          type: array
+          items:
+            $ref: '#/components/schemas/ShortcutTrackerSummary'
+        truncated:
+          type: boolean
+      required:
+      - credential
+      - protocol_version
+      - trackers
+      - truncated
+    ShortcutContextCredential:
+      type: object
+      description: Serializer that rejects misspelled or unsupported request fields.
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        tracker_id:
+          type: string
+          format: uuid
+          nullable: true
+        scopes:
+          type: array
+          items:
+            type: string
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - expires_at
+      - id
+      - name
+      - scopes
+      - tracker_id
+    ShortcutCredential:
+      type: object
+      description: Model serializer with strict input-field handling.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+        tracker_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        token_prefix:
+          type: string
+          readOnly: true
+        scopes:
+          type: array
+          items:
+            type: string
+          readOnly: true
+        expires_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        last_used_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        revoked_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - expires_at
+      - id
+      - last_used_at
+      - name
+      - revoked_at
+      - scopes
+      - token_prefix
+      - tracker_id
+    ShortcutCredentialCreateRequest:
+      type: object
+      description: Serializer that rejects misspelled or unsupported request fields.
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        tracker_id:
+          type: string
+          format: uuid
+          nullable: true
+        scopes:
+          type: array
+          items:
+            $ref: '#/components/schemas/ScopesEnum'
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - name
+    ShortcutCredentialCreated:
+      type: object
+      description: Model serializer with strict input-field handling.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+        tracker_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        token_prefix:
+          type: string
+          readOnly: true
+        scopes:
+          type: array
+          items:
+            type: string
+          readOnly: true
+        expires_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        last_used_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        revoked_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        raw_token:
+          type: string
+          readOnly: true
+      required:
+      - created_at
+      - expires_at
+      - id
+      - last_used_at
+      - name
+      - raw_token
+      - revoked_at
+      - scopes
+      - token_prefix
+      - tracker_id
+    ShortcutTrackerSummary:
+      type: object
+      description: Serializer that rejects misspelled or unsupported request fields.
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        base_currency:
+          type: string
+        base_currency_exponent:
+          type: integer
+        default_account_id:
+          type: string
+          format: uuid
+          nullable: true
+        default_category_id:
+          type: string
+          format: uuid
+          nullable: true
+        role:
+          type: string
+      required:
+      - base_currency
+      - base_currency_exponent
+      - default_account_id
+      - default_category_id
+      - id
+      - name
+      - role
+    ShortcutTransactionRequest:
+      type: object
+      description: Serializer that rejects misspelled or unsupported request fields.
+      properties:
+        event_id:
+          type: string
+          format: uuid
+        source:
+          $ref: '#/components/schemas/ShortcutTransactionSource'
+        tracker_id:
+          type: string
+          format: uuid
+        account_id:
+          type: string
+          format: uuid
+        category_id:
+          type: string
+          format: uuid
+          nullable: true
+        amount_minor:
+          type: integer
+          minimum: 1
+        account_amount_minor:
+          type: integer
+          minimum: 1
+        currency:
+          type: string
+          minLength: 3
+          maxLength: 3
+        merchant:
+          type: string
+          nullable: true
+          default: ''
+          maxLength: 160
+        occurred_at:
+          type: string
+          format: date-time
+        card_label:
+          type: string
+          nullable: true
+          default: ''
+          maxLength: 120
+        note:
+          type: string
+          nullable: true
+          default: ''
+          maxLength: 5000
+        needs_review:
+          type: boolean
+          default: false
+        base_amount_minor:
+          type: integer
+          minimum: 1
+        base_currency:
+          type: string
+          minLength: 3
+          maxLength: 3
+        rate_snapshot:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,16}(?:\.\d{0,12})?$
+        rate_source:
+          type: string
+          minLength: 1
+          maxLength: 80
+        rate_effective_at:
+          type: string
+          format: date-time
+        client_payload_version:
+          type: integer
+          maximum: 1
+          minimum: 1
+      required:
+      - account_id
+      - amount_minor
+      - client_payload_version
+      - currency
+      - event_id
+      - occurred_at
+      - source
+      - tracker_id
+    ShortcutTransactionResult:
+      type: object
+      description: Serializer that rejects misspelled or unsupported request fields.
+      properties:
+        status:
+          $ref: '#/components/schemas/ShortcutTransactionResultStatusEnum'
+        transaction:
+          $ref: '#/components/schemas/TransactionRead'
+      required:
+      - status
+      - transaction
+    ShortcutTransactionResultStatusEnum:
+      enum:
+      - created
+      - duplicate
+      type: string
+      description: |-
+        * `created` - created
+        * `duplicate` - duplicate
+    ShortcutTransactionSource:
+      enum:
+      - apple_wallet_shortcut
+      type: string
+      description: '* `apple_wallet_shortcut` - apple_wallet_shortcut'
     StateEnum:
       enum:
       - active
@@ -3342,7 +3958,7 @@ components:
           readOnly: true
         source:
           allOf:
-          - $ref: '#/components/schemas/SourceEnum'
+          - $ref: '#/components/schemas/TransactionSource'
           readOnly: true
         status:
           allOf:
@@ -3389,6 +4005,12 @@ components:
           readOnly: true
         note:
           type: string
+          readOnly: true
+        card_label:
+          type: string
+          readOnly: true
+        needs_review:
+          type: boolean
           readOnly: true
         occurred_at:
           type: string
@@ -3453,6 +4075,7 @@ components:
       - base_amount_minor
       - base_currency
       - captured_at
+      - card_label
       - created_at
       - creator_id
       - currency
@@ -3465,6 +4088,7 @@ components:
       - merchant
       - merchant_id
       - movements
+      - needs_review
       - note
       - occurred_at
       - payee
@@ -3498,7 +4122,7 @@ components:
           readOnly: true
         source:
           allOf:
-          - $ref: '#/components/schemas/SourceEnum'
+          - $ref: '#/components/schemas/TransactionSource'
           readOnly: true
         status:
           allOf:
@@ -3539,6 +4163,12 @@ components:
         payee:
           type: string
           readOnly: true
+        card_label:
+          type: string
+          readOnly: true
+        needs_review:
+          type: boolean
+          readOnly: true
         occurred_at:
           type: string
           format: date-time
@@ -3576,6 +4206,7 @@ components:
       - amount_minor
       - base_amount_minor
       - base_currency
+      - card_label
       - created_at
       - currency
       - currency_exponent
@@ -3585,6 +4216,7 @@ components:
       - kind
       - merchant_id
       - movements
+      - needs_review
       - occurred_at
       - payee
       - rate_effective_at
@@ -3595,6 +4227,24 @@ components:
       - refund_of_id
       - source
       - status
+    TransactionSource:
+      enum:
+      - manual
+      - shortcut
+      - recurring
+      - installment
+      - receipt_scan
+      - import
+      - server
+      type: string
+      description: |-
+        * `manual` - Manual
+        * `shortcut` - Shortcut
+        * `recurring` - Recurring
+        * `installment` - Installment
+        * `receipt_scan` - Receipt scan
+        * `import` - Import
+        * `server` - Server
     TransactionStatus:
       enum:
       - draft
@@ -3620,7 +4270,7 @@ components:
           $ref: '#/components/schemas/TransactionKind'
         source:
           allOf:
-          - $ref: '#/components/schemas/SourceEnum'
+          - $ref: '#/components/schemas/TransactionSource'
           default: manual
         status:
           allOf:
@@ -3666,6 +4316,11 @@ components:
           type: string
           default: ''
           maxLength: 5000
+        card_label:
+          type: string
+          maxLength: 120
+        needs_review:
+          type: boolean
         occurred_at:
           type: string
           format: date-time
@@ -3737,3 +4392,8 @@ components:
       scheme: bearer
       bearerFormat: JWT
       description: Short-lived Project Ledger access token bound to a device session.
+    shortcutToken:
+      type: http
+      scheme: bearer
+      description: Revocable high-entropy Shortcut token. It is not an iOS access
+        or refresh token.

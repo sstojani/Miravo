@@ -11,6 +11,8 @@ from rest_framework.views import exception_handler
 def _code_for(exc: Exception, response_status: int) -> str:
     if isinstance(exc, ValidationError):
         return "validation_error"
+    if response_status == status.HTTP_429_TOO_MANY_REQUESTS:
+        return "rate_limited"
     if isinstance(exc, APIException):
         code = exc.get_codes()
         if isinstance(code, str):

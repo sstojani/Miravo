@@ -340,6 +340,8 @@ class Transaction(SyncableModel):
     )
     payee = models.CharField(max_length=160, blank=True)
     note = models.TextField(blank=True, max_length=5000)
+    card_label = models.CharField(max_length=120, blank=True)
+    needs_review = models.BooleanField(default=False)
     occurred_at = models.DateTimeField(db_index=True)
     captured_at = models.DateTimeField(default=timezone.now)
     creator = models.ForeignKey(
@@ -464,6 +466,8 @@ class TransactionRevision(UUIDTimestampedModel):
         related_name="transaction_revisions",
     )
     payee = models.CharField(max_length=160, blank=True)
+    card_label = models.CharField(max_length=120, blank=True)
+    needs_review = models.BooleanField(default=False)
     occurred_at = models.DateTimeField()
     external_event_id = models.UUIDField(null=True, blank=True)
     refund_of = models.ForeignKey(

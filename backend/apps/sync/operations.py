@@ -153,6 +153,10 @@ def _transaction_values(payload: dict[str, Any]) -> dict[str, Any]:
         "refund_of_id": payload.get("refund_of_id"),
         "tag_ids": payload.get("tag_ids", []),
     }
+    if "card_label" in payload:
+        result["card_label"] = payload["card_label"]
+    if "needs_review" in payload:
+        result["needs_review"] = payload["needs_review"]
     for field in (
         "base_amount_minor",
         "base_currency",

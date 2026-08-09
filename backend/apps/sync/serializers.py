@@ -129,6 +129,8 @@ class TransactionMutationPayloadSerializer(StrictSerializer):
     rate_effective_at = serializers.DateTimeField(required=False)
     merchant = serializers.CharField(max_length=160, allow_blank=True, default="")
     note = serializers.CharField(max_length=5000, allow_blank=True, default="")
+    card_label = serializers.CharField(max_length=120, allow_blank=True, required=False)
+    needs_review = serializers.BooleanField(required=False)
     occurred_at = serializers.DateTimeField()
     refund_of_id = serializers.UUIDField(required=False, allow_null=True)
     tag_ids = serializers.ListField(

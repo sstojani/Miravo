@@ -11,11 +11,11 @@ Primary assets are financial records, identity/session data, tracker membership,
 | IPA static extraction | Public configuration only; server-wide credentials absent | URLs, routes, and UI strings are public by design |
 | Leaked access token | Short lifetime, device-session active check, revocation, audit, TLS | Valid until expiry/revocation; future key rotation runbook |
 | Leaked refresh token | One-time rotation, keyed digest storage, reuse detection revokes family/session | First thief use can race legitimate client; surface session history |
-| Leaked Shortcut token | Separate high entropy, prefix+digest, narrow tracker/scopes, rate limits, expiry/revoke, idempotency | Token can create scoped records until revoked; show raw once and warn screenshots |
+| Leaked Shortcut token | Separate high entropy, HMAC prefix+digest, narrow tracker/scopes, client-attempt/per-token/per-user rate limits, default expiry, immediate revoke, idempotency | Token can create scoped records until revoked; show raw once and warn screenshots |
 | Public Funnel probing | HTTPS, strict proxy path policy, Django auth/object auth, body/throttle limits, safe errors | Funnel is beta/version-dependent; external exposure test at deployment |
 | Credential stuffing | Tight login throttle, generic errors, Argon2, audit; optional proxy controls | Home-host bandwidth/resource exhaustion remains possible |
 | Cross-tracker IDOR | Central permission/queryset services, no client-trusted role, exhaustive role/object tests | A missed endpoint is high impact; test matrix is release gate |
-| Shortcut replay/duplicate | Scoped unique event ID and idempotency key/fingerprint; transactional create | Retention expiry must exceed expected queue/retry window |
+| Shortcut replay/duplicate | User-scoped event ID and idempotency key/fingerprint; transactional create; token rotation preserves the user scope | The initial 120-day retention must exceed the expected queue/retry window; a genuinely new event needs a new UUID |
 | Malicious receipt upload | Content sniffing, allow-list, size/decompression/page limits, random private key, quarantine/AV hook, never execute | AV cannot prove safety; downloads use safe disposition |
 | Compromised server account | SSH keys, no root password login, least privilege, updates, audit, disk encryption, secret separation | Root compromise exposes live data; rotate all secrets and restore trusted build |
 | Stolen disk/backup | LUKS recommendation; age-encrypted offsite archives; separate key; restricted paths | Mounted running disk is readable to privileged compromise |
@@ -37,4 +37,3 @@ Primary assets are financial records, identity/session data, tracker membership,
 ## Privacy
 
 No advertising or third-party analytics SDK ships initially. Users receive clear local/server storage disclosure, data portability, session/Shortcut revocation, receipt-original retention controls, and a confirmed/graceful account-deletion process whose effects on shared/audit data are documented before implementation.
-

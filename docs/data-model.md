@@ -24,7 +24,7 @@ Exactly one active owner relationship exists per tracker. Object references may 
 | Category | Optional tracker scope, one optional parent, income/expense type, icon/color/order/archive |
 | Tag | Tracker-scoped normalized unique label |
 | Merchant | Tracker-scoped normalized/display name and optional default category |
-| Transaction | Tracker, kind/source/status, positive display amount/currency, merchant/note/time, creator/editor/external ID/version |
+| Transaction | Tracker, kind/source/status, positive display amount/currency, merchant/note/time, optional non-secret card label/review flag, creator/editor/external ID/version |
 | AccountMovement | Transaction/account, signed amount in account currency, conversion snapshot |
 | CategoryAllocation | Transaction/category, exact minor-unit amount, and category-version snapshot |
 | TransactionTag | Explicit transaction/tag relation |
@@ -52,7 +52,8 @@ The native transaction cache additionally retains source/destination account IDs
 | InstallmentPayment | Plan/item, linked posted transaction, amount, extra-payment flag |
 | Attachment | Owner/tracker/transaction, type/size/checksum/private key/upload state |
 | CurrencyRate | Base/quote decimal rate, source, effective/fetched-or-entered timestamps |
-| ShortcutCredential | User/tracker scope, prefix/digest/scopes/expiry/use/revocation |
+| ShortcutCredential | User/optional tracker scope, name, public prefix, HMAC digest, explicit scope bitmask, expiry/use/revocation; raw token is never stored |
+| ShortcutIdempotencyRecord | User-scoped UUID key, credential reference, canonical request fingerprint, existing transaction, 120-day expiry |
 | SyncOperationReceipt | User and optional device session, operation UUID, SHA-256 request fingerprint, entity reference, safe result, 120-day expiry; unique `(user, operation_id)` |
 | SyncChange | Global sequence, tracker and optional target-user scope, entity/id, upsert/delete operation, version, timestamp |
 | SyncDeviceState | One device session, latest acknowledged sequence/time |
@@ -63,7 +64,7 @@ The native transaction cache additionally retains source/destination account IDs
 ## Required constraints
 
 - Valid ISO currency and amount/exponent combinations; positive display amounts.
-- Unique membership, recurrence occurrence key, scoped external Shortcut event ID, and scoped idempotency key.
+- Unique membership, recurrence occurrence key, tracker-scoped external Shortcut event ID, and user-scoped Shortcut idempotency key.
 - No self-parent/cycle at the supported one-level category hierarchy.
 - No cross-tracker account/category/tag/participant/attachment references.
 - Exact transaction allocation, split paid, and split owed totals.

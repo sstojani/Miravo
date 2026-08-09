@@ -369,3 +369,42 @@ Run the macOS iOS workflow when a repository is available and fix every compile/
 ### Next exact action
 
 Commit this Milestone 5 source checkpoint, then begin Milestone 6 with the scoped, hashed, revocable Shortcut credential model and the narrow context/category/account/transaction API. Keep direct Shortcut capture independent from the native app and test duplicate/mismatched idempotency behavior before adding setup UI or documentation.
+
+## 2026-08-09 — Milestone 6 scoped Shortcut server checkpoint
+
+### Acceptance checks established
+
+- Shortcut capture authenticates only with an independent, high-entropy, HMAC-protected credential shown once at creation; a normal access/refresh credential never works on the narrow routes.
+- Tracker restriction, explicit scopes, live membership role, expiry, revocation, and authentication-attempt/per-token/per-user throttles are enforced on every applicable request. Credential create/revoke actions are audited without raw-token metadata.
+- Single and batch expense capture reuse the authoritative financial command service, reject unknown/payment-credential fields, require exact integer/currency and conversion semantics, and never accept client-authored signed movements or balances.
+- A user-scoped UUID and normalized payload fingerprint make lost-response retries and token rotation duplicate-safe. Same key/payload returns the existing transaction; same key/different payload conflicts; batch failures do not erase accepted siblings.
+- Server completion is distinct from current-iPhone verification: the native credential/default screen, Transaction-trigger field mapping, immediate-run behavior, and queue-file rewrite remain open.
+
+### Material work
+
+- Added `ShortcutCredential` and `ShortcutIdempotencyRecord` with constrained scope bits, optional tracker boundary, expiry/revocation/use metadata, independent peppered HMAC digests, database constraints, admin-safe fields, and daily receipt pruning.
+- Added JWT-authenticated credential create/list/revoke routes and Shortcut-token-only context/category/account/single/batch routes. Context is bounded, reads return only active authorized choices, and creates require editor access at request time.
+- Added strict version-1 capture validation, positive minor units, optional explicit account/base conversion data, PAN-like text rejection, `card_label`/`needs_review` transaction history, per-item batch results, and stable machine-readable throttle/idempotency errors.
+- Generated the current OpenAPI contract with a distinct `shortcutToken` scheme, added a separate CI/environment secret, expanded safe log redaction, and added checked-in single/batch JSON samples plus an honest online/offline setup guide.
+- Re-checked Apple’s current Transaction-trigger and `Get Contents of URL` documentation on 2026-08-09. They continue to support the bridge design, but target-device field labels and queue-file behavior are intentionally not claimed as verified.
+
+### Commands and outcomes
+
+- `.venv/bin/pytest backend/tests/test_shortcut_api.py -q`: **10 passed locally**, covering one-time raw display/hash, user scoping, expiry/revoke/audit, scopes/tracker/live role, single replay/fingerprint mismatch, explicit conversion, archived account behavior, payment-credential rejection, partial/repeated batch, and all three throttle layers.
+- `UV_CACHE_DIR=/tmp/project-ledger-uv-cache make check`: **passed locally** — 62 tests, 83.93% branch-aware coverage, Ruff format/lint, Django system checks, strict mypy over 81 source files, OpenAPI validation, and schema freshness.
+- `cd backend && ../.venv/bin/python manage.py makemigrations --check --dry-run`: **no changes detected** against the two new committed migrations.
+- Production `manage.py check --deploy --fail-level WARNING` with five distinct synthetic secrets, an HTTPS public URL, and a PostgreSQL-shaped URL: **passed locally without contacting a production service**. The first harness attempt correctly failed the production SQLite/public-URL/weak-secret guards before its synthetic inputs were corrected.
+- `.venv/bin/bandit -q -r backend/apps backend/config`: **passed locally**. Bandit initially misclassified the `shortcut_token` DRF rate value as a password; moving the literal to a clearly named rate constant removed the narrow false positive without disabling B105 globally.
+- `.venv/bin/pip-audit --cache-dir /tmp/project-ledger-pip-audit`: **no known vulnerabilities found**. The explicit cache path was required because the runtime-owned default cache directory is read-only.
+- Both `docs/examples/shortcut-*.json` files parsed with `python3 -m json.tool`; `git diff --check` passed.
+
+### Verification boundary
+
+- Django/SQLite credential lifecycle, live permission checks, narrow lookup/capture behavior, ledger integration, replay protection, throttling, audit, cleanup, schema, production configuration guards, and dependency/static scans: **verified locally on Linux**.
+- PostgreSQL transaction/concurrency behavior, Redis-backed distributed throttling/Celery cleanup, Docker, and hosted CI: **unverified in this environment**.
+- Native credential/default management, Swift compilation/tests, real HTTPS/Funnel capture, physical Wallet Transaction automation, queue-file behavior, signing, and iPhone installation: **not yet verified and not claimed**.
+- No production host, Funnel policy, external repository, signing service, or physical device was contacted.
+
+### Next exact action
+
+Implement the native Settings → Shortcut credential/default-management screen using the normal access-JWT API, never persist or log the one-time raw token, add English/Albanian and repository/client tests, then run the Linux static gates. Physical automation and queue verification wait for the signed iPhone build and deployed HTTPS host.
