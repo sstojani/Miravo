@@ -43,6 +43,7 @@ actor LedgerSyncActor {
         case account(AccountSnapshot)
         case category(CategorySnapshot)
         case tag(TagSnapshot)
+        case budget(BudgetSnapshot)
         case transaction(TransactionSnapshot)
         case tombstone(entityType: String, entityID: UUID, changedAt: Date, version: Int64)
         case ignored
@@ -614,6 +615,7 @@ actor LedgerSyncActor {
             "categories": "category",
             "tags": "tag",
             "merchants": "merchant",
+            "budgets": "budget",
             "transactions": "transaction",
         ]
         let encoder = JSONEncoder()
@@ -705,12 +707,17 @@ actor LedgerSyncActor {
         var trackerIDs = Set<UUID>()
         var accountIDs = Set<UUID>()
         var categoryIDs = Set<UUID>()
+        var categoryTrackers = [UUID: UUID]()
         var tagTrackers = [UUID: UUID]()
         for item in decoded {
             switch item {
             case let .tracker(snapshot): trackerIDs.insert(snapshot.id)
             case let .account(snapshot): accountIDs.insert(snapshot.id)
-            case let .category(snapshot): categoryIDs.insert(snapshot.id)
+            case let .category(snapshot):
+                categoryIDs.insert(snapshot.id)
+                if let trackerID = snapshot.trackerID {
+                    categoryTrackers[snapshot.id] = trackerID
+                }
             case let .tag(snapshot): tagTrackers[snapshot.id] = snapshot.trackerID
             default: break
             }
@@ -731,6 +738,14 @@ actor LedgerSyncActor {
                 }
             case let .tag(snapshot):
                 guard trackerIDs.contains(snapshot.trackerID) else {
+                    throw SyncEngineError.invalidServerResponse
+                }
+            case let .budget(snapshot):
+                guard trackerIDs.contains(snapshot.trackerID),
+                      snapshot.categoryIDs.allSatisfy({
+                          categoryTrackers[$0] == snapshot.trackerID
+                      })
+                else {
                     throw SyncEngineError.invalidServerResponse
                 }
             case let .transaction(snapshot):
@@ -772,6 +787,8 @@ actor LedgerSyncActor {
             .category(try SyncSnapshotDecoder.decode(CategorySnapshot.self, from: data))
         case "tag":
             .tag(try SyncSnapshotDecoder.decode(TagSnapshot.self, from: data))
+        case "budget":
+            .budget(try SyncSnapshotDecoder.decode(BudgetSnapshot.self, from: data))
         case "transaction":
             .transaction(try SyncSnapshotDecoder.decode(TransactionSnapshot.self, from: data))
         default:
@@ -786,6 +803,7 @@ actor LedgerSyncActor {
         case let .account(snapshot): try upsertAccount(snapshot, scopeKey: scopeKey)
         case let .category(snapshot): try upsertCategory(snapshot, scopeKey: scopeKey)
         case let .tag(snapshot): try upsertTag(snapshot, scopeKey: scopeKey)
+        case let .budget(snapshot): try upsertBudget(snapshot, scopeKey: scopeKey)
         case let .transaction(snapshot): try upsertTransaction(snapshot, scopeKey: scopeKey)
         case let .tombstone(entityType, entityID, changedAt, version):
             try applyTombstone(
@@ -1019,6 +1037,115 @@ actor LedgerSyncActor {
         tag.updatedAt = try parseTimestamp(snapshot.updatedAt)
         tag.archivedAt = try parseOptionalTimestamp(snapshot.archivedAt)
         tag.deletedAt = try parseOptionalTimestamp(snapshot.deletedAt)
+    }
+
+    private func upsertBudget(_ snapshot: BudgetSnapshot, scopeKey: String) throws {
+        guard let budgetScope = BudgetScope(rawValue: snapshot.scope),
+              let period = BudgetPeriod(rawValue: snapshot.period),
+              TimeZone(identifier: snapshot.timeZone) != nil,
+              snapshot.amountMinor > 0,
+              Set(snapshot.categoryIDs) == Set(snapshot.categorySnapshots.map(\.categoryID)),
+              Set(snapshot.thresholdPercentages).count == snapshot.thresholdPercentages.count,
+              !snapshot.thresholdPercentages.isEmpty,
+              snapshot.thresholdPercentages.allSatisfy({ (1 ... 1000).contains($0) }),
+              (budgetScope == .tracker && snapshot.categoryIDs.isEmpty) ||
+                (budgetScope == .categories && !snapshot.categoryIDs.isEmpty)
+        else {
+            throw SyncEngineError.invalidServerResponse
+        }
+        let money = try Money(
+            minorUnits: snapshot.amountMinor,
+            currencyCode: snapshot.currency,
+            exponent: snapshot.currencyExponent
+        )
+        let startsOn = try parseDate(snapshot.startsOn)
+        let endsOn = try snapshot.endsOn.map { try parseDate($0) }
+        guard (endsOn == nil || endsOn! >= startsOn), period != .custom || endsOn != nil else {
+            throw SyncEngineError.invalidServerResponse
+        }
+        let snapshotID = snapshot.id
+        let existing = try modelContext.fetch(
+            FetchDescriptor<LocalBudget>(
+                predicate: #Predicate { $0.scopeKey == scopeKey && $0.id == snapshotID }
+            )
+        ).first
+        if let version = existing?.serverVersion, version > snapshot.version { return }
+        let budget = existing ?? LocalBudget(
+            id: snapshot.id,
+            scopeKey: scopeKey,
+            trackerID: snapshot.trackerID,
+            name: snapshot.name,
+            budgetScope: budgetScope,
+            period: period,
+            money: money,
+            timeZoneIdentifier: snapshot.timeZone,
+            startsOn: startsOn,
+            endsOn: endsOn,
+            rollover: snapshot.rollover,
+            syncState: .synced,
+            createdAt: try parseTimestamp(snapshot.createdAt)
+        )
+        if existing == nil { modelContext.insert(budget) }
+        budget.trackerID = snapshot.trackerID
+        budget.name = snapshot.name
+        budget.budgetScopeRaw = snapshot.scope
+        budget.periodRaw = snapshot.period
+        budget.amountMinor = snapshot.amountMinor
+        budget.currencyCode = snapshot.currency
+        budget.currencyExponent = snapshot.currencyExponent
+        budget.timeZoneIdentifier = snapshot.timeZone
+        budget.startsOn = startsOn
+        budget.endsOn = endsOn
+        budget.rollover = snapshot.rollover
+        budget.serverVersion = snapshot.version
+        budget.syncStateRaw = LocalSyncState.synced.rawValue
+        budget.createdAt = try parseTimestamp(snapshot.createdAt)
+        budget.updatedAt = try parseTimestamp(snapshot.updatedAt)
+        budget.archivedAt = try parseOptionalTimestamp(snapshot.archivedAt)
+        budget.deletedAt = try parseOptionalTimestamp(snapshot.deletedAt)
+        try replaceBudgetChildren(snapshot, scopeKey: scopeKey)
+    }
+
+    private func replaceBudgetChildren(_ snapshot: BudgetSnapshot, scopeKey: String) throws {
+        let budgetID = snapshot.id
+        for value in try modelContext.fetch(
+            FetchDescriptor<LocalBudgetCategory>(
+                predicate: #Predicate {
+                    $0.scopeKey == scopeKey && $0.budgetID == budgetID
+                }
+            )
+        ) {
+            modelContext.delete(value)
+        }
+        for value in try modelContext.fetch(
+            FetchDescriptor<LocalBudgetThreshold>(
+                predicate: #Predicate {
+                    $0.scopeKey == scopeKey && $0.budgetID == budgetID
+                }
+            )
+        ) {
+            modelContext.delete(value)
+        }
+        for category in snapshot.categorySnapshots {
+            modelContext.insert(
+                LocalBudgetCategory(
+                    scopeKey: scopeKey,
+                    budgetID: budgetID,
+                    categoryID: category.categoryID,
+                    categoryNameSnapshot: category.name,
+                    categoryVersionSnapshot: category.version
+                )
+            )
+        }
+        for threshold in snapshot.thresholdPercentages {
+            modelContext.insert(
+                LocalBudgetThreshold(
+                    scopeKey: scopeKey,
+                    budgetID: budgetID,
+                    percent: threshold
+                )
+            )
+        }
     }
 
     private func upsertTransaction(_ snapshot: TransactionSnapshot, scopeKey: String) throws {
@@ -1280,6 +1407,16 @@ actor LedgerSyncActor {
                 value.serverVersion = version
                 value.syncStateRaw = LocalSyncState.synced.rawValue
             }
+        case "budget":
+            if let value = try modelContext.fetch(
+                FetchDescriptor<LocalBudget>(
+                    predicate: #Predicate { $0.scopeKey == scopeKey && $0.id == entityID }
+                )
+            ).first {
+                value.deletedAt = changedAt
+                value.serverVersion = version
+                value.syncStateRaw = LocalSyncState.synced.rawValue
+            }
         case "transaction":
             if let value = try modelContext.fetch(
                 FetchDescriptor<LedgerTransaction>(
@@ -1333,6 +1470,14 @@ actor LedgerSyncActor {
             modelContext.delete(value)
         }
         for value in try modelContext.fetch(
+            FetchDescriptor<LocalBudget>(
+                predicate: #Predicate { $0.scopeKey == scopeKey && $0.serverVersion != nil }
+            )
+        ) where !(remoteIDs["budget"] ?? []).contains(value.id) &&
+            !pendingKeys.contains("budget|\(value.id.uuidString)") {
+            try deleteBudgetAndChildren(value, scopeKey: scopeKey)
+        }
+        for value in try modelContext.fetch(
             FetchDescriptor<LocalTrackerMembership>(
                 predicate: #Predicate { $0.scopeKey == scopeKey }
             )
@@ -1376,6 +1521,25 @@ actor LedgerSyncActor {
             )
         ) { modelContext.delete(value) }
         modelContext.delete(transaction)
+    }
+
+    private func deleteBudgetAndChildren(_ budget: LocalBudget, scopeKey: String) throws {
+        let budgetID = budget.id
+        for value in try modelContext.fetch(
+            FetchDescriptor<LocalBudgetCategory>(
+                predicate: #Predicate {
+                    $0.scopeKey == scopeKey && $0.budgetID == budgetID
+                }
+            )
+        ) { modelContext.delete(value) }
+        for value in try modelContext.fetch(
+            FetchDescriptor<LocalBudgetThreshold>(
+                predicate: #Predicate {
+                    $0.scopeKey == scopeKey && $0.budgetID == budgetID
+                }
+            )
+        ) { modelContext.delete(value) }
+        modelContext.delete(budget)
     }
 
     private func storeConflict(
@@ -1503,6 +1667,15 @@ actor LedgerSyncActor {
         case "tag":
             if let value = try modelContext.fetch(
                 FetchDescriptor<LocalTag>(
+                    predicate: #Predicate { $0.scopeKey == scopeKey && $0.id == entityID }
+                )
+            ).first {
+                value.syncStateRaw = state.rawValue
+                if let serverVersion { value.serverVersion = serverVersion }
+            }
+        case "budget":
+            if let value = try modelContext.fetch(
+                FetchDescriptor<LocalBudget>(
                     predicate: #Predicate { $0.scopeKey == scopeKey && $0.id == entityID }
                 )
             ).first {

@@ -2,7 +2,7 @@
 
 Last updated: 2026-08-09. A checked item is complete; its verification tier is recorded in `IMPLEMENT.md`. Items are not checked merely because scaffolding exists.
 
-Current focus: **Milestone 7 — budgets, recurring/subscriptions, and installments**, while Milestone 6 waits only on external macOS/physical-iPhone validation. Its server routes pass locally, and its native source now creates/lists/rotates/revokes tracker-scoped credentials, exposes tracker defaults, keeps the raw token in memory only, and uses an explicitly expiring local-only pasteboard on user request. Swift compilation, actual Wallet-trigger mapping, queue-file behavior, Docker, and hosted CI remain explicit external checks.
+Current focus: **Milestone 7 — recurring rules and subscriptions**, after completing the budget vertical slice at the locally verifiable tier. Budget REST/sync/domain behavior passes locally; the native cache, atomic outbox, matching offline calculator, and Plans UI are source-complete with localization/project contracts passing. Swift compilation, simulator behavior, actual Wallet-trigger mapping, queue-file behavior, Docker, and hosted CI remain explicit external checks.
 
 ## Milestone 0 — Discovery and durable project plan
 
@@ -74,7 +74,7 @@ Current acceptance: an authenticated device can push an ordered offline tracker/
 
 ## Milestone 7 — Budgets, recurring/subscriptions, and installments
 
-- [ ] Budget periods, rollover, thresholds, historical reproducibility, and offline progress.
+- [x] Budget periods, rollover, thresholds, historical reproducibility, explicit partial conversion, synchronized offline progress, and Plans UI (backend passing locally; native source/tests authored, macOS execution pending).
 - [ ] Idempotent recurrence/subscription materialization, pause/skip/edit/end, catch-up, cost normalization, and reminders.
 - [ ] Installment schedules/revisions, regular/extra payments, skip/reschedule, early payoff, and overpayment confirmation.
 

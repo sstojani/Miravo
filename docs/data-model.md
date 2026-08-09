@@ -44,7 +44,9 @@ The native transaction cache additionally retains source/destination account IDs
 
 | Entity | Essential semantics |
 |---|---|
-| Budget | Tracker/scope, period rule, amount/currency, rollover/thresholds |
+| Budget | Tracker, tracker/category scope, monthly/weekly/custom civil-date rule, positive amount/currency/exponent, IANA time-zone snapshot, rollover, archive/tombstone/version, creator/editor |
+| BudgetCategory | Selected expense category plus immutable name/version snapshots; unique per budget |
+| BudgetThreshold | Unique integer alert/progress percentage from 1 through 1000 |
 | RecurringRule | Template, cadence/time zone, next due, pause/end and subscription fields |
 | RecurringOccurrence | Unique deterministic `(rule, due date)` key, state, transaction link |
 | InstallmentPlan | Terms, currency, deterministic schedule config, revision/state |
@@ -61,6 +63,8 @@ The native transaction cache additionally retains source/destination account IDs
 | AuditEvent | Actor/tracker/action/target/request ID/allow-listed safe metadata |
 | ExportJob | Requester/filter/format/state/private key/expiry/safe error |
 
+Budget child rows belong to the budget synchronization aggregate. Historical category labels come from the snapshots, not a mutable current category name. Progress maps the budget's civil-date boundaries through its stored time zone to a half-open UTC window, counts only posted expenses, and uses only identity conversion or a transaction's stored historical base snapshot. Missing rates produce explicit partial results. Rollover is the signed sum of prior `budget amount - converted spending`; any incomplete prior period makes the carry unknown rather than zero. Custom ranges never roll over, and traversal is configuration-bounded.
+
 ## Required constraints
 
 - Valid ISO currency and amount/exponent combinations; positive display amounts.
@@ -72,5 +76,6 @@ The native transaction cache additionally retains source/destination account IDs
 - Protected history: account/category delete is rejected when referenced; archive instead.
 - Unique relational revision versions per transaction/category; allocation rows retain the category version used at posting time.
 - Refresh expiry follows creation; consumed/revoked credential cannot rotate successfully.
+- Positive budget amount, valid start/end/custom combinations, same-tracker expense-category scope, unique selected categories/thresholds, and threshold bounds.
 
 Cross-row totals and ownership are enforced in locked domain services plus deferred PostgreSQL triggers/constraint mechanisms where safely expressible. A serializer-only invariant is insufficient.

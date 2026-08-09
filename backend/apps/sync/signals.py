@@ -15,6 +15,7 @@ from apps.ledger.models import (
     TrackerMembership,
     Transaction,
 )
+from apps.planning.models import Budget
 from apps.sync.models import SyncChange
 from apps.sync.realtime import schedule_sync_invalidation
 
@@ -49,6 +50,7 @@ def _record_change(sender: type[Any], instance: Any, raw: bool, **kwargs: Any) -
         Category: SyncChange.EntityType.CATEGORY,
         Tag: SyncChange.EntityType.TAG,
         Merchant: SyncChange.EntityType.MERCHANT,
+        Budget: SyncChange.EntityType.BUDGET,
         Transaction: SyncChange.EntityType.TRANSACTION,
     }[sender]
     tracker_id, audience_user_id = _scope(instance)
@@ -67,7 +69,16 @@ def _record_change(sender: type[Any], instance: Any, raw: bool, **kwargs: Any) -
     )
 
 
-for _sender in (Tracker, TrackerMembership, Account, Category, Tag, Merchant, Transaction):
+for _sender in (
+    Tracker,
+    TrackerMembership,
+    Account,
+    Category,
+    Tag,
+    Merchant,
+    Budget,
+    Transaction,
+):
     receiver(
         post_save,
         sender=_sender,

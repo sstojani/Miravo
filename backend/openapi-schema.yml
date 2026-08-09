@@ -322,6 +322,195 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/budgets/:
+    get:
+      operationId: budgets_list
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      tags:
+      - budgets
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedBudgetList'
+          description: ''
+    post:
+      operationId: budgets_create
+      tags:
+      - budgets
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BudgetRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/BudgetRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/BudgetRequest'
+        required: true
+      security:
+      - accessToken: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Budget'
+          description: ''
+  /api/v1/budgets/{id}/:
+    get:
+      operationId: budgets_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this budget.
+        required: true
+      tags:
+      - budgets
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Budget'
+          description: ''
+    put:
+      operationId: budgets_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this budget.
+        required: true
+      tags:
+      - budgets
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BudgetRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/BudgetRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/BudgetRequest'
+        required: true
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Budget'
+          description: ''
+    delete:
+      operationId: budgets_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this budget.
+        required: true
+      tags:
+      - budgets
+      security:
+      - accessToken: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/budgets/{id}/archive/:
+    post:
+      operationId: budgets_archive_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this budget.
+        required: true
+      tags:
+      - budgets
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Budget'
+          description: ''
+  /api/v1/budgets/{id}/progress/:
+    get:
+      operationId: budgets_progress_retrieve
+      parameters:
+      - in: query
+        name: as_of
+        schema:
+          type: string
+          format: date
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this budget.
+        required: true
+      tags:
+      - budgets
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BudgetProgress'
+          description: ''
+  /api/v1/budgets/{id}/restore/:
+    post:
+      operationId: budgets_restore_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this budget.
+        required: true
+      tags:
+      - budgets
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Budget'
+          description: ''
   /api/v1/categories/:
     get:
       operationId: categories_list
@@ -2124,6 +2313,220 @@ components:
           minimum: 1
       required:
       - base_version
+    Budget:
+      type: object
+      description: Model serializer with strict input-field handling.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        tracker_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          maxLength: 120
+        scope:
+          $ref: '#/components/schemas/ScopeEnum'
+        period:
+          $ref: '#/components/schemas/PeriodEnum'
+        amount_minor:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        currency:
+          type: string
+          maxLength: 3
+        currency_exponent:
+          type: integer
+          readOnly: true
+        time_zone:
+          type: string
+          maxLength: 64
+        starts_on:
+          type: string
+          format: date
+        ends_on:
+          type: string
+          format: date
+          nullable: true
+        rollover:
+          type: boolean
+        category_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        category_snapshots:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+          readOnly: true
+        threshold_percentages:
+          type: array
+          items:
+            type: integer
+            maximum: 1000
+            minimum: 1
+        archived_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        version:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        deleted_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+      required:
+      - amount_minor
+      - archived_at
+      - category_snapshots
+      - created_at
+      - currency
+      - currency_exponent
+      - deleted_at
+      - id
+      - name
+      - period
+      - scope
+      - starts_on
+      - time_zone
+      - tracker_id
+      - updated_at
+      - version
+    BudgetProgress:
+      type: object
+      description: Serializer that rejects misspelled or unsupported request fields.
+      properties:
+        budget_id:
+          type: string
+          format: uuid
+        period_start:
+          type: string
+          format: date
+        period_end:
+          type: string
+          format: date
+        is_active:
+          type: boolean
+        amount_minor:
+          type: integer
+        rollover_carried_minor:
+          type: integer
+          nullable: true
+        available_minor:
+          type: integer
+        spent_minor:
+          type: integer
+        remaining_minor:
+          type: integer
+        progress_basis_points:
+          type: integer
+          nullable: true
+        crossed_threshold_percent:
+          type: integer
+          nullable: true
+        currency:
+          type: string
+        currency_exponent:
+          type: integer
+        is_partial:
+          type: boolean
+        rollover_complete:
+          type: boolean
+        unconverted:
+          type: array
+          items:
+            $ref: '#/components/schemas/UnconvertedBudgetAmount'
+      required:
+      - amount_minor
+      - available_minor
+      - budget_id
+      - crossed_threshold_percent
+      - currency
+      - currency_exponent
+      - is_active
+      - is_partial
+      - period_end
+      - period_start
+      - progress_basis_points
+      - remaining_minor
+      - rollover_carried_minor
+      - rollover_complete
+      - spent_minor
+      - unconverted
+    BudgetRequest:
+      type: object
+      description: Model serializer with strict input-field handling.
+      properties:
+        tracker_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        scope:
+          $ref: '#/components/schemas/ScopeEnum'
+        period:
+          $ref: '#/components/schemas/PeriodEnum'
+        amount_minor:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        currency:
+          type: string
+          minLength: 1
+          maxLength: 3
+        time_zone:
+          type: string
+          minLength: 1
+          maxLength: 64
+        starts_on:
+          type: string
+          format: date
+        ends_on:
+          type: string
+          format: date
+          nullable: true
+        rollover:
+          type: boolean
+        category_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        threshold_percentages:
+          type: array
+          items:
+            type: integer
+            maximum: 1000
+            minimum: 1
+      required:
+      - amount_minor
+      - currency
+      - name
+      - period
+      - scope
+      - starts_on
+      - time_zone
+      - tracker_id
     Category:
       type: object
       description: Model serializer with strict input-field handling.
@@ -2308,6 +2711,7 @@ components:
       - account
       - category
       - tag
+      - budget
       - transaction
       type: string
       description: |-
@@ -2315,6 +2719,7 @@ components:
         * `account` - account
         * `category` - category
         * `tag` - tag
+        * `budget` - budget
         * `transaction` - transaction
     Invite:
       type: object
@@ -2707,6 +3112,25 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/AuditEvent'
+    PaginatedBudgetList:
+      type: object
+      required:
+      - results
+      properties:
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cD00ODY%3D"
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Budget'
     PaginatedCategoryList:
       type: object
       required:
@@ -3022,6 +3446,16 @@ components:
           type: string
           format: uuid
           nullable: true
+    PeriodEnum:
+      enum:
+      - monthly
+      - weekly
+      - custom
+      type: string
+      description: |-
+        * `monthly` - Monthly
+        * `weekly` - Weekly
+        * `custom` - Custom range
     RefreshRequest:
       type: object
       properties:
@@ -3032,6 +3466,14 @@ components:
           maxLength: 512
       required:
       - refresh_token
+    ScopeEnum:
+      enum:
+      - tracker
+      - categories
+      type: string
+      description: |-
+        * `tracker` - Entire tracker
+        * `categories` - Selected categories
     ScopesEnum:
       enum:
       - categories:read
@@ -4386,6 +4828,20 @@ components:
         * `credit` - Credit
         * `digital_wallet` - Digital wallet
         * `custom` - Custom
+    UnconvertedBudgetAmount:
+      type: object
+      description: Serializer that rejects misspelled or unsupported request fields.
+      properties:
+        currency:
+          type: string
+        amount_minor:
+          type: integer
+        transaction_count:
+          type: integer
+      required:
+      - amount_minor
+      - currency
+      - transaction_count
   securitySchemes:
     accessToken:
       type: http

@@ -444,3 +444,44 @@ Implement the native Settings → Shortcut credential/default-management screen 
 ### Next exact action
 
 Commit the native Milestone 6 checkpoint. Then begin Milestone 7 with the budget period/domain model and posted-expense-only calculation as the smallest offline/server vertical slice; keep physical Shortcut verification open rather than blocking independent work.
+
+## 2026-08-09 — Milestone 7 offline-first budget checkpoint
+
+### Acceptance checks established
+
+- A tracker editor can create, replace, archive, restore, and tombstone a tracker-wide or selected-category budget through REST or the ordinary idempotent sync protocol; viewers remain read-only and every material lifecycle action is audited.
+- Monthly, Monday-based weekly, and fixed custom periods use the budget's stored IANA time zone and civil dates, including daylight-saving transitions. Only nondeleted posted expenses count; transfers, income, refunds, voided/deleted, draft, pending, and reconciled records do not.
+- Selected-category progress uses exact allocations and immutable category name/version snapshots. Conversion uses only identity or the transaction's stored tracker-base snapshot with decimal half-up proportional allocation. A missing conversion remains an explicit partial amount and is never inferred.
+- Rollover carries the signed prior-period remainder so overspending reduces the next period. Any incomplete prior conversion makes the carry unknown, and traversal is bounded to 600 periods by default. Custom ranges do not roll over.
+- Native budget mutations and their child snapshots/thresholds/outbox command commit locally in one rollback boundary. Plans reads and calculates from SwiftData, remains useful offline, exposes partial/inactive/sync states, and enforces the cached role boundary.
+
+### Material work
+
+- Added the `planning` Django app with `Budget`, `BudgetCategory`, and `BudgetThreshold`, database constraints, admin registration, strict serializers, role-aware REST lifecycle actions, audit events, deterministic progress calculation, migration, and OpenAPI contract.
+- Added budget as a synchronization aggregate root with strict versioned payloads, create/update/archive/restore/delete handlers, ordinary operation-receipt replay safety, conflicts, change notifications, pull/bootstrap rendering, category/threshold child replacement, and tombstones.
+- Added five backend tests covering REST/permissions/audit/strict validation, database constraints, posted/category/currency progress, DST/rollover/threshold/custom boundaries, and sync create/bootstrap/conflict/delete behavior.
+- Added scoped SwiftData budget/category-snapshot/threshold models, canonical civil-date encoding, strict outbox payloads, atomic repository lifecycle methods, bootstrap/pull/tombstone/reconciliation integration, and a local calculator matching server period/conversion/partial/rollover semantics.
+- Replaced the Plans placeholder with tracker selection, locally calculated cards, create/edit/category/period/date/currency/rollover controls, archive/restore/delete, nonblocking local save, explicit recurring/installment-next disclosure, role-aware controls, and English/Albanian/accessibility copy.
+- Authored native tests for local CRUD/outbox/rollback/roles, progress conversion/allocation/DST/rollover/partial behavior, wire decoding, and paginated bootstrap reconciliation.
+
+### Commands and outcomes
+
+- `.venv/bin/pytest backend/tests/test_budgets.py -q`: **5 passed locally**.
+- `UV_CACHE_DIR=/tmp/project-ledger-uv-cache make check`: **passed locally** — 67 tests, 84.17% branch-aware coverage, Ruff format/lint, Django checks, strict mypy over 90 source files, OpenAPI validation, and schema freshness.
+- `manage.py makemigrations --check --dry-run`: **no changes detected** after the committed planning and sync migrations were generated.
+- Production `manage.py check --deploy --fail-level WARNING` with distinct synthetic secrets, strict HTTPS/host/origin settings, and a PostgreSQL-shaped URL: **passed locally without contacting production**.
+- `.venv/bin/bandit -q -r backend/apps backend/config`: initially reported one low-severity `assert` in custom-period handling. Replacing it with an explicit fail-closed exception made the complete scan **pass**.
+- `ios/check-localizations.sh`: **passed locally** — 402 literal UI keys with identical English/Albanian sets and compatible format placeholders.
+- `python3 ios/check-project-contract.py`, JSON resource parsing, and iOS/workflow YAML parsing: **passed locally**.
+- A fresh `pip-audit` and an ephemeral Swift syntax-parser invocation were rejected when this environment reached its tool usage limit. No workaround was attempted. The prior locked dependency audit found no known vulnerability, but that prior result is not presented as a fresh budget-checkpoint scan.
+
+### Verification boundary
+
+- Django/SQLite budget persistence, validation, permissions, audit, progress math, sync replay/conflict/bootstrap/tombstone behavior, schema, production guards, and static security scan: **verified locally on Linux**.
+- Native budget models, repository/sync/calculator/UI source, tests, localization, privacy/transport contract, and resources: **implemented and statically reviewed on Linux**.
+- Swift 6 syntax/type/concurrency checking, XcodeGen regeneration, SwiftData runtime behavior, native test execution, simulator rendering/accessibility, and physical-device Plans interaction: **not verified** because macOS/Xcode are unavailable. No syntax-parser result is claimed for this new Swift slice.
+- Docker/PostgreSQL/Redis, hosted Actions, real server/Funnel, signing, and the physical iPhone remain unverified. No external system was contacted.
+
+### Next exact action
+
+Commit the budget vertical slice. Then implement `RecurringRule` and deterministic `RecurringOccurrence` server semantics first: cadence/date generation, stable occurrence keys, pause/resume/skip/end, edit-future revisions, downtime catch-up, and Celery materialization tests. Extend the native offline rule cache/Plans UI only after the authoritative recurrence invariants pass locally.

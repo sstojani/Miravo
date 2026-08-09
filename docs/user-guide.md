@@ -22,6 +22,12 @@ Transaction search covers merchant/payee, note, tracker, source or destination a
 
 Pending means stored locally and durably queued. Foreground synchronization pushes stable operations, pulls bounded pages, and resumes a staged full download when a cursor is too old. Settings shows pending/failed/conflict counts, last success, safe status codes, manual synchronization/retry, and a field-by-field conflict review with “keep server” or “keep mine” decisions. Device-session management and attachment transfer remain later screens.
 
+## Budgets
+
+Plans shows monthly, weekly, and custom-range budgets from the local store, so current progress remains available offline. A budget may cover all posted expenses in one tracker or selected expense categories. Create/edit/archive/restore/delete commits locally first and queues the synchronized command; viewer access is read-only.
+
+Each budget retains its own currency, exponent, IANA time zone, civil start/end dates, category label snapshots, thresholds, and rollover choice. Only posted expenses count. Transfers, income, refunds, voided/deleted records, and non-posted states do not. Category budgets use the matching allocation rather than the whole transaction. When the ledger lacks a stored historical conversion into the budget currency, the card labels progress partial and lists the missing currency instead of inventing a rate. Rollover carries both underspending and overspending; it is shown as incomplete when any required prior conversion is absent. Custom ranges do not roll over.
+
 ## Shared trackers
 
 Owner controls ownership/deletion; admin manages settings/members; editor changes financial records; viewer is read-only. The synchronized collaborator roster and roles remain visible offline. The repository rejects viewer writes even if a stale screen attempts one; a role change received during pull updates the local permission state. Creating invitations and changing roles remain online collaboration work for Milestone 8. Expenses can eventually be split among registered/guest participants, and settlements will not count as spending.

@@ -33,6 +33,7 @@ Useful endpoints:
 - `GET/POST /api/v1/shortcut/credentials` and `DELETE /api/v1/shortcut/credentials/{id}` with the ordinary access JWT
 - `GET /api/v1/shortcut/context`, `/categories`, and `/accounts` with a scoped Shortcut bearer token
 - `POST /api/v1/shortcut/transactions` and `/transactions/batch` for duplicate-safe capture
+- `/api/v1/budgets/` plus archive, restore, tombstone, and deterministic `/progress/?as_of=YYYY-MM-DD`
 
 The OpenAPI source is generated at `backend/openapi-schema.yml`. The schema endpoint and Django Admin are intentionally denied by the public reverse proxy.
 
@@ -53,3 +54,5 @@ Shortcut credentials use another independent pepper and store only a public pref
 ## Financial write behavior
 
 Clients submit transaction commands with a tracker/account, positive integer minor-unit amount, ISO currency, and optional exact category allocations. The server creates signed account movements; clients cannot submit an arbitrary balance. Cross-currency records require an explicit base amount, decimal rate, source, and effective timestamp. Full transaction replacements require `base_version`; stale updates return HTTP 409.
+
+Budget progress is derived rather than client-authored. It uses the budget's stored IANA time zone and civil dates, posted expenses only, exact category allocations, and existing historical conversion snapshots. Missing rates produce explicit partial results; signed rollover is bounded by `PROJECT_LEDGER_BUDGET_MAX_ROLLOVER_PERIODS`.

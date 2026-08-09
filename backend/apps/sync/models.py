@@ -14,6 +14,7 @@ class SyncChange(models.Model):
         CATEGORY = "category", "Category"
         TAG = "tag", "Tag"
         MERCHANT = "merchant", "Merchant"
+        BUDGET = "budget", "Budget"
         TRANSACTION = "transaction", "Transaction"
 
     class Operation(models.TextChoices):

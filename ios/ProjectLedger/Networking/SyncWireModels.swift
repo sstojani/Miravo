@@ -330,6 +330,61 @@ struct TagSnapshot: Decodable, Sendable {
     }
 }
 
+struct BudgetCategorySnapshot: Decodable, Sendable {
+    let categoryID: UUID
+    let name: String
+    let version: Int64
+
+    enum CodingKeys: String, CodingKey {
+        case categoryID = "category_id"
+        case name, version
+    }
+}
+
+struct BudgetSnapshot: Decodable, Sendable {
+    let id: UUID
+    let trackerID: UUID
+    let name: String
+    let scope: String
+    let period: String
+    let amountMinor: Int64
+    let currency: String
+    let currencyExponent: Int
+    let timeZone: String
+    let startsOn: String
+    let endsOn: String?
+    let rollover: Bool
+    let categoryIDs: [UUID]
+    let categorySnapshots: [BudgetCategorySnapshot]
+    let thresholdPercentages: [Int]
+    let archivedAt: String?
+    let version: Int64
+    let createdAt: String
+    let updatedAt: String
+    let deletedAt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case trackerID = "tracker_id"
+        case name, scope, period
+        case amountMinor = "amount_minor"
+        case currency
+        case currencyExponent = "currency_exponent"
+        case timeZone = "time_zone"
+        case startsOn = "starts_on"
+        case endsOn = "ends_on"
+        case rollover
+        case categoryIDs = "category_ids"
+        case categorySnapshots = "category_snapshots"
+        case thresholdPercentages = "threshold_percentages"
+        case archivedAt = "archived_at"
+        case version
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+        case deletedAt = "deleted_at"
+    }
+}
+
 struct MembershipSnapshot: Decodable, Sendable {
     let id: UUID
     let userID: UUID

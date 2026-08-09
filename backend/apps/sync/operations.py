@@ -33,6 +33,8 @@ from apps.ledger.services.transactions import (
     restore_transaction,
     tombstone_transaction,
 )
+from apps.planning.models import Budget
+from apps.planning.serializers import BudgetSerializer
 from apps.sync.models import SyncChange, SyncOperationReceipt
 from apps.sync.presenters import json_safe, serialize_instance
 from apps.users.models import DeviceSession, User
@@ -133,6 +135,26 @@ def _category_values(payload: dict[str, Any]) -> dict[str, Any]:
 
 def _tag_values(payload: dict[str, Any]) -> dict[str, Any]:
     return {field: payload[field] for field in ("tracker_id", "name", "color")}
+
+
+def _budget_values(payload: dict[str, Any]) -> dict[str, Any]:
+    return {
+        field: payload.get(field)
+        for field in (
+            "tracker_id",
+            "name",
+            "scope",
+            "period",
+            "amount_minor",
+            "currency",
+            "time_zone",
+            "starts_on",
+            "ends_on",
+            "rollover",
+            "category_ids",
+            "threshold_percentages",
+        )
+    }
 
 
 def _transaction_values(payload: dict[str, Any]) -> dict[str, Any]:
@@ -486,12 +508,83 @@ def _apply_transaction(operation: dict[str, Any], actor: User, request: Any) -> 
     raise serializers.ValidationError({"command": "Unsupported transaction command."})
 
 
+def _apply_budget(operation: dict[str, Any], actor: User, request: Any) -> Budget:
+    entity_id = operation["entity_id"]
+    payload = operation["payload"]
+    command = operation["command"]
+    values = _budget_values(payload)
+    if command == "create":
+        _ensure_available(Budget, entity_id)
+        tracker = Tracker.objects.get(id=payload["tracker_id"], deleted_at__isnull=True)
+        require_tracker_role(actor, tracker, TrackerMembership.Role.EDITOR)
+        serializer = BudgetSerializer(data=values)
+        serializer.is_valid(raise_exception=True)
+        budget = cast(
+            Budget,
+            serializer.save(
+                id=entity_id,
+                created_by=actor,
+                last_editor=actor,
+                archived_at=timezone.now() if payload.get("archived_at") else None,
+            ),
+        )
+        _audit(actor=actor, instance=budget, action="budget.created", request=request)
+        return budget
+
+    budget = Budget.objects.select_related("tracker").select_for_update().get(id=entity_id)
+    require_tracker_role(actor, budget.tracker, TrackerMembership.Role.EDITOR)
+    _require_version(
+        instance=budget,
+        expected=operation["base_server_version"],
+        entity_type=SyncChange.EntityType.BUDGET,
+        actor=actor,
+        proposed=payload,
+    )
+    if payload["tracker_id"] != budget.tracker_id:
+        raise serializers.ValidationError({"tracker_id": "A budget cannot change tracker."})
+    if command == "update":
+        serializer = BudgetSerializer(budget, data=values)
+        serializer.is_valid(raise_exception=True)
+        budget = cast(
+            Budget,
+            serializer.save(version=budget.version + 1, last_editor=actor),
+        )
+        _audit(actor=actor, instance=budget, action="budget.updated", request=request)
+    elif command == "archive" and budget.archived_at is None:
+        budget.archived_at = timezone.now()
+        budget.version += 1
+        budget.last_editor = actor
+        budget.save(update_fields=("archived_at", "version", "last_editor", "updated_at"))
+        _audit(actor=actor, instance=budget, action="budget.archived", request=request)
+    elif command == "restore":
+        update_fields: list[str] = []
+        if budget.archived_at is not None:
+            budget.archived_at = None
+            update_fields.append("archived_at")
+        if budget.deleted_at is not None:
+            budget.deleted_at = None
+            update_fields.append("deleted_at")
+        if update_fields:
+            budget.version += 1
+            budget.last_editor = actor
+            budget.save(update_fields=(*update_fields, "version", "last_editor", "updated_at"))
+            _audit(actor=actor, instance=budget, action="budget.restored", request=request)
+    elif command == "delete" and budget.deleted_at is None:
+        budget.deleted_at = timezone.now()
+        budget.version += 1
+        budget.last_editor = actor
+        budget.save(update_fields=("deleted_at", "version", "last_editor", "updated_at"))
+        _audit(actor=actor, instance=budget, action="budget.deleted", request=request)
+    return budget
+
+
 def apply_operation(operation: dict[str, Any], actor: User, request: Any) -> Any:
     handler = {
         SyncChange.EntityType.TRACKER: _apply_tracker,
         SyncChange.EntityType.ACCOUNT: _apply_account,
         SyncChange.EntityType.CATEGORY: _apply_category,
         SyncChange.EntityType.TAG: _apply_tag,
+        SyncChange.EntityType.BUDGET: _apply_budget,
         SyncChange.EntityType.TRANSACTION: _apply_transaction,
     }[operation["entity_type"]]
     return handler(operation, actor, request)

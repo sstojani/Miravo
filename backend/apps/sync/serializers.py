@@ -9,6 +9,8 @@ from rest_framework import serializers
 from apps.common.serializers import StrictSerializer
 from apps.ledger.currency import currency_exponent, normalize_currency
 from apps.ledger.models import Account, Category, Transaction
+from apps.planning.models import Budget
+from apps.planning.serializers import normalize_time_zone
 from apps.sync.models import SyncChange
 
 SYNC_OPERATION_RESULT_STATUSES = (
@@ -98,6 +100,62 @@ class TagMutationPayloadSerializer(StrictSerializer):
     deleted_at = serializers.DateTimeField(required=False, allow_null=True)
 
 
+class BudgetMutationPayloadSerializer(StrictSerializer):
+    client_payload_version = serializers.IntegerField(min_value=1, max_value=1)
+    id = serializers.UUIDField()
+    tracker_id = serializers.UUIDField()
+    name = serializers.CharField(max_length=120)
+    scope = serializers.ChoiceField(choices=Budget.Scope.choices)
+    period = serializers.ChoiceField(choices=Budget.Period.choices)
+    amount_minor = serializers.IntegerField(min_value=1)
+    currency = serializers.CharField(min_length=3, max_length=3)
+    currency_exponent = serializers.IntegerField(min_value=0, max_value=6)
+    time_zone = serializers.CharField(max_length=64)
+    starts_on = serializers.DateField()
+    ends_on = serializers.DateField(required=False, allow_null=True)
+    rollover = serializers.BooleanField()
+    category_ids = serializers.ListField(
+        child=serializers.UUIDField(), required=False, default=list, allow_empty=True
+    )
+    threshold_percentages = serializers.ListField(
+        child=serializers.IntegerField(min_value=1, max_value=1000),
+        allow_empty=False,
+    )
+    archived_at = serializers.DateTimeField(required=False, allow_null=True)
+    deleted_at = serializers.DateTimeField(required=False, allow_null=True)
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        attrs = super().validate(attrs)
+        code = normalize_currency(attrs["currency"])
+        attrs["currency"] = code
+        if attrs["currency_exponent"] != currency_exponent(code):
+            raise serializers.ValidationError(
+                {"currency_exponent": "Does not match the currency's minor-unit exponent."}
+            )
+        attrs["time_zone"] = normalize_time_zone(attrs["time_zone"])
+        if len(attrs["category_ids"]) != len(set(attrs["category_ids"])):
+            raise serializers.ValidationError({"category_ids": "Values must be unique."})
+        thresholds = sorted(attrs["threshold_percentages"])
+        if len(thresholds) != len(set(thresholds)):
+            raise serializers.ValidationError({"threshold_percentages": "Values must be unique."})
+        attrs["threshold_percentages"] = thresholds
+        if attrs["scope"] == Budget.Scope.TRACKER and attrs["category_ids"]:
+            raise serializers.ValidationError(
+                {"category_ids": "Tracker-wide budgets cannot select categories."}
+            )
+        if attrs["scope"] == Budget.Scope.CATEGORIES and not attrs["category_ids"]:
+            raise serializers.ValidationError(
+                {"category_ids": "Choose at least one expense category."}
+            )
+        if attrs["period"] == Budget.Period.CUSTOM and attrs.get("ends_on") is None:
+            raise serializers.ValidationError({"ends_on": "A custom budget requires an end date."})
+        if attrs.get("ends_on") and attrs["ends_on"] < attrs["starts_on"]:
+            raise serializers.ValidationError(
+                {"ends_on": "The end date cannot precede the start date."}
+            )
+        return attrs
+
+
 class TransactionMutationPayloadSerializer(StrictSerializer):
     client_payload_version = serializers.IntegerField(min_value=1, max_value=1)
     id = serializers.UUIDField()
@@ -172,6 +230,7 @@ PAYLOAD_SERIALIZERS: dict[str, type[StrictSerializer]] = {
     SyncChange.EntityType.ACCOUNT: AccountMutationPayloadSerializer,
     SyncChange.EntityType.CATEGORY: CategoryMutationPayloadSerializer,
     SyncChange.EntityType.TAG: TagMutationPayloadSerializer,
+    SyncChange.EntityType.BUDGET: BudgetMutationPayloadSerializer,
     SyncChange.EntityType.TRANSACTION: TransactionMutationPayloadSerializer,
 }
 

@@ -169,6 +169,7 @@ struct LedgerSyncActorTests {
         let tagID = UUID(uuidString: "71000000-0000-0000-0000-000000000007")!
         let membershipID = UUID(uuidString: "72000000-0000-0000-0000-000000000007")!
         let transactionID = UUID(uuidString: "73000000-0000-0000-0000-000000000007")!
+        let budgetID = UUID(uuidString: "74000000-0000-0000-0000-000000000007")!
         let transport = ScriptedSyncTransport(
             pushResponses: [],
             pullResponses: [emptyPull(cursor: "after-bootstrap")],
@@ -203,6 +204,7 @@ struct LedgerSyncActorTests {
                             trackerID: trackerID
                         )],
                         tags: [tagRepresentation(id: tagID, trackerID: trackerID)],
+                        budgets: [budgetRepresentation(id: budgetID, trackerID: trackerID)],
                         transactions: [transactionRepresentation(
                             id: transactionID,
                             trackerID: trackerID,
@@ -225,6 +227,8 @@ struct LedgerSyncActorTests {
         let accounts = try verification.fetch(FetchDescriptor<LocalAccount>())
         let tags = try verification.fetch(FetchDescriptor<LocalTag>())
         let memberships = try verification.fetch(FetchDescriptor<LocalTrackerMembership>())
+        let budgets = try verification.fetch(FetchDescriptor<LocalBudget>())
+        let budgetThresholds = try verification.fetch(FetchDescriptor<LocalBudgetThreshold>())
         let tagLinks = try verification.fetch(FetchDescriptor<LocalTransactionTag>())
         let staged = try verification.fetch(FetchDescriptor<BootstrapStagedEntity>())
         let cursors = try verification.fetch(FetchDescriptor<SyncCursor>())
@@ -234,6 +238,9 @@ struct LedgerSyncActorTests {
         #expect(accounts.first?.id == accountID)
         #expect(tags.first?.id == tagID)
         #expect(memberships.first?.role == .editor)
+        #expect(budgets.first?.id == budgetID)
+        #expect(budgets.first?.serverVersion == 1)
+        #expect(budgetThresholds.map(\.percent).sorted() == [50, 80, 100])
         #expect(tagLinks.first?.transactionID == transactionID)
         #expect(tagLinks.first?.tagID == tagID)
         #expect(staged.isEmpty)
@@ -455,6 +462,31 @@ struct LedgerSyncActorTests {
         ])
     }
 
+    private func budgetRepresentation(id: UUID, trackerID: UUID) -> JSONValue {
+        .object([
+            "id": .string(id.uuidString.lowercased()),
+            "tracker_id": .string(trackerID.uuidString.lowercased()),
+            "name": .string("Monthly spending"),
+            "scope": .string("tracker"),
+            "period": .string("monthly"),
+            "amount_minor": .integer(25_000),
+            "currency": .string("ALL"),
+            "currency_exponent": .integer(2),
+            "time_zone": .string("Europe/Tirane"),
+            "starts_on": .string("2026-08-01"),
+            "ends_on": .null,
+            "rollover": .bool(true),
+            "category_ids": .array([]),
+            "category_snapshots": .array([]),
+            "threshold_percentages": .array([.integer(50), .integer(80), .integer(100)]),
+            "archived_at": .null,
+            "version": .integer(1),
+            "created_at": .string(timestamp),
+            "updated_at": .string(timestamp),
+            "deleted_at": .null,
+        ])
+    }
+
     private func transactionRepresentation(
         id: UUID,
         trackerID: UUID,
@@ -504,6 +536,7 @@ struct LedgerSyncActorTests {
         memberships: [JSONValue] = [],
         accounts: [JSONValue] = [],
         tags: [JSONValue] = [],
+        budgets: [JSONValue] = [],
         transactions: [JSONValue] = []
     ) -> JSONValue {
         .object([
@@ -513,6 +546,7 @@ struct LedgerSyncActorTests {
             "categories": .array([]),
             "tags": .array(tags),
             "merchants": .array([]),
+            "budgets": .array(budgets),
             "transactions": .array(transactions),
         ])
     }
@@ -533,6 +567,9 @@ struct LedgerSyncActorTests {
             LocalAccount.self,
             LocalCategory.self,
             LocalTag.self,
+            LocalBudget.self,
+            LocalBudgetCategory.self,
+            LocalBudgetThreshold.self,
             LedgerTransaction.self,
             LocalAccountMovement.self,
             LocalCategoryAllocation.self,

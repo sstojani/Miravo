@@ -327,6 +327,155 @@ struct LocalLedgerRepository {
     }
 
     @discardableResult
+    func createBudget(
+        scopeKey: String,
+        tracker: LocalTracker,
+        name: String,
+        budgetScope: BudgetScope,
+        period: BudgetPeriod,
+        money: Money,
+        timeZoneIdentifier: String,
+        startsOn: Date,
+        endsOn: Date?,
+        rollover: Bool,
+        categories: [LocalCategory],
+        thresholds: [Int] = [50, 80, 100]
+    ) throws -> LocalBudget {
+        try validate(tracker: tracker, scopeKey: scopeKey)
+        let values = try validatedBudgetValues(
+            tracker: tracker,
+            scopeKey: scopeKey,
+            budgetScope: budgetScope,
+            period: period,
+            money: money,
+            timeZoneIdentifier: timeZoneIdentifier,
+            startsOn: startsOn,
+            endsOn: endsOn,
+            categories: categories,
+            thresholds: thresholds
+        )
+        let budget = LocalBudget(
+            scopeKey: scopeKey,
+            trackerID: tracker.id,
+            name: try validatedName(name),
+            budgetScope: budgetScope,
+            period: period,
+            money: money,
+            timeZoneIdentifier: timeZoneIdentifier,
+            startsOn: values.startsOn,
+            endsOn: values.endsOn,
+            rollover: rollover
+        )
+        try commit {
+            context.insert(budget)
+            insertBudgetChildren(
+                for: budget,
+                categories: values.categories,
+                thresholds: values.thresholds
+            )
+            try enqueue(
+                budget,
+                command: .create,
+                categoryIDs: values.categories.map(\.id),
+                thresholds: values.thresholds
+            )
+        }
+        return budget
+    }
+
+    func updateBudget(
+        _ budget: LocalBudget,
+        tracker: LocalTracker,
+        name: String,
+        budgetScope: BudgetScope,
+        period: BudgetPeriod,
+        money: Money,
+        timeZoneIdentifier: String,
+        startsOn: Date,
+        endsOn: Date?,
+        rollover: Bool,
+        categories: [LocalCategory],
+        thresholds: [Int] = [50, 80, 100]
+    ) throws {
+        guard budget.scopeKey == tracker.scopeKey,
+              budget.trackerID == tracker.id,
+              budget.deletedAt == nil
+        else {
+            throw LocalLedgerError.invalidReference
+        }
+        try validate(tracker: tracker, scopeKey: budget.scopeKey)
+        let values = try validatedBudgetValues(
+            tracker: tracker,
+            scopeKey: budget.scopeKey,
+            budgetScope: budgetScope,
+            period: period,
+            money: money,
+            timeZoneIdentifier: timeZoneIdentifier,
+            startsOn: startsOn,
+            endsOn: endsOn,
+            categories: categories,
+            thresholds: thresholds
+        )
+        let cleanName = try validatedName(name)
+        try commit {
+            budget.name = cleanName
+            budget.budgetScopeRaw = budgetScope.rawValue
+            budget.periodRaw = period.rawValue
+            budget.amountMinor = money.minorUnits
+            budget.currencyCode = money.currencyCode
+            budget.currencyExponent = money.exponent
+            budget.timeZoneIdentifier = timeZoneIdentifier
+            budget.startsOn = values.startsOn
+            budget.endsOn = values.endsOn
+            budget.rollover = rollover
+            touch(budget)
+            try replaceBudgetChildren(
+                for: budget,
+                categories: values.categories,
+                thresholds: values.thresholds
+            )
+            try enqueue(
+                budget,
+                command: .update,
+                categoryIDs: values.categories.map(\.id),
+                thresholds: values.thresholds
+            )
+        }
+    }
+
+    func setBudgetArchived(_ budget: LocalBudget, archived: Bool) throws {
+        try validateTrackerAccess(id: budget.trackerID, scopeKey: budget.scopeKey)
+        guard budget.deletedAt == nil else { throw LocalLedgerError.invalidReference }
+        let children = try budgetChildValues(for: budget)
+        try commit {
+            budget.archivedAt = archived ? .now : nil
+            touch(budget)
+            try enqueue(
+                budget,
+                command: archived ? .archive : .restore,
+                categoryIDs: children.categoryIDs,
+                thresholds: children.thresholds
+            )
+        }
+    }
+
+    func deleteBudget(_ budget: LocalBudget) throws {
+        try validateTrackerAccess(id: budget.trackerID, scopeKey: budget.scopeKey)
+        guard budget.deletedAt == nil else { return }
+        let children = try budgetChildValues(for: budget)
+        try commit {
+            budget.deletedAt = .now
+            touch(budget)
+            try enqueue(
+                budget,
+                command: .delete,
+                categoryIDs: children.categoryIDs,
+                thresholds: children.thresholds
+            )
+        }
+    }
+
+    @discardableResult
     func createTransaction(
         scopeKey: String,
         tracker: LocalTracker,
@@ -868,6 +1017,153 @@ struct LocalLedgerRepository {
         tag.syncStateRaw = LocalSyncState.pending.rawValue
     }
 
+    private func touch(_ budget: LocalBudget) {
+        budget.updatedAt = .now
+        budget.syncStateRaw = LocalSyncState.pending.rawValue
+    }
+
+    private func validatedBudgetValues(
+        tracker: LocalTracker,
+        scopeKey: String,
+        budgetScope: BudgetScope,
+        period: BudgetPeriod,
+        money: Money,
+        timeZoneIdentifier: String,
+        startsOn: Date,
+        endsOn: Date?,
+        categories: [LocalCategory],
+        thresholds: [Int]
+    ) throws -> (startsOn: Date, endsOn: Date?, categories: [LocalCategory], thresholds: [Int]) {
+        guard money.minorUnits > 0,
+              TimeZone(identifier: timeZoneIdentifier) != nil,
+              let canonicalStart = BudgetDateCodec.canonicalDate(from: startsOn)
+        else {
+            throw LocalLedgerError.invalidReference
+        }
+        let canonicalEnd: Date?
+        if let endsOn {
+            guard let value = BudgetDateCodec.canonicalDate(from: endsOn) else {
+                throw LocalLedgerError.invalidReference
+            }
+            canonicalEnd = value
+        } else {
+            canonicalEnd = nil
+        }
+        guard canonicalEnd == nil || canonicalEnd! >= canonicalStart,
+              period != .custom || canonicalEnd != nil
+        else {
+            throw LocalLedgerError.invalidReference
+        }
+        guard Set(categories.map(\.id)).count == categories.count else {
+            throw LocalLedgerError.invalidReference
+        }
+        for category in categories {
+            guard category.scopeKey == scopeKey,
+                  category.trackerID == tracker.id,
+                  category.kind == .expense,
+                  category.deletedAt == nil
+            else {
+                throw LocalLedgerError.invalidReference
+            }
+        }
+        guard (budgetScope == .tracker && categories.isEmpty) ||
+            (budgetScope == .categories && !categories.isEmpty)
+        else {
+            throw LocalLedgerError.invalidReference
+        }
+        let orderedThresholds = thresholds.sorted()
+        guard !orderedThresholds.isEmpty,
+              Set(orderedThresholds).count == orderedThresholds.count,
+              orderedThresholds.allSatisfy({ (1 ... 1000).contains($0) })
+        else {
+            throw LocalLedgerError.invalidReference
+        }
+        return (
+            canonicalStart,
+            canonicalEnd,
+            categories.sorted { $0.id.uuidString < $1.id.uuidString },
+            orderedThresholds
+        )
+    }
+
+    private func insertBudgetChildren(
+        for budget: LocalBudget,
+        categories: [LocalCategory],
+        thresholds: [Int]
+    ) {
+        for category in categories {
+            context.insert(
+                LocalBudgetCategory(
+                    scopeKey: budget.scopeKey,
+                    budgetID: budget.id,
+                    categoryID: category.id,
+                    categoryNameSnapshot: category.name,
+                    categoryVersionSnapshot: category.serverVersion ?? 1
+                )
+            )
+        }
+        for threshold in thresholds {
+            context.insert(
+                LocalBudgetThreshold(
+                    scopeKey: budget.scopeKey,
+                    budgetID: budget.id,
+                    percent: threshold
+                )
+            )
+        }
+    }
+
+    private func replaceBudgetChildren(
+        for budget: LocalBudget,
+        categories: [LocalCategory],
+        thresholds: [Int]
+    ) throws {
+        let budgetID = budget.id
+        let scopeKey = budget.scopeKey
+        for value in try context.fetch(
+            FetchDescriptor<LocalBudgetCategory>(
+                predicate: #Predicate {
+                    $0.scopeKey == scopeKey && $0.budgetID == budgetID
+                }
+            )
+        ) {
+            context.delete(value)
+        }
+        for value in try context.fetch(
+            FetchDescriptor<LocalBudgetThreshold>(
+                predicate: #Predicate {
+                    $0.scopeKey == scopeKey && $0.budgetID == budgetID
+                }
+            )
+        ) {
+            context.delete(value)
+        }
+        insertBudgetChildren(for: budget, categories: categories, thresholds: thresholds)
+    }
+
+    private func budgetChildValues(
+        for budget: LocalBudget
+    ) throws -> (categoryIDs: [UUID], thresholds: [Int]) {
+        let budgetID = budget.id
+        let scopeKey = budget.scopeKey
+        let categoryIDs = try context.fetch(
+            FetchDescriptor<LocalBudgetCategory>(
+                predicate: #Predicate {
+                    $0.scopeKey == scopeKey && $0.budgetID == budgetID
+                }
+            )
+        ).map(\.categoryID).sorted { $0.uuidString < $1.uuidString }
+        let thresholds = try context.fetch(
+            FetchDescriptor<LocalBudgetThreshold>(
+                predicate: #Predicate {
+                    $0.scopeKey == scopeKey && $0.budgetID == budgetID
+                },
+                sortBy: [SortDescriptor(\LocalBudgetThreshold.percent)]
+            )
+        ).map(\.percent)
+        return (categoryIDs, thresholds)
+    }
+
     private func insertChildren(
         for transaction: LedgerTransaction,
         account: LocalAccount,
@@ -1060,6 +1356,40 @@ struct LocalLedgerRepository {
             entity: .tag,
             command: command,
             baseServerVersion: tag.serverVersion,
+            payload: payload
+        )
+    }
+
+    private func enqueue(
+        _ budget: LocalBudget,
+        command: LocalMutationCommand,
+        categoryIDs: [UUID],
+        thresholds: [Int]
+    ) throws {
+        let payload = BudgetMutationPayload(
+            id: budget.id,
+            trackerID: budget.trackerID,
+            name: budget.name,
+            scope: budget.budgetScopeRaw,
+            period: budget.periodRaw,
+            amountMinor: budget.amountMinor,
+            currency: budget.currencyCode,
+            currencyExponent: budget.currencyExponent,
+            timeZone: budget.timeZoneIdentifier,
+            startsOn: BudgetDateCodec.string(from: budget.startsOn),
+            endsOn: budget.endsOn.map { BudgetDateCodec.string(from: $0) },
+            rollover: budget.rollover,
+            categoryIDs: categoryIDs,
+            thresholdPercentages: thresholds,
+            archivedAt: budget.archivedAt,
+            deletedAt: budget.deletedAt
+        )
+        try insertOutbox(
+            scopeKey: budget.scopeKey,
+            entityID: budget.id,
+            entity: .budget,
+            command: command,
+            baseServerVersion: budget.serverVersion,
             payload: payload
         )
     }

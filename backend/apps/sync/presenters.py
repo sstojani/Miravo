@@ -26,6 +26,8 @@ from apps.ledger.serializers import (
     TrackerSerializer,
     TransactionReadSerializer,
 )
+from apps.planning.models import Budget
+from apps.planning.serializers import BudgetSerializer
 from apps.sync.models import SyncChange
 from apps.users.models import User
 
@@ -36,6 +38,7 @@ BOOTSTRAP_ENTITY_ORDER = (
     ("categories", SyncChange.EntityType.CATEGORY),
     ("tags", SyncChange.EntityType.TAG),
     ("merchants", SyncChange.EntityType.MERCHANT),
+    ("budgets", SyncChange.EntityType.BUDGET),
     ("transactions", SyncChange.EntityType.TRANSACTION),
 )
 
@@ -96,6 +99,13 @@ def _load_instance(entity_type: str, entity_id: UUID | str) -> Any | None:  # no
             .filter(id=entity_id)
             .first()
         )
+    if entity_type == SyncChange.EntityType.BUDGET:
+        return (
+            Budget.objects.select_related("tracker", "created_by", "last_editor")
+            .prefetch_related("category_links", "thresholds")
+            .filter(id=entity_id)
+            .first()
+        )
     if entity_type == SyncChange.EntityType.TRANSACTION:
         return (
             Transaction.objects.select_related(
@@ -141,6 +151,8 @@ def _serialize_loaded_instance(
     elif entity_type == SyncChange.EntityType.MERCHANT:
         data = dict(MerchantSerializer(instance).data)
         data["deleted_at"] = instance.deleted_at
+    elif entity_type == SyncChange.EntityType.BUDGET:
+        data = dict(BudgetSerializer(instance).data)
     elif entity_type == SyncChange.EntityType.TRANSACTION:
         data = dict(TransactionReadSerializer(instance).data)
     else:
@@ -229,6 +241,13 @@ def _bootstrap_queryset(entity_type: str, *, user: User, tracker_ids: list[UUID]
         return (
             Merchant.objects.filter(tracker_id__in=tracker_ids, deleted_at__isnull=True)
             .select_related("tracker", "default_category")
+            .order_by("id")
+        )
+    if entity_type == SyncChange.EntityType.BUDGET:
+        return (
+            Budget.objects.filter(tracker_id__in=tracker_ids, deleted_at__isnull=True)
+            .select_related("tracker", "created_by", "last_editor")
+            .prefetch_related("category_links", "thresholds")
             .order_by("id")
         )
     if entity_type == SyncChange.EntityType.TRANSACTION:

@@ -74,7 +74,7 @@ The write representation accepts account IDs and exact category allocations; it 
 | `GET /sync/bootstrap?bootstrap_cursor=…&limit=…` | Active access JWT | Bounded current authorized snapshot page, fixed normal pull cursor, signed next bootstrap cursor, and `has_more` |
 | `WSS /sync/events` | Active access JWT/device session in `Authorization` header | Optional foreground sequence invalidation; client then uses normal pull |
 
-Push currently accepts the five locally implemented aggregate roots: tracker, account, category, tag, and transaction. Each operation contains `operation_id`, positive ascending `local_sequence`, `entity_type`, client `entity_id`, command, nullable `base_server_version`, and a strict versioned payload. The server preserves client UUIDs. Creates omit a base version; later updates/archive/restore/delete require one. The full batch is structurally validated, then each operation commits or rolls back independently.
+Push currently accepts six locally implemented aggregate roots: tracker, account, category, tag, transaction, and budget. Each operation contains `operation_id`, positive ascending `local_sequence`, `entity_type`, client `entity_id`, command, nullable `base_server_version`, and a strict versioned payload. The server preserves client UUIDs. Creates omit a base version; later updates/archive/restore/delete require one. The full batch is structurally validated, then each operation commits or rolls back independently.
 
 Receipts are scoped to the user rather than a transient login session. Exact replay returns `duplicate` without another domain write. Reusing an operation UUID for a different normalized fingerprint returns `idempotency_fingerprint_mismatch`. Stale edits return `conflict` with base version, current server representation, and the proposed payload; unrelated operations continue.
 
@@ -82,12 +82,25 @@ Pull and bootstrap cursors are independently signed and user-bound. Bootstrap fi
 
 The WebSocket requires `Authorization: Bearer <access-token>`; credentials are never accepted in its URL. After acceptance it sends `{"type":"ready","protocol_version":1}`. Invalidation frames contain only `type`, `protocol_version`, and the latest sequence hint. The socket closes at access-token expiry, reconnects only from the foreground app, and is never authoritative. Unknown client application messages close with code `4400`; missing, invalid, expired, or revoked authentication closes with `4401`.
 
+## Implemented in Milestone 7 (budgets)
+
+| Method/path | Minimum tracker role | Purpose |
+|---|---|---|
+| `GET/POST /budgets/` | viewer / editor | List visible active budgets or create a tracker/category-scoped budget |
+| `GET/PUT/DELETE /budgets/{id}/` | viewer / editor | Read, fully replace, or tombstone a budget |
+| `POST /budgets/{id}/archive/` and `/restore/` | editor | Reversible lifecycle preserving history |
+| `GET /budgets/{id}/progress/?as_of=YYYY-MM-DD` | viewer | Calculate one deterministic period in the budget's stored time zone |
+
+Budgets support monthly, Monday-based weekly, and fixed custom civil-date ranges. Category-scoped writes require active expense categories from the same tracker, snapshot their names/versions, and reject duplicate/unknown critical fields. Thresholds are unique integer percentages from 1 through 1000. Progress counts only nondeleted posted expenses, uses exact allocations, and converts only through an identity amount or the transaction's stored tracker-base snapshot. Missing conversions are returned under `unconverted`, set `is_partial`, and are never guessed. Rollover carries signed completed-period remainder; an incomplete prior period makes `rollover_carried_minor` null and `rollover_complete` false. Traversal is bounded by `PROJECT_LEDGER_BUDGET_MAX_ROLLOVER_PERIODS` (default 600).
+
+Budgets are normal sync aggregate roots. Their selected-category snapshots and thresholds travel inside the versioned representation; create/update/archive/restore/delete use the same replay, conflict, tombstone, pull, and bootstrap rules as other roots.
+
 ## Planned resource surface
 
 - Profile and configured recovery.
 - Attachments and receipt upload/download.
 - Participants, splits, simplified balances, settlements.
-- Budgets/periods, recurring rules/occurrences/subscriptions, installments/schedule/payments.
+- Recurring rules/occurrences/subscriptions and installments/schedule/payments.
 - Currency rates, analytics, audit history, export jobs/expiring downloads.
 
 Collection endpoints use bounded cursor pagination, explicit filters/order, and stable error codes. Authorization returns 404 where revealing object existence would be inappropriate.
