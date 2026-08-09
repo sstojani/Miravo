@@ -10,6 +10,7 @@ struct QuickAddView: View {
     @Query private var trackers: [LocalTracker]
     @Query private var accounts: [LocalAccount]
     @Query private var categories: [LocalCategory]
+    @Query private var tags: [LocalTag]
     @State private var kind = TransactionKind.expense
     @State private var amount = ""
     @State private var merchant = ""
@@ -19,6 +20,7 @@ struct QuickAddView: View {
     @State private var accountID: UUID?
     @State private var destinationAccountID: UUID?
     @State private var categoryID: UUID?
+    @State private var selectedTagIDs = Set<UUID>()
     @State private var destinationAmount = ""
     @State private var baseAmount = ""
     @State private var errorMessage: String?
@@ -48,10 +50,20 @@ struct QuickAddView: View {
             },
             sort: \LocalCategory.sortOrder
         )
+        _tags = Query(
+            filter: #Predicate {
+                $0.scopeKey == scopeKey && $0.deletedAt == nil && $0.archivedAt == nil
+            },
+            sort: \LocalTag.name
+        )
+    }
+
+    private var editableTrackers: [LocalTracker] {
+        trackers.filter { $0.role.canEditFinancialData }
     }
 
     private var selectedTracker: LocalTracker? {
-        trackers.first { $0.id == trackerID }
+        editableTrackers.first { $0.id == trackerID }
     }
 
     private var availableAccounts: [LocalAccount] {
@@ -66,6 +78,10 @@ struct QuickAddView: View {
 
     private var availableDestinationAccounts: [LocalAccount] {
         availableAccounts.filter { $0.id != accountID }
+    }
+
+    private var availableTags: [LocalTag] {
+        tags.filter { $0.trackerID == trackerID }
     }
 
     private var selectedAccount: LocalAccount? {
@@ -127,7 +143,7 @@ struct QuickAddView: View {
 
             Section("Where") {
                 Picker("Tracker", selection: $trackerID) {
-                    ForEach(trackers) { tracker in
+                    ForEach(editableTrackers) { tracker in
                         Text(tracker.name).tag(Optional(tracker.id))
                     }
                 }
@@ -176,6 +192,16 @@ struct QuickAddView: View {
                 TextField("Note", text: $note, axis: .vertical)
                     .lineLimit(2 ... 5)
                 DatePicker("Date", selection: $occurredAt)
+            }
+
+            TagSelectionSection(tags: availableTags, selectedIDs: $selectedTagIDs)
+
+            if editableTrackers.isEmpty {
+                Section {
+                    Label("Your trackers are read only.", systemImage: "eye")
+                } footer: {
+                    Text("An owner or admin must grant editor access before you can add transactions.")
+                }
             }
 
             if let errorMessage {
@@ -232,7 +258,9 @@ struct QuickAddView: View {
     }
 
     private func configureDefaults() {
-        if trackerID == nil { trackerID = trackers.first?.id }
+        if !editableTrackers.contains(where: { $0.id == trackerID }) {
+            trackerID = editableTrackers.first?.id
+        }
         configureChildDefaults()
     }
 
@@ -240,6 +268,7 @@ struct QuickAddView: View {
         guard let tracker = selectedTracker else {
             accountID = nil
             categoryID = nil
+            selectedTagIDs.removeAll()
             return
         }
         if !availableAccounts.contains(where: { $0.id == accountID }) {
@@ -247,6 +276,8 @@ struct QuickAddView: View {
         }
         configureCategoryDefault()
         configureDestinationDefault()
+        let availableIDs = Set(availableTags.map(\.id))
+        selectedTagIDs.formIntersection(availableIDs)
     }
 
     private func configureCategoryDefault() {
@@ -295,7 +326,8 @@ struct QuickAddView: View {
                 occurredAt: occurredAt,
                 destinationAccount: selectedDestinationAccount,
                 destinationMoney: destinationMoney,
-                baseMoney: baseMoney
+                baseMoney: baseMoney,
+                tags: availableTags.filter { selectedTagIDs.contains($0.id) }
             )
             amount = ""
             merchant = ""
@@ -303,6 +335,7 @@ struct QuickAddView: View {
             destinationAmount = ""
             self.baseAmount = ""
             occurredAt = .now
+            selectedTagIDs.removeAll()
             errorMessage = nil
             presentUndo(for: transaction)
             Task { await sync.synchronize(session: session) }

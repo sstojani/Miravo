@@ -60,6 +60,7 @@ The write representation accepts account IDs and exact category allocations; it 
 - Expense, transfer, and settlement commands subtract from the primary account; income/refund commands add.
 - A transfer requires another account. Same-currency source/destination amounts must match; cross-currency transfers preserve both integer amounts and a conversion snapshot.
 - Allocations are optional, but when supplied they must be positive, unique by category, same-tracker/same-kind, and sum exactly to `amount_minor`.
+- Tag IDs are optional, unique, and same-tracker. Archived tags cannot be newly assigned; a full update may retain an archived tag already linked to that transaction so unrelated edits do not erase historical taxonomy.
 - If transaction currency differs from tracker base currency, `base_amount_minor`, positive 12-place decimal `rate_snapshot`, `rate_source`, and `rate_effective_at` are mandatory. Sync payloads also carry `base_currency`; it must match the authoritative tracker base currency. The rate must equal base major units divided by original major units at 12-place half-up precision. The server never invents a rate or silently accepts an inconsistent conversion claim.
 - A full `PUT` requires the current `base_version`. A stale version returns `409 version_conflict`; successful material edits first create immutable relational revisions.
 
@@ -73,7 +74,7 @@ The write representation accepts account IDs and exact category allocations; it 
 | `GET /sync/bootstrap?bootstrap_cursor=…&limit=…` | Active access JWT | Bounded current authorized snapshot page, fixed normal pull cursor, signed next bootstrap cursor, and `has_more` |
 | `WSS /sync/events` | Active access JWT/device session in `Authorization` header | Optional foreground sequence invalidation; client then uses normal pull |
 
-Push currently accepts the four locally implemented aggregate roots: tracker, account, category, and transaction. Each operation contains `operation_id`, positive ascending `local_sequence`, `entity_type`, client `entity_id`, command, nullable `base_server_version`, and a strict versioned payload. The server preserves client UUIDs. Creates omit a base version; later updates/archive/restore/delete require one. The full batch is structurally validated, then each operation commits or rolls back independently.
+Push currently accepts the five locally implemented aggregate roots: tracker, account, category, tag, and transaction. Each operation contains `operation_id`, positive ascending `local_sequence`, `entity_type`, client `entity_id`, command, nullable `base_server_version`, and a strict versioned payload. The server preserves client UUIDs. Creates omit a base version; later updates/archive/restore/delete require one. The full batch is structurally validated, then each operation commits or rolls back independently.
 
 Receipts are scoped to the user rather than a transient login session. Exact replay returns `duplicate` without another domain write. Reusing an operation UUID for a different normalized fingerprint returns `idempotency_fingerprint_mismatch`. Stale edits return `conflict` with base version, current server representation, and the proposed payload; unrelated operations continue.
 

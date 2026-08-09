@@ -88,6 +88,16 @@ class CategoryMutationPayloadSerializer(StrictSerializer):
     deleted_at = serializers.DateTimeField(required=False, allow_null=True)
 
 
+class TagMutationPayloadSerializer(StrictSerializer):
+    client_payload_version = serializers.IntegerField(min_value=1, max_value=1)
+    id = serializers.UUIDField()
+    tracker_id = serializers.UUIDField()
+    name = serializers.CharField(max_length=80)
+    color = serializers.CharField(max_length=16)
+    archived_at = serializers.DateTimeField(required=False, allow_null=True)
+    deleted_at = serializers.DateTimeField(required=False, allow_null=True)
+
+
 class TransactionMutationPayloadSerializer(StrictSerializer):
     client_payload_version = serializers.IntegerField(min_value=1, max_value=1)
     id = serializers.UUIDField()
@@ -121,6 +131,12 @@ class TransactionMutationPayloadSerializer(StrictSerializer):
     note = serializers.CharField(max_length=5000, allow_blank=True, default="")
     occurred_at = serializers.DateTimeField()
     refund_of_id = serializers.UUIDField(required=False, allow_null=True)
+    tag_ids = serializers.ListField(
+        child=serializers.UUIDField(),
+        required=False,
+        default=list,
+        allow_empty=True,
+    )
     deleted_at = serializers.DateTimeField(required=False, allow_null=True)
 
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
@@ -153,6 +169,7 @@ PAYLOAD_SERIALIZERS: dict[str, type[StrictSerializer]] = {
     SyncChange.EntityType.TRACKER: TrackerMutationPayloadSerializer,
     SyncChange.EntityType.ACCOUNT: AccountMutationPayloadSerializer,
     SyncChange.EntityType.CATEGORY: CategoryMutationPayloadSerializer,
+    SyncChange.EntityType.TAG: TagMutationPayloadSerializer,
     SyncChange.EntityType.TRANSACTION: TransactionMutationPayloadSerializer,
 }
 

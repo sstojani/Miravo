@@ -12,6 +12,8 @@ struct TransactionDetailView: View {
     @Query private var trackers: [LocalTracker]
     @Query private var accounts: [LocalAccount]
     @Query private var categories: [LocalCategory]
+    @Query private var tags: [LocalTag]
+    @Query private var transactionTags: [LocalTransactionTag]
     @Query private var transactions: [LedgerTransaction]
     @State private var showingEditor = false
     @State private var showingRefund = false
@@ -27,7 +29,17 @@ struct TransactionDetailView: View {
         })
         _accounts = Query(filter: #Predicate { $0.scopeKey == scopeKey && $0.deletedAt == nil })
         _categories = Query(filter: #Predicate { $0.scopeKey == scopeKey && $0.deletedAt == nil })
+        _tags = Query(filter: #Predicate { $0.scopeKey == scopeKey && $0.deletedAt == nil })
+        _transactionTags = Query(filter: #Predicate { $0.scopeKey == scopeKey })
         _transactions = Query(filter: #Predicate { $0.scopeKey == scopeKey })
+    }
+
+    private var tracker: LocalTracker? {
+        trackers.first { $0.id == transaction.trackerID }
+    }
+
+    private var canEdit: Bool {
+        tracker?.role.canEditFinancialData == true
     }
 
     private var trackerName: String {
@@ -52,6 +64,15 @@ struct TransactionDetailView: View {
     private var refundOriginal: LedgerTransaction? {
         guard let refundOfID = transaction.refundOfID else { return nil }
         return transactions.first { $0.id == refundOfID }
+    }
+
+    private var tagNames: [String] {
+        let linkedIDs = Set(
+            transactionTags
+                .filter { $0.transactionID == transaction.id }
+                .map(\.tagID)
+        )
+        return tags.filter { linkedIDs.contains($0.id) }.map(\.name).sorted()
     }
 
     var body: some View {
@@ -79,6 +100,9 @@ struct TransactionDetailView: View {
                 }
                 if transaction.kind != .transfer {
                     LabeledContent("Category", value: categoryName)
+                }
+                if !tagNames.isEmpty {
+                    LabeledContent("Tags", value: tagNames.joined(separator: ", "))
                 }
                 if transaction.currencyCode != transaction.baseCurrencyCode {
                     LabeledContent("Base amount") {
@@ -113,26 +137,35 @@ struct TransactionDetailView: View {
                 Section("Note") { Text(transaction.note) }
             }
 
-            Section {
-                if transaction.kind == .expense, transaction.deletedAt == nil {
-                    Button("Record refund") { showingRefund = true }
-                }
-                Button("Duplicate") { duplicate() }
-                Button {
-                    setDeleted(transaction.deletedAt == nil)
-                } label: {
-                    if transaction.deletedAt == nil {
-                        Text("Delete")
-                    } else {
-                        Text("Restore")
+            if canEdit {
+                Section {
+                    if transaction.kind == .expense, transaction.deletedAt == nil {
+                        Button("Record refund") { showingRefund = true }
                     }
+                    Button("Duplicate") { duplicate() }
+                    Button {
+                        setDeleted(transaction.deletedAt == nil)
+                    } label: {
+                        if transaction.deletedAt == nil {
+                            Text("Delete")
+                        } else {
+                            Text("Restore")
+                        }
+                    }
+                    .foregroundStyle(
+                        transaction.deletedAt == nil ? LedgerTheme.negative : LedgerTheme.positive
+                    )
                 }
-                .foregroundStyle(transaction.deletedAt == nil ? LedgerTheme.negative : LedgerTheme.positive)
+            } else {
+                Section {
+                    Label("Read-only tracker", systemImage: "eye")
+                        .foregroundStyle(.secondary)
+                }
             }
         }
         .navigationTitle("Transaction")
         .toolbar {
-            if transaction.deletedAt == nil {
+            if transaction.deletedAt == nil, canEdit {
                 Button("Edit") { showingEditor = true }
             }
         }
@@ -141,7 +174,9 @@ struct TransactionDetailView: View {
                 transaction: transaction,
                 trackers: trackers,
                 accounts: accounts,
-                categories: categories
+                categories: categories,
+                tags: tags,
+                transactionTags: transactionTags
             )
         }
         .sheet(isPresented: $showingRefund) {
@@ -188,6 +223,8 @@ private struct TransactionEditorView: View {
     let trackers: [LocalTracker]
     let accounts: [LocalAccount]
     let categories: [LocalCategory]
+    let tags: [LocalTag]
+    let transactionTags: [LocalTransactionTag]
 
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
@@ -200,6 +237,7 @@ private struct TransactionEditorView: View {
     @State private var accountID: UUID
     @State private var destinationAccountID: UUID?
     @State private var categoryID: UUID?
+    @State private var selectedTagIDs: Set<UUID>
     @State private var destinationAmount: String
     @State private var baseAmount: String
     @State private var safeError: String?
@@ -208,12 +246,16 @@ private struct TransactionEditorView: View {
         transaction: LedgerTransaction,
         trackers: [LocalTracker],
         accounts: [LocalAccount],
-        categories: [LocalCategory]
+        categories: [LocalCategory],
+        tags: [LocalTag],
+        transactionTags: [LocalTransactionTag]
     ) {
         self.transaction = transaction
         self.trackers = trackers
         self.accounts = accounts
         self.categories = categories
+        self.tags = tags
+        self.transactionTags = transactionTags
         _amount = State(
             initialValue: transaction.money?.editableMajorUnits(locale: .current) ?? ""
         )
@@ -223,6 +265,11 @@ private struct TransactionEditorView: View {
         _accountID = State(initialValue: transaction.accountID)
         _destinationAccountID = State(initialValue: transaction.destinationAccountID)
         _categoryID = State(initialValue: transaction.categoryID)
+        _selectedTagIDs = State(initialValue: Set(
+            transactionTags
+                .filter { $0.transactionID == transaction.id }
+                .map(\.tagID)
+        ))
         if let destinationAccountID = transaction.destinationAccountID,
            let destination = accounts.first(where: { $0.id == destinationAccountID }),
            let destinationAmountMinor = transaction.destinationAmountMinor,
@@ -264,6 +311,14 @@ private struct TransactionEditorView: View {
 
     private var tracker: LocalTracker? {
         trackers.first { $0.id == transaction.trackerID }
+    }
+
+    private var availableTags: [LocalTag] {
+        tags.filter {
+            $0.trackerID == transaction.trackerID &&
+                ($0.archivedAt == nil || selectedTagIDs.contains($0.id)) &&
+                $0.deletedAt == nil
+        }
     }
 
     private var selectedAccount: LocalAccount? {
@@ -344,6 +399,7 @@ private struct TransactionEditorView: View {
                 TextField("Merchant or payee", text: $merchant)
                 TextField("Note", text: $note, axis: .vertical)
                 DatePicker("Date", selection: $occurredAt)
+                TagSelectionSection(tags: availableTags, selectedIDs: $selectedTagIDs)
                 if let safeError {
                     Text(safeError).foregroundStyle(LedgerTheme.negative)
                 }
@@ -400,7 +456,8 @@ private struct TransactionEditorView: View {
                 occurredAt: occurredAt,
                 destinationAccount: selectedDestinationAccount,
                 destinationMoney: destinationMoney,
-                baseMoney: reportingBaseMoney
+                baseMoney: reportingBaseMoney,
+                tags: availableTags.filter { selectedTagIDs.contains($0.id) }
             )
             Task { await sync.synchronize(session: session) }
             dismiss()

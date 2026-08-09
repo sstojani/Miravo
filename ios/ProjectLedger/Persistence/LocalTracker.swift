@@ -1,6 +1,25 @@
 import Foundation
 import SwiftData
 
+enum TrackerRole: String, Codable, CaseIterable, Sendable {
+    case owner
+    case admin
+    case editor
+    case viewer
+
+    var canEditFinancialData: Bool {
+        self != .viewer
+    }
+
+    var canManageTracker: Bool {
+        self == .owner || self == .admin
+    }
+
+    var canTransferOwnership: Bool {
+        self == .owner
+    }
+}
+
 @Model
 final class LocalTracker {
     #Unique<LocalTracker>([\.scopeKey, \.id])
@@ -55,5 +74,9 @@ final class LocalTracker {
 
     var syncState: LocalSyncState {
         LocalSyncState(rawValue: syncStateRaw) ?? .failed
+    }
+
+    var role: TrackerRole {
+        TrackerRole(rawValue: roleRaw) ?? .viewer
     }
 }

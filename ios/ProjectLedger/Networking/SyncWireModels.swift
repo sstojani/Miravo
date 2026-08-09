@@ -307,12 +307,37 @@ struct CategorySnapshot: Decodable, Sendable {
     }
 }
 
+struct TagSnapshot: Decodable, Sendable {
+    let id: UUID
+    let trackerID: UUID
+    let name: String
+    let color: String
+    let archivedAt: String?
+    let version: Int64
+    let createdAt: String
+    let updatedAt: String
+    let deletedAt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case trackerID = "tracker_id"
+        case name, color
+        case archivedAt = "archived_at"
+        case version
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+        case deletedAt = "deleted_at"
+    }
+}
+
 struct MembershipSnapshot: Decodable, Sendable {
     let id: UUID
     let userID: UUID
     let trackerID: UUID
+    let email: String
     let role: String
     let state: String
+    let joinedAt: String
     let version: Int64
     let createdAt: String
     let updatedAt: String
@@ -322,7 +347,9 @@ struct MembershipSnapshot: Decodable, Sendable {
         case id
         case userID = "user_id"
         case trackerID = "tracker_id"
-        case role, state, version
+        case email, role, state
+        case joinedAt = "joined_at"
+        case version
         case createdAt = "created_at"
         case updatedAt = "updated_at"
         case deletedAt = "deleted_at"
@@ -384,6 +411,7 @@ struct TransactionSnapshot: Decodable, Sendable {
     let refundOfID: UUID?
     let movements: [MovementSnapshot]
     let allocations: [AllocationSnapshot]
+    let tagIDs: [UUID]
     let version: Int64
     let createdAt: String
     let updatedAt: String
@@ -406,7 +434,9 @@ struct TransactionSnapshot: Decodable, Sendable {
         case capturedAt = "captured_at"
         case externalEventID = "external_event_id"
         case refundOfID = "refund_of_id"
-        case movements, allocations, version
+        case movements, allocations
+        case tagIDs = "tag_ids"
+        case version
         case createdAt = "created_at"
         case updatedAt = "updated_at"
         case deletedAt = "deleted_at"

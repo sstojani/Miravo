@@ -8,6 +8,7 @@ struct TransactionListQueryTests {
     private let sourceAccountID = UUID(uuidString: "20000000-0000-0000-0000-000000000001")!
     private let destinationAccountID = UUID(uuidString: "20000000-0000-0000-0000-000000000002")!
     private let categoryID = UUID(uuidString: "30000000-0000-0000-0000-000000000001")!
+    private let tagID = UUID(uuidString: "40000000-0000-0000-0000-000000000001")!
 
     @Test func combinedFacetsIncludeDestinationAccountsAndExcludeMismatches() throws {
         let now = try #require(ISO8601DateFormatter().date(from: "2026-08-09T12:00:00Z"))
@@ -17,11 +18,14 @@ struct TransactionListQueryTests {
         transaction.sourceRaw = TransactionSource.shortcut.rawValue
         transaction.statusRaw = TransactionStatus.pending.rawValue
         transaction.syncStateRaw = LocalSyncState.failed.rawValue
-        let context = searchContext()
+        var context = searchContext()
+        context.tagNamesByTransaction[transaction.id] = ["Weekend"]
+        context.tagIDsByTransaction[transaction.id] = [tagID]
         var criteria = TransactionListCriteria(
             trackerID: trackerID,
             accountID: destinationAccountID,
             categoryID: categoryID,
+            tagID: tagID,
             kind: .expense,
             source: .shortcut,
             status: .pending,
@@ -37,7 +41,7 @@ struct TransactionListQueryTests {
             calendar: utcCalendar(),
             locale: Locale(identifier: "en_US_POSIX")
         ))
-        #expect(criteria.activeFacetCount == 9)
+        #expect(criteria.activeFacetCount == 10)
 
         criteria.accountID = UUID()
         #expect(!criteria.matches(
@@ -53,9 +57,11 @@ struct TransactionListQueryTests {
         let now = try #require(ISO8601DateFormatter().date(from: "2026-08-09T12:00:00Z"))
         let transaction = try makeTransaction(occurredAt: now)
         transaction.destinationAccountID = destinationAccountID
-        let context = searchContext()
+        var context = searchContext()
+        context.tagNamesByTransaction[transaction.id] = ["Weekend"]
+        context.tagIDsByTransaction[transaction.id] = [tagID]
 
-        for query in ["cafe", "savings", "travel", "food", "12.50", "EUR"] {
+        for query in ["cafe", "savings", "travel", "food", "weekend", "12.50", "EUR"] {
             let criteria = TransactionListCriteria(query: query)
             #expect(criteria.matches(
                 transaction,

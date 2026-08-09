@@ -6,6 +6,7 @@ enum LocalLedgerError: Error, Equatable {
     case invalidReference
     case archivedReference
     case invalidTransactionKind
+    case permissionDenied
 }
 
 @MainActor
@@ -89,7 +90,7 @@ struct LocalLedgerRepository {
     }
 
     func renameTracker(_ tracker: LocalTracker, name: String) throws {
-        try validateAccess(to: tracker, scopeKey: tracker.scopeKey)
+        try validateManagementAccess(to: tracker, scopeKey: tracker.scopeKey)
         let cleanName = try validatedName(name)
         try commit {
             tracker.name = cleanName
@@ -99,7 +100,7 @@ struct LocalLedgerRepository {
     }
 
     func setTrackerArchived(_ tracker: LocalTracker, archived: Bool) throws {
-        try validateAccess(to: tracker, scopeKey: tracker.scopeKey)
+        try validateManagementAccess(to: tracker, scopeKey: tracker.scopeKey)
         try commit {
             tracker.archivedAt = archived ? .now : nil
             touch(tracker)
@@ -194,6 +195,52 @@ struct LocalLedgerRepository {
     }
 
     @discardableResult
+    func createTag(
+        scopeKey: String,
+        tracker: LocalTracker,
+        name: String
+    ) throws -> LocalTag {
+        try validate(tracker: tracker, scopeKey: scopeKey)
+        let cleanName = try validatedName(name)
+        try ensureUniqueTagName(cleanName, trackerID: tracker.id, scopeKey: scopeKey)
+        let tag = LocalTag(
+            scopeKey: scopeKey,
+            trackerID: tracker.id,
+            name: cleanName
+        )
+        try commit {
+            context.insert(tag)
+            try enqueue(tag, command: .create)
+        }
+        return tag
+    }
+
+    func renameTag(_ tag: LocalTag, name: String) throws {
+        try validateTrackerAccess(id: tag.trackerID, scopeKey: tag.scopeKey)
+        let cleanName = try validatedName(name)
+        try ensureUniqueTagName(
+            cleanName,
+            trackerID: tag.trackerID,
+            scopeKey: tag.scopeKey,
+            excluding: tag.id
+        )
+        try commit {
+            tag.name = cleanName
+            touch(tag)
+            try enqueue(tag, command: .update)
+        }
+    }
+
+    func setTagArchived(_ tag: LocalTag, archived: Bool) throws {
+        try validateTrackerAccess(id: tag.trackerID, scopeKey: tag.scopeKey)
+        try commit {
+            tag.archivedAt = archived ? .now : nil
+            touch(tag)
+            try enqueue(tag, command: archived ? .archive : .restore)
+        }
+    }
+
+    @discardableResult
     func createTransaction(
         scopeKey: String,
         tracker: LocalTracker,
@@ -207,7 +254,8 @@ struct LocalLedgerRepository {
         destinationAccount: LocalAccount? = nil,
         destinationMoney: Money? = nil,
         refundOf: LedgerTransaction? = nil,
-        baseMoney: Money? = nil
+        baseMoney: Money? = nil,
+        tags: [LocalTag] = []
     ) throws -> LedgerTransaction {
         guard [.expense, .income, .transfer, .refund].contains(kind) else {
             throw LocalLedgerError.invalidTransactionKind
@@ -236,6 +284,11 @@ struct LocalLedgerRepository {
         try validateRefund(
             refundOf,
             kind: kind,
+            tracker: tracker,
+            scopeKey: scopeKey
+        )
+        let validatedTags = try validate(
+            tags: tags,
             tracker: tracker,
             scopeKey: scopeKey
         )
@@ -272,9 +325,14 @@ struct LocalLedgerRepository {
                 for: transaction,
                 account: account,
                 destinationAccount: destinationAccount,
-                category: category
+                category: category,
+                tags: validatedTags
             )
-            try enqueue(transaction, command: .create)
+            try enqueue(
+                transaction,
+                command: .create,
+                tagIDs: validatedTags.map(\.id)
+            )
         }
         return transaction
     }
@@ -290,7 +348,8 @@ struct LocalLedgerRepository {
         occurredAt: Date,
         destinationAccount: LocalAccount? = nil,
         destinationMoney: Money? = nil,
-        baseMoney: Money? = nil
+        baseMoney: Money? = nil,
+        tags: [LocalTag]
     ) throws {
         guard money.minorUnits > 0 else { throw MoneyError.nonPositiveAmount }
         try validate(tracker: tracker, scopeKey: transaction.scopeKey)
@@ -331,6 +390,12 @@ struct LocalLedgerRepository {
             tracker: tracker,
             scopeKey: transaction.scopeKey
         )
+        let validatedTags = try validate(
+            tags: tags,
+            tracker: tracker,
+            scopeKey: transaction.scopeKey,
+            permittingArchivedIDs: Set(try self.tags(for: transaction).map(\.id))
+        )
         let conversion = try ReportingConversionSnapshot.resolved(
             original: money,
             baseCurrencyCode: tracker.baseCurrencyCode,
@@ -361,9 +426,14 @@ struct LocalLedgerRepository {
                 for: transaction,
                 account: account,
                 destinationAccount: destinationAccount,
-                category: category
+                category: category,
+                tags: validatedTags
             )
-            try enqueue(transaction, command: .update)
+            try enqueue(
+                transaction,
+                command: .update,
+                tagIDs: validatedTags.map(\.id)
+            )
         }
     }
 
@@ -436,15 +506,17 @@ struct LocalLedgerRepository {
         if copy.destinationAccountID != nil, destinationAccount == nil {
             throw LocalLedgerError.invalidReference
         }
+        let tags = try tags(for: transaction).filter { $0.archivedAt == nil && $0.deletedAt == nil }
         try commit {
             context.insert(copy)
             try insertChildren(
                 for: copy,
                 account: account,
                 destinationAccount: destinationAccount,
-                category: category
+                category: category,
+                tags: tags
             )
-            try enqueue(copy, command: .create)
+            try enqueue(copy, command: .create, tagIDs: tags.map(\.id))
         }
         return copy
     }
@@ -456,7 +528,7 @@ struct LocalLedgerRepository {
     }
 
     private func validate(tracker: LocalTracker, scopeKey: String) throws {
-        try validateAccess(to: tracker, scopeKey: scopeKey)
+        try validateEditorAccess(to: tracker, scopeKey: scopeKey)
         guard tracker.archivedAt == nil else { throw LocalLedgerError.archivedReference }
     }
 
@@ -477,7 +549,21 @@ struct LocalLedgerRepository {
         ).first else {
             throw LocalLedgerError.invalidReference
         }
+        try validateEditorAccess(to: tracker, scopeKey: scopeKey)
+    }
+
+    private func validateEditorAccess(to tracker: LocalTracker, scopeKey: String) throws {
         try validateAccess(to: tracker, scopeKey: scopeKey)
+        guard tracker.role.canEditFinancialData else {
+            throw LocalLedgerError.permissionDenied
+        }
+    }
+
+    private func validateManagementAccess(to tracker: LocalTracker, scopeKey: String) throws {
+        try validateAccess(to: tracker, scopeKey: scopeKey)
+        guard tracker.role.canManageTracker else {
+            throw LocalLedgerError.permissionDenied
+        }
     }
 
     private func validate(
@@ -510,6 +596,79 @@ struct LocalLedgerRepository {
             throw LocalLedgerError.invalidReference
         }
         guard category.archivedAt == nil else { throw LocalLedgerError.archivedReference }
+    }
+
+    private func validate(
+        tags: [LocalTag],
+        tracker: LocalTracker,
+        scopeKey: String,
+        permittingArchivedIDs: Set<UUID> = []
+    ) throws -> [LocalTag] {
+        let uniqueIDs = Set(tags.map(\.id))
+        guard uniqueIDs.count == tags.count else {
+            throw LocalLedgerError.invalidReference
+        }
+        for tag in tags {
+            guard tag.scopeKey == scopeKey,
+                  tag.trackerID == tracker.id,
+                  (tag.archivedAt == nil || permittingArchivedIDs.contains(tag.id)),
+                  tag.deletedAt == nil
+            else {
+                throw LocalLedgerError.invalidReference
+            }
+        }
+        return tags.sorted { $0.id.uuidString < $1.id.uuidString }
+    }
+
+    private func ensureUniqueTagName(
+        _ name: String,
+        trackerID: UUID,
+        scopeKey: String,
+        excluding excludedID: UUID? = nil
+    ) throws {
+        let candidates = try context.fetch(
+            FetchDescriptor<LocalTag>(
+                predicate: #Predicate {
+                    $0.scopeKey == scopeKey &&
+                        $0.trackerID == trackerID &&
+                        $0.deletedAt == nil
+                }
+            )
+        )
+        let normalized = normalizedTagName(name)
+        guard !candidates.contains(where: {
+            $0.id != excludedID && normalizedTagName($0.name) == normalized
+        }) else {
+            throw LocalLedgerError.invalidReference
+        }
+    }
+
+    private func normalizedTagName(_ value: String) -> String {
+        value.trimmingCharacters(in: .whitespacesAndNewlines)
+            .folding(
+                options: [.caseInsensitive, .diacriticInsensitive],
+                locale: Locale(identifier: "en_US_POSIX")
+            )
+    }
+
+    private func tags(for transaction: LedgerTransaction) throws -> [LocalTag] {
+        let transactionID = transaction.id
+        let scopeKey = transaction.scopeKey
+        let links = try context.fetch(
+            FetchDescriptor<LocalTransactionTag>(
+                predicate: #Predicate {
+                    $0.scopeKey == scopeKey && $0.transactionID == transactionID
+                }
+            )
+        )
+        let tagIDs = Set(links.map(\.tagID))
+        return try context.fetch(
+            FetchDescriptor<LocalTag>(
+                predicate: #Predicate { $0.scopeKey == scopeKey }
+            )
+        )
+        .filter { tagIDs.contains($0.id) }
+        .sorted { $0.id.uuidString < $1.id.uuidString }
     }
 
     private func validatedDestinationAmount(
@@ -593,11 +752,17 @@ struct LocalLedgerRepository {
         category.syncStateRaw = LocalSyncState.pending.rawValue
     }
 
+    private func touch(_ tag: LocalTag) {
+        tag.updatedAt = .now
+        tag.syncStateRaw = LocalSyncState.pending.rawValue
+    }
+
     private func insertChildren(
         for transaction: LedgerTransaction,
         account: LocalAccount,
         destinationAccount: LocalAccount?,
-        category: LocalCategory?
+        category: LocalCategory?,
+        tags: [LocalTag]
     ) throws {
         let incomingKinds: Set<TransactionKind> = [.income, .refund]
         let signedAmount = incomingKinds.contains(transaction.kind)
@@ -641,13 +806,23 @@ struct LocalLedgerRepository {
                 )
             )
         }
+        for tag in tags {
+            context.insert(
+                LocalTransactionTag(
+                    scopeKey: transaction.scopeKey,
+                    transactionID: transaction.id,
+                    tagID: tag.id
+                )
+            )
+        }
     }
 
     private func replaceChildren(
         for transaction: LedgerTransaction,
         account: LocalAccount,
         destinationAccount: LocalAccount?,
-        category: LocalCategory?
+        category: LocalCategory?,
+        tags: [LocalTag]
     ) throws {
         let transactionID = transaction.id
         let scopeKey = transaction.scopeKey
@@ -665,13 +840,22 @@ struct LocalLedgerRepository {
                 }
             )
         )
+        let tagLinks = try context.fetch(
+            FetchDescriptor<LocalTransactionTag>(
+                predicate: #Predicate {
+                    $0.transactionID == transactionID && $0.scopeKey == scopeKey
+                }
+            )
+        )
         for movement in movements { context.delete(movement) }
         for allocation in allocations { context.delete(allocation) }
+        for tagLink in tagLinks { context.delete(tagLink) }
         try insertChildren(
             for: transaction,
             account: account,
             destinationAccount: destinationAccount,
-            category: category
+            category: category,
+            tags: tags
         )
     }
 
@@ -750,10 +934,36 @@ struct LocalLedgerRepository {
         )
     }
 
+    private func enqueue(_ tag: LocalTag, command: LocalMutationCommand) throws {
+        let payload = TagMutationPayload(
+            id: tag.id,
+            trackerID: tag.trackerID,
+            name: tag.name,
+            color: tag.colorHex,
+            archivedAt: tag.archivedAt,
+            deletedAt: tag.deletedAt
+        )
+        try insertOutbox(
+            scopeKey: tag.scopeKey,
+            entityID: tag.id,
+            entity: .tag,
+            command: command,
+            baseServerVersion: tag.serverVersion,
+            payload: payload
+        )
+    }
+
     private func enqueue(
         _ transaction: LedgerTransaction,
-        command: LocalMutationCommand
+        command: LocalMutationCommand,
+        tagIDs explicitTagIDs: [UUID]? = nil
     ) throws {
+        let tagIDs: [UUID]
+        if let explicitTagIDs {
+            tagIDs = explicitTagIDs
+        } else {
+            tagIDs = try tags(for: transaction).map(\.id)
+        }
         let payload = TransactionMutationPayload(
             id: transaction.id,
             trackerID: transaction.trackerID,
@@ -777,6 +987,7 @@ struct LocalLedgerRepository {
             note: transaction.note,
             occurredAt: transaction.occurredAt,
             refundOfID: transaction.refundOfID,
+            tagIDs: tagIDs,
             deletedAt: transaction.deletedAt
         )
         try insertOutbox(

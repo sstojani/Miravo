@@ -38,7 +38,7 @@ The current native attachment boundary persists a compound scoped attachment UUI
 1. Preserve unsent outbox commands and locally referenced files.
 2. The server fixes an upper change-log sequence and signs one normal target cursor on the first request. Every UUID-ordered page carries that exact opaque token inside its signed, user-bound bootstrap continuation; it is not re-signed between pages.
 3. Persist each page under a local bootstrap generation without changing the visible ledger or normal pull cursor.
-4. Require every page to retain the same target cursor; decode all typed records and validate core tracker/account/category/transaction relationships.
+4. Require every page to retain the same target cursor; decode all typed records and validate tracker/membership/account/category/tag/transaction relationships, including same-tracker tag assignments.
 5. Publish the reconciled snapshot and final pull cursor in one SwiftData save, retaining every entity with a queued local mutation.
 6. Immediately pull from the fixed cursor so changes committed while pages were downloading are not deferred to a later launch.
 7. Rebase/replay retained commands against downloaded versions, producing conflicts where required.
@@ -48,6 +48,7 @@ A page or publish failure rolls back its entire local transaction. Completed sta
 ## Conflict rules
 
 - Security/membership/role data is server-authoritative.
+- Membership snapshots persist as an offline roster. A current-user active role change updates the cached tracker permission immediately; removal marks access revoked. Viewer writes are also rejected inside the local repository, not only hidden in views.
 - Delete on a newer version defeats an older edit, but the local proposal is retained for review.
 - The server merges only provably non-overlapping field changes.
 - Overlapping financial edits return base information when retained, current server representation, proposed local changes, and changed-field metadata.

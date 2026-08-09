@@ -2,7 +2,7 @@
 
 Last updated: 2026-08-09. A checked item is complete; its verification tier is recorded in `IMPLEMENT.md`. Items are not checked merely because scaffolding exists.
 
-Current focus: **Milestone 5 — Complete core app experience**. The first source-level slice now includes atomic offline transfer/refund commands, explicit reporting conversion snapshots, duplicate/undo, combined local transaction filters/search, grouped currency-safe day totals, and related tests. Role-aware tag/collaborator UI and 50,000-record native performance validation remain. All Swift/Xcode compile/runtime claims still require the macOS workflow; PostgreSQL/Redis Docker and hosted CI verification remain explicit external checks.
+Current focus: **Milestone 5 — Complete core app experience**. The source-level slice now includes atomic transfer/refund commands, explicit reporting snapshots, duplicate/undo, combined local filters/search, synchronized transaction tags, an offline collaborator roster, and repository-enforced viewer read-only behavior. A deterministic 50,000-record regression check is authored. Accessibility/runtime performance and all Swift/Xcode claims still require the macOS workflow; PostgreSQL/Redis Docker and hosted CI remain explicit external checks.
 
 ## Milestone 0 — Discovery and durable project plan
 
@@ -63,8 +63,8 @@ Current acceptance: an authenticated device can push an ordered offline tracker/
 ## Milestone 5 — Complete core app experience
 
 - [x] Overview, fast amount-first quick add, transaction detail/list/filter/search, transfers, refunds, and undo (source implemented; macOS/device verification pending).
-- [ ] Tracker/account/category/tag/collaborator settings and role-aware states.
-- [ ] Complete English/Albanian strings, accessibility, empty/loading/offline/error/permission/conflict states, and 50k-record performance checks.
+- [x] Tracker/account/category/tag settings, synchronized offline collaborator roster, and role-aware local states (source implemented; online invite/role mutation remains Milestone 8 and macOS verification is pending).
+- [ ] Complete English/Albanian strings, accessibility, empty/loading/offline/error/permission/conflict states, and 50k-record performance checks (264 strings pass locally and the 50k check is authored; simulator/device audit remains).
 
 ## Milestone 6 — Shortcut automation
 

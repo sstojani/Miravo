@@ -51,6 +51,8 @@ struct TransactionSearchContext: Sendable {
     var trackerNames: [UUID: String] = [:]
     var accountNames: [UUID: String] = [:]
     var categoryNames: [UUID: String] = [:]
+    var tagNamesByTransaction: [UUID: [String]] = [:]
+    var tagIDsByTransaction: [UUID: Set<UUID>] = [:]
 }
 
 struct TransactionListCriteria: Equatable, Sendable {
@@ -58,6 +60,7 @@ struct TransactionListCriteria: Equatable, Sendable {
     var trackerID: UUID?
     var accountID: UUID?
     var categoryID: UUID?
+    var tagID: UUID?
     var kind: TransactionKind?
     var source: TransactionSource?
     var status: TransactionStatus?
@@ -67,7 +70,7 @@ struct TransactionListCriteria: Equatable, Sendable {
 
     var isActive: Bool {
         !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
-            trackerID != nil || accountID != nil || categoryID != nil || kind != nil ||
+            trackerID != nil || accountID != nil || categoryID != nil || tagID != nil || kind != nil ||
             source != nil || status != nil || currencyCode != nil || syncState != nil ||
             dateWindow != .all
     }
@@ -77,6 +80,7 @@ struct TransactionListCriteria: Equatable, Sendable {
             trackerID != nil,
             accountID != nil,
             categoryID != nil,
+            tagID != nil,
             kind != nil,
             source != nil,
             status != nil,
@@ -93,11 +97,15 @@ struct TransactionListCriteria: Equatable, Sendable {
         calendar: Calendar,
         locale: Locale
     ) -> Bool {
+        let tagMatches = tagID.map {
+            context.tagIDsByTransaction[transaction.id]?.contains($0) == true
+        } ?? true
         guard trackerID == nil || transaction.trackerID == trackerID,
               accountID == nil ||
               transaction.accountID == accountID ||
               transaction.destinationAccountID == accountID,
               categoryID == nil || transaction.categoryID == categoryID,
+              tagMatches,
               kind == nil || transaction.kind == kind,
               source == nil || transaction.source == source,
               status == nil || transaction.status == status,
@@ -110,7 +118,7 @@ struct TransactionListCriteria: Equatable, Sendable {
 
         let cleanQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleanQuery.isEmpty else { return true }
-        let searchableValues = [
+        var searchableValues = [
             transaction.merchant,
             transaction.note,
             transaction.currencyCode,
@@ -124,6 +132,7 @@ struct TransactionListCriteria: Equatable, Sendable {
             amountSearchText(for: transaction, locale: locale),
             String(transaction.amountMinor),
         ]
+        searchableValues.append(contentsOf: context.tagNamesByTransaction[transaction.id] ?? [])
         return searchableValues.contains { value in
             value.range(
                 of: cleanQuery,

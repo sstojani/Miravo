@@ -2130,12 +2130,14 @@ components:
       - tracker
       - account
       - category
+      - tag
       - transaction
       type: string
       description: |-
         * `tracker` - tracker
         * `account` - account
         * `category` - category
+        * `tag` - tag
         * `transaction` - transaction
     Invite:
       type: object

@@ -12,11 +12,11 @@ Open Quick Add, choose expense, income, or transfer, and enter the amount. Track
 
 Save commits the transaction, derived account movements, optional category allocation, conversion snapshot, and ordered outbox mutation locally without a network request. The confirmation bar offers Undo for eight seconds; Undo records a normal recoverable deletion and never waits for synchronization.
 
-Open an expense's detail screen to record a linked full or partial refund. A refund adds money back to the selected account while keeping its relationship to the historical expense. Settlement, tags, receipts, and splits arrive in their scheduled milestones.
+Open an expense's detail screen to record a linked full or partial refund. A refund adds money back to the selected account while keeping its relationship to the historical expense. Tags can be created in Local Data, selected during entry/editing, searched, and filtered. Archiving a tag prevents new assignment while retaining it on historical transactions. Settlement, receipts, and splits arrive in their scheduled milestones.
 
 ## Finding transactions
 
-Transaction search covers merchant/payee, note, tracker, source or destination account, category, currency, and locale-formatted amount. It is debounced so typing does not trigger network work. Filters for tracker, account, category, type, source, status, sync state, currency, and date range combine; Clear Filters resets them predictably. Results are grouped by local day, and each day shows separate per-currency net totals so unlike currencies are never added together.
+Transaction search covers merchant/payee, note, tracker, source or destination account, category, tag, currency, and locale-formatted amount. It is debounced so typing does not trigger network work. Filters for tracker, account, category, tag, type, source, status, sync state, currency, and date range combine; Clear Filters resets them predictably. Results are grouped by local day, and each day shows separate per-currency net totals so unlike currencies are never added together.
 
 ## Sync status
 
@@ -24,7 +24,7 @@ Pending means stored locally and durably queued. Foreground synchronization push
 
 ## Shared trackers
 
-Owner controls ownership/deletion; admin manages settings/members; editor changes financial records; viewer is read-only. Expenses can be split among registered/guest participants and settlements do not count as spending.
+Owner controls ownership/deletion; admin manages settings/members; editor changes financial records; viewer is read-only. The synchronized collaborator roster and roles remain visible offline. The repository rejects viewer writes even if a stale screen attempts one; a role change received during pull updates the local permission state. Creating invitations and changing roles remain online collaboration work for Milestone 8. Expenses can eventually be split among registered/guest participants, and settlements will not count as spending.
 
 ## Privacy and recovery
 

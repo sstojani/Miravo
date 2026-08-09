@@ -38,7 +38,7 @@ Exactly one active owner relationship exists per tracker. Object references may 
 
 Balances derive from posted/reconciled, non-deleted movements. Transfer movements net between accounts and do not count as spending/income. Allocations, paid amounts, and owed shares must each sum exactly at currency precision. Used entities archive instead of disappearing. Clients cannot author arbitrary signed movements; a locked domain service derives them from validated transaction commands.
 
-The native transaction cache additionally retains source/destination account IDs and integer amounts, tracker-base amount/currency, decimal rate snapshot/source/effective time, and optional original-expense UUID for refunds. Its repository derives matching local movements and commits those rows with the outbox mutation in one rollback boundary. These cached values support immediate offline balances and reports; the server still revalidates the command and derives authoritative movements.
+The native transaction cache additionally retains source/destination account IDs and integer amounts, tracker-base amount/currency, decimal rate snapshot/source/effective time, optional original-expense UUID for refunds, and explicit transaction/tag join rows. It caches membership email/role/state for an offline collaborator roster while treating the server as permission authority. Its repository derives matching local movements and commits those rows, tag links, and the outbox mutation in one rollback boundary. These cached values support immediate offline balances and reports; the server still revalidates commands and derives authoritative movements.
 
 ## Planning, media, sync, and operations
 

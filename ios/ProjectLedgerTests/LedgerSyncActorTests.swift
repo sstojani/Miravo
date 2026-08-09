@@ -166,6 +166,9 @@ struct LedgerSyncActorTests {
         let container = try makeContainer()
         let trackerID = UUID(uuidString: "60000000-0000-0000-0000-000000000006")!
         let accountID = UUID(uuidString: "70000000-0000-0000-0000-000000000007")!
+        let tagID = UUID(uuidString: "71000000-0000-0000-0000-000000000007")!
+        let membershipID = UUID(uuidString: "72000000-0000-0000-0000-000000000007")!
+        let transactionID = UUID(uuidString: "73000000-0000-0000-0000-000000000007")!
         let transport = ScriptedSyncTransport(
             pushResponses: [],
             pullResponses: [emptyPull(cursor: "after-bootstrap")],
@@ -179,7 +182,8 @@ struct LedgerSyncActorTests {
                     data: bootstrapData(trackers: [trackerRepresentation(
                         id: trackerID,
                         name: "Server tracker",
-                        version: 3
+                        version: 3,
+                        role: "editor"
                     )])
                 ),
                 SyncBootstrapResponse(
@@ -188,10 +192,24 @@ struct LedgerSyncActorTests {
                     cursor: "bootstrap-target",
                     bootstrapCursor: nil,
                     hasMore: false,
-                    data: bootstrapData(accounts: [accountRepresentation(
-                        id: accountID,
-                        trackerID: trackerID
-                    )])
+                    data: bootstrapData(
+                        memberships: [membershipRepresentation(
+                            id: membershipID,
+                            trackerID: trackerID,
+                            role: "editor"
+                        )],
+                        accounts: [accountRepresentation(
+                            id: accountID,
+                            trackerID: trackerID
+                        )],
+                        tags: [tagRepresentation(id: tagID, trackerID: trackerID)],
+                        transactions: [transactionRepresentation(
+                            id: transactionID,
+                            trackerID: trackerID,
+                            accountID: accountID,
+                            tagID: tagID
+                        )]
+                    )
                 ),
             ],
             ackResponses: [ack(cursor: "after-bootstrap")]
@@ -205,12 +223,19 @@ struct LedgerSyncActorTests {
         let verification = ModelContext(container)
         let trackers = try verification.fetch(FetchDescriptor<LocalTracker>())
         let accounts = try verification.fetch(FetchDescriptor<LocalAccount>())
+        let tags = try verification.fetch(FetchDescriptor<LocalTag>())
+        let memberships = try verification.fetch(FetchDescriptor<LocalTrackerMembership>())
+        let tagLinks = try verification.fetch(FetchDescriptor<LocalTransactionTag>())
         let staged = try verification.fetch(FetchDescriptor<BootstrapStagedEntity>())
         let cursors = try verification.fetch(FetchDescriptor<SyncCursor>())
         let requestedCursors = await transport.capturedBootstrapCursors()
         #expect(summary.pulledCount == 0)
         #expect(trackers.first?.id == trackerID)
         #expect(accounts.first?.id == accountID)
+        #expect(tags.first?.id == tagID)
+        #expect(memberships.first?.role == .editor)
+        #expect(tagLinks.first?.transactionID == transactionID)
+        #expect(tagLinks.first?.tagID == tagID)
         #expect(staged.isEmpty)
         #expect(cursors.first?.cursor == "after-bootstrap")
         #expect(cursors.first?.bootstrapRequired == false)
@@ -348,10 +373,15 @@ struct LedgerSyncActorTests {
         )
     }
 
-    private func trackerRepresentation(id: UUID, name: String, version: Int64) -> JSONValue {
+    private func trackerRepresentation(
+        id: UUID,
+        name: String,
+        version: Int64,
+        role: String = "owner"
+    ) -> JSONValue {
         .object([
             "id": .string(id.uuidString.lowercased()),
-            "role": .string("owner"),
+            "role": .string(role),
             "name": .string(name),
             "description": .string(""),
             "icon": .string("wallet.pass"),
@@ -391,18 +421,99 @@ struct LedgerSyncActorTests {
         ])
     }
 
+    private func membershipRepresentation(
+        id: UUID,
+        trackerID: UUID,
+        role: String
+    ) -> JSONValue {
+        .object([
+            "id": .string(id.uuidString.lowercased()),
+            "user_id": .string("10000000-0000-0000-0000-000000000001"),
+            "tracker_id": .string(trackerID.uuidString.lowercased()),
+            "email": .string("owner@example.com"),
+            "role": .string(role),
+            "state": .string("active"),
+            "joined_at": .string(timestamp),
+            "version": .integer(1),
+            "created_at": .string(timestamp),
+            "updated_at": .string(timestamp),
+            "deleted_at": .null,
+        ])
+    }
+
+    private func tagRepresentation(id: UUID, trackerID: UUID) -> JSONValue {
+        .object([
+            "id": .string(id.uuidString.lowercased()),
+            "tracker_id": .string(trackerID.uuidString.lowercased()),
+            "name": .string("Trip"),
+            "color": .string("#73819B"),
+            "archived_at": .null,
+            "version": .integer(1),
+            "created_at": .string(timestamp),
+            "updated_at": .string(timestamp),
+            "deleted_at": .null,
+        ])
+    }
+
+    private func transactionRepresentation(
+        id: UUID,
+        trackerID: UUID,
+        accountID: UUID,
+        tagID: UUID
+    ) -> JSONValue {
+        .object([
+            "id": .string(id.uuidString.lowercased()),
+            "tracker_id": .string(trackerID.uuidString.lowercased()),
+            "kind": .string("expense"),
+            "source": .string("manual"),
+            "status": .string("posted"),
+            "amount_minor": .integer(500),
+            "currency": .string("ALL"),
+            "currency_exponent": .integer(2),
+            "base_amount_minor": .integer(500),
+            "base_currency": .string("ALL"),
+            "rate_snapshot": .string("1.000000000000"),
+            "rate_source": .string("identity"),
+            "rate_effective_at": .string(timestamp),
+            "merchant": .string("Train"),
+            "payee": .string(""),
+            "note": .string(""),
+            "occurred_at": .string(timestamp),
+            "captured_at": .string(timestamp),
+            "external_event_id": .null,
+            "refund_of_id": .null,
+            "movements": .array([.object([
+                "id": .string(UUID().uuidString.lowercased()),
+                "account_id": .string(accountID.uuidString.lowercased()),
+                "signed_amount_minor": .integer(-500),
+                "currency": .string("ALL"),
+                "currency_exponent": .integer(2),
+                "conversion_rate": .null,
+            ])]),
+            "allocations": .array([]),
+            "tag_ids": .array([.string(tagID.uuidString.lowercased())]),
+            "version": .integer(1),
+            "created_at": .string(timestamp),
+            "updated_at": .string(timestamp),
+            "deleted_at": .null,
+        ])
+    }
+
     private func bootstrapData(
         trackers: [JSONValue] = [],
-        accounts: [JSONValue] = []
+        memberships: [JSONValue] = [],
+        accounts: [JSONValue] = [],
+        tags: [JSONValue] = [],
+        transactions: [JSONValue] = []
     ) -> JSONValue {
         .object([
             "trackers": .array(trackers),
-            "memberships": .array([]),
+            "memberships": .array(memberships),
             "accounts": .array(accounts),
             "categories": .array([]),
-            "tags": .array([]),
+            "tags": .array(tags),
             "merchants": .array([]),
-            "transactions": .array([]),
+            "transactions": .array(transactions),
         ])
     }
 
@@ -418,11 +529,14 @@ struct LedgerSyncActorTests {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
         return try ModelContainer(
             for: LocalTracker.self,
+            LocalTrackerMembership.self,
             LocalAccount.self,
             LocalCategory.self,
+            LocalTag.self,
             LedgerTransaction.self,
             LocalAccountMovement.self,
             LocalCategoryAllocation.self,
+            LocalTransactionTag.self,
             OutboxMutation.self,
             AttachmentTransfer.self,
             SyncCursor.self,

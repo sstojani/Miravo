@@ -9,7 +9,7 @@ import pytest
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from apps.ledger.models import Account, Category, Tracker, TrackerMembership, Transaction
+from apps.ledger.models import Account, Category, Tag, Tracker, TrackerMembership, Transaction
 from apps.sync.models import SyncChange, SyncDeviceState, SyncOperationReceipt, SyncRetentionState
 from apps.sync.tasks import prune_sync_history
 from apps.users.models import User
@@ -71,6 +71,22 @@ def _category_payload(entity_id: UUID, tracker_id: UUID) -> dict[str, object]:
     }
 
 
+def _tag_payload(
+    entity_id: UUID,
+    tracker_id: UUID,
+    name: str = "Travel",
+) -> dict[str, object]:
+    return {
+        "client_payload_version": 1,
+        "id": str(entity_id),
+        "tracker_id": str(tracker_id),
+        "name": name,
+        "color": "#73819B",
+        "archived_at": None,
+        "deleted_at": None,
+    }
+
+
 def _transaction_payload(
     entity_id: UUID,
     tracker_id: UUID,
@@ -104,6 +120,7 @@ def _transaction_payload(
         "note": "Saved offline",
         "occurred_at": "2026-08-09T12:30:00+02:00",
         "refund_of_id": None,
+        "tag_ids": [],
         "deleted_at": None,
     }
 
@@ -689,6 +706,136 @@ def test_sync_transfer_and_linked_refund_preserve_movements(
     assert mismatched.status_code == 200, mismatched.data
     assert mismatched.data["results"][0]["status"] == "rejected"
     assert not Transaction.objects.filter(id=mismatched_id).exists()
+
+
+def test_sync_tag_lifecycle_and_transaction_assignment(
+    user: User,
+    client_for_user: Callable[[User, str], APIClient],
+) -> None:
+    client = client_for_user(user, "Valid-Test-Password-8274!")
+    tracker = _create_rest_tracker(client, "Tagged tracker")
+    account = _create_rest_account(client, tracker["id"], "Cash")
+    assert account.status_code == 201, account.data
+    category = Category.objects.get(tracker_id=tracker["id"], name="Groceries")
+    tracker_id = UUID(str(tracker["id"]))
+    account_id = UUID(str(account.data["id"]))
+    tag_id, transaction_id = uuid4(), uuid4()
+    transaction_payload = _transaction_payload(
+        transaction_id,
+        tracker_id,
+        account_id,
+        category.id,
+    )
+    transaction_payload["tag_ids"] = [str(tag_id)]
+    created = _push(
+        client,
+        [
+            _operation(
+                sequence=1,
+                entity_type="tag",
+                entity_id=tag_id,
+                payload=_tag_payload(tag_id, tracker_id),
+            ),
+            _operation(
+                sequence=2,
+                entity_type="transaction",
+                entity_id=transaction_id,
+                payload=transaction_payload,
+            ),
+        ],
+    )
+    assert created.status_code == 200, created.data
+    assert [item["status"] for item in created.data["results"]] == ["accepted", "accepted"]
+    assert list(
+        Transaction.objects.get(id=transaction_id).transaction_tags.values_list("tag_id", flat=True)
+    ) == [tag_id]
+
+    renamed_payload = _tag_payload(tag_id, tracker_id, name="Holiday")
+    renamed = _push(
+        client,
+        [
+            _operation(
+                sequence=3,
+                entity_type="tag",
+                entity_id=tag_id,
+                payload=renamed_payload,
+                command="update",
+                base_version=1,
+            )
+        ],
+    )
+    assert renamed.data["results"][0]["status"] == "accepted"
+    assert renamed.data["results"][0]["server_version"] == 2
+
+    archived_payload = {**renamed_payload, "archived_at": "2026-08-09T12:40:00+02:00"}
+    archived = _push(
+        client,
+        [
+            _operation(
+                sequence=4,
+                entity_type="tag",
+                entity_id=tag_id,
+                payload=archived_payload,
+                command="archive",
+                base_version=2,
+            )
+        ],
+    )
+    assert archived.data["results"][0]["status"] == "accepted"
+    assert Tag.objects.get(id=tag_id).archived_at is not None
+
+    transaction_payload["merchant"] = "Edited while tag archived"
+    rejected_new_id = uuid4()
+    rejected_new_payload = _transaction_payload(
+        rejected_new_id,
+        tracker_id,
+        account_id,
+        category.id,
+    )
+    rejected_new_payload["tag_ids"] = [str(tag_id)]
+    archived_assignment = _push(
+        client,
+        [
+            _operation(
+                sequence=5,
+                entity_type="transaction",
+                entity_id=transaction_id,
+                payload=transaction_payload,
+                command="update",
+                base_version=1,
+            ),
+            _operation(
+                sequence=6,
+                entity_type="transaction",
+                entity_id=rejected_new_id,
+                payload=rejected_new_payload,
+            ),
+        ],
+    )
+    assert [item["status"] for item in archived_assignment.data["results"]] == [
+        "accepted",
+        "rejected",
+    ]
+    assert list(
+        Transaction.objects.get(id=transaction_id).transaction_tags.values_list("tag_id", flat=True)
+    ) == [tag_id]
+    assert not Transaction.objects.filter(id=rejected_new_id).exists()
+
+    restored = _push(
+        client,
+        [
+            _operation(
+                sequence=7,
+                entity_type="tag",
+                entity_id=tag_id,
+                payload=renamed_payload,
+                command="restore",
+                base_version=3,
+            )
+        ],
+    )
+    assert restored.data["results"][0]["status"] == "accepted"
+    assert Tag.objects.get(id=tag_id).archived_at is None
 
 
 def test_retention_task_prunes_old_changes_and_advances_floor(

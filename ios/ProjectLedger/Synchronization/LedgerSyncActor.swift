@@ -42,6 +42,7 @@ actor LedgerSyncActor {
         case membership(MembershipSnapshot)
         case account(AccountSnapshot)
         case category(CategorySnapshot)
+        case tag(TagSnapshot)
         case transaction(TransactionSnapshot)
         case tombstone(entityType: String, entityID: UUID, changedAt: Date, version: Int64)
         case ignored
@@ -704,11 +705,13 @@ actor LedgerSyncActor {
         var trackerIDs = Set<UUID>()
         var accountIDs = Set<UUID>()
         var categoryIDs = Set<UUID>()
+        var tagTrackers = [UUID: UUID]()
         for item in decoded {
             switch item {
             case let .tracker(snapshot): trackerIDs.insert(snapshot.id)
             case let .account(snapshot): accountIDs.insert(snapshot.id)
             case let .category(snapshot): categoryIDs.insert(snapshot.id)
+            case let .tag(snapshot): tagTrackers[snapshot.id] = snapshot.trackerID
             default: break
             }
         }
@@ -726,10 +729,15 @@ actor LedgerSyncActor {
                 if let trackerID = snapshot.trackerID, !trackerIDs.contains(trackerID) {
                     throw SyncEngineError.invalidServerResponse
                 }
+            case let .tag(snapshot):
+                guard trackerIDs.contains(snapshot.trackerID) else {
+                    throw SyncEngineError.invalidServerResponse
+                }
             case let .transaction(snapshot):
                 guard trackerIDs.contains(snapshot.trackerID),
                       snapshot.movements.allSatisfy({ accountIDs.contains($0.accountID) }),
-                      snapshot.allocations.allSatisfy({ categoryIDs.contains($0.categoryID) })
+                      snapshot.allocations.allSatisfy({ categoryIDs.contains($0.categoryID) }),
+                      snapshot.tagIDs.allSatisfy({ tagTrackers[$0] == snapshot.trackerID })
                 else {
                     throw SyncEngineError.invalidServerResponse
                 }
@@ -762,6 +770,8 @@ actor LedgerSyncActor {
             .account(try SyncSnapshotDecoder.decode(AccountSnapshot.self, from: data))
         case "category":
             .category(try SyncSnapshotDecoder.decode(CategorySnapshot.self, from: data))
+        case "tag":
+            .tag(try SyncSnapshotDecoder.decode(TagSnapshot.self, from: data))
         case "transaction":
             .transaction(try SyncSnapshotDecoder.decode(TransactionSnapshot.self, from: data))
         default:
@@ -772,8 +782,10 @@ actor LedgerSyncActor {
     private func applyDecoded(_ remote: DecodedRemote, scopeKey: String) throws {
         switch remote {
         case let .tracker(snapshot): try upsertTracker(snapshot, scopeKey: scopeKey)
+        case let .membership(snapshot): try upsertMembership(snapshot, scopeKey: scopeKey)
         case let .account(snapshot): try upsertAccount(snapshot, scopeKey: scopeKey)
         case let .category(snapshot): try upsertCategory(snapshot, scopeKey: scopeKey)
+        case let .tag(snapshot): try upsertTag(snapshot, scopeKey: scopeKey)
         case let .transaction(snapshot): try upsertTransaction(snapshot, scopeKey: scopeKey)
         case let .tombstone(entityType, entityID, changedAt, version):
             try applyTombstone(
@@ -783,7 +795,7 @@ actor LedgerSyncActor {
                 version: version,
                 scopeKey: scopeKey
             )
-        case .membership, .ignored:
+        case .ignored:
             break
         }
     }
@@ -843,7 +855,12 @@ actor LedgerSyncActor {
         tracker.sortOrder = snapshot.sortOrder
         tracker.defaultAccountID = snapshot.defaultAccountID
         tracker.defaultCategoryID = snapshot.defaultCategoryID
-        tracker.roleRaw = snapshot.role ?? tracker.roleRaw
+        if let roleRaw = snapshot.role {
+            guard TrackerRole(rawValue: roleRaw) != nil else {
+                throw SyncEngineError.invalidServerResponse
+            }
+            tracker.roleRaw = roleRaw
+        }
         tracker.serverVersion = snapshot.version
         tracker.syncStateRaw = LocalSyncState.synced.rawValue
         tracker.createdAt = try parseTimestamp(snapshot.createdAt)
@@ -851,6 +868,47 @@ actor LedgerSyncActor {
         tracker.archivedAt = try parseOptionalTimestamp(snapshot.archivedAt)
         tracker.deletedAt = try parseOptionalTimestamp(snapshot.deletedAt)
         tracker.accessRevokedAt = nil
+    }
+
+    private func upsertMembership(
+        _ snapshot: MembershipSnapshot,
+        scopeKey: String
+    ) throws {
+        guard let role = TrackerRole(rawValue: snapshot.role),
+              ["active", "removed"].contains(snapshot.state)
+        else {
+            throw SyncEngineError.invalidServerResponse
+        }
+        let snapshotID = snapshot.id
+        let existing = try modelContext.fetch(
+            FetchDescriptor<LocalTrackerMembership>(
+                predicate: #Predicate { $0.scopeKey == scopeKey && $0.id == snapshotID }
+            )
+        ).first
+        if let existing, existing.serverVersion > snapshot.version { return }
+        let membership = existing ?? LocalTrackerMembership(
+            id: snapshot.id,
+            scopeKey: scopeKey,
+            trackerID: snapshot.trackerID,
+            userID: snapshot.userID,
+            email: snapshot.email,
+            role: role,
+            state: snapshot.state,
+            serverVersion: snapshot.version,
+            joinedAt: try parseTimestamp(snapshot.joinedAt),
+            createdAt: try parseTimestamp(snapshot.createdAt)
+        )
+        if existing == nil { modelContext.insert(membership) }
+        membership.trackerID = snapshot.trackerID
+        membership.userID = snapshot.userID
+        membership.email = snapshot.email
+        membership.roleRaw = role.rawValue
+        membership.stateRaw = snapshot.state
+        membership.serverVersion = snapshot.version
+        membership.joinedAt = try parseTimestamp(snapshot.joinedAt)
+        membership.createdAt = try parseTimestamp(snapshot.createdAt)
+        membership.updatedAt = try parseTimestamp(snapshot.updatedAt)
+        membership.deletedAt = try parseOptionalTimestamp(snapshot.deletedAt)
     }
 
     private func upsertAccount(_ snapshot: AccountSnapshot, scopeKey: String) throws {
@@ -932,6 +990,35 @@ actor LedgerSyncActor {
         category.updatedAt = try parseTimestamp(snapshot.updatedAt)
         category.archivedAt = try parseOptionalTimestamp(snapshot.archivedAt)
         category.deletedAt = try parseOptionalTimestamp(snapshot.deletedAt)
+    }
+
+    private func upsertTag(_ snapshot: TagSnapshot, scopeKey: String) throws {
+        let snapshotID = snapshot.id
+        let existing = try modelContext.fetch(
+            FetchDescriptor<LocalTag>(
+                predicate: #Predicate { $0.scopeKey == scopeKey && $0.id == snapshotID }
+            )
+        ).first
+        if let version = existing?.serverVersion, version > snapshot.version { return }
+        let tag = existing ?? LocalTag(
+            id: snapshot.id,
+            scopeKey: scopeKey,
+            trackerID: snapshot.trackerID,
+            name: snapshot.name,
+            colorHex: snapshot.color,
+            syncState: .synced,
+            createdAt: try parseTimestamp(snapshot.createdAt)
+        )
+        if existing == nil { modelContext.insert(tag) }
+        tag.trackerID = snapshot.trackerID
+        tag.name = snapshot.name
+        tag.colorHex = snapshot.color
+        tag.serverVersion = snapshot.version
+        tag.syncStateRaw = LocalSyncState.synced.rawValue
+        tag.createdAt = try parseTimestamp(snapshot.createdAt)
+        tag.updatedAt = try parseTimestamp(snapshot.updatedAt)
+        tag.archivedAt = try parseOptionalTimestamp(snapshot.archivedAt)
+        tag.deletedAt = try parseOptionalTimestamp(snapshot.deletedAt)
     }
 
     private func upsertTransaction(_ snapshot: TransactionSnapshot, scopeKey: String) throws {
@@ -1028,6 +1115,15 @@ actor LedgerSyncActor {
         ) {
             modelContext.delete(allocation)
         }
+        for tagLink in try modelContext.fetch(
+            FetchDescriptor<LocalTransactionTag>(
+                predicate: #Predicate {
+                    $0.scopeKey == scopeKey && $0.transactionID == transactionID
+                }
+            )
+        ) {
+            modelContext.delete(tagLink)
+        }
         for movement in snapshot.movements {
             modelContext.insert(
                 LocalAccountMovement(
@@ -1054,6 +1150,15 @@ actor LedgerSyncActor {
                 )
             )
         }
+        for tagID in snapshot.tagIDs {
+            modelContext.insert(
+                LocalTransactionTag(
+                    scopeKey: scopeKey,
+                    transactionID: transactionID,
+                    tagID: tagID
+                )
+            )
+        }
     }
 
     private func primaryMovement(
@@ -1073,10 +1178,25 @@ actor LedgerSyncActor {
         changedAt: String,
         scopeKey: String
     ) throws {
+        try upsertMembership(snapshot, scopeKey: scopeKey)
         guard snapshot.userID == scopeUserID(scopeKey) else { return }
         let state = try cursorState(scopeKey: scopeKey)
         if snapshot.state == "active" && snapshot.deletedAt == nil {
-            state.bootstrapRequired = true
+            guard TrackerRole(rawValue: snapshot.role) != nil else {
+                throw SyncEngineError.invalidServerResponse
+            }
+            let trackerID = snapshot.trackerID
+            if let tracker = try modelContext.fetch(
+                FetchDescriptor<LocalTracker>(
+                    predicate: #Predicate { $0.scopeKey == scopeKey && $0.id == trackerID }
+                )
+            ).first {
+                tracker.roleRaw = snapshot.role
+                tracker.accessRevokedAt = nil
+                tracker.syncStateRaw = LocalSyncState.synced.rawValue
+            } else {
+                state.bootstrapRequired = true
+            }
             return
         }
         let trackerID = snapshot.trackerID
@@ -1121,6 +1241,38 @@ actor LedgerSyncActor {
         case "category":
             if let value = try modelContext.fetch(
                 FetchDescriptor<LocalCategory>(
+                    predicate: #Predicate { $0.scopeKey == scopeKey && $0.id == entityID }
+                )
+            ).first {
+                value.deletedAt = changedAt
+                value.serverVersion = version
+                value.syncStateRaw = LocalSyncState.synced.rawValue
+            }
+        case "tracker_membership":
+            if let value = try modelContext.fetch(
+                FetchDescriptor<LocalTrackerMembership>(
+                    predicate: #Predicate { $0.scopeKey == scopeKey && $0.id == entityID }
+                )
+            ).first {
+                value.deletedAt = changedAt
+                value.stateRaw = "removed"
+                value.serverVersion = version
+                let trackerID = value.trackerID
+                if value.userID == scopeUserID(scopeKey),
+                   let tracker = try modelContext.fetch(
+                       FetchDescriptor<LocalTracker>(
+                           predicate: #Predicate {
+                               $0.scopeKey == scopeKey && $0.id == trackerID
+                           }
+                       )
+                   ).first {
+                    tracker.accessRevokedAt = changedAt
+                    tracker.syncStateRaw = LocalSyncState.synced.rawValue
+                }
+            }
+        case "tag":
+            if let value = try modelContext.fetch(
+                FetchDescriptor<LocalTag>(
                     predicate: #Predicate { $0.scopeKey == scopeKey && $0.id == entityID }
                 )
             ).first {
@@ -1173,6 +1325,21 @@ actor LedgerSyncActor {
             modelContext.delete(value)
         }
         for value in try modelContext.fetch(
+            FetchDescriptor<LocalTag>(
+                predicate: #Predicate { $0.scopeKey == scopeKey && $0.serverVersion != nil }
+            )
+        ) where !(remoteIDs["tag"] ?? []).contains(value.id) &&
+            !pendingKeys.contains("tag|\(value.id.uuidString)") {
+            modelContext.delete(value)
+        }
+        for value in try modelContext.fetch(
+            FetchDescriptor<LocalTrackerMembership>(
+                predicate: #Predicate { $0.scopeKey == scopeKey }
+            )
+        ) where !(remoteIDs["tracker_membership"] ?? []).contains(value.id) {
+            modelContext.delete(value)
+        }
+        for value in try modelContext.fetch(
             FetchDescriptor<LocalTracker>(
                 predicate: #Predicate { $0.scopeKey == scopeKey && $0.serverVersion != nil }
             )
@@ -1196,6 +1363,13 @@ actor LedgerSyncActor {
         ) { modelContext.delete(value) }
         for value in try modelContext.fetch(
             FetchDescriptor<LocalCategoryAllocation>(
+                predicate: #Predicate {
+                    $0.scopeKey == scopeKey && $0.transactionID == transactionID
+                }
+            )
+        ) { modelContext.delete(value) }
+        for value in try modelContext.fetch(
+            FetchDescriptor<LocalTransactionTag>(
                 predicate: #Predicate {
                     $0.scopeKey == scopeKey && $0.transactionID == transactionID
                 }
@@ -1320,6 +1494,15 @@ actor LedgerSyncActor {
         case "category":
             if let value = try modelContext.fetch(
                 FetchDescriptor<LocalCategory>(
+                    predicate: #Predicate { $0.scopeKey == scopeKey && $0.id == entityID }
+                )
+            ).first {
+                value.syncStateRaw = state.rawValue
+                if let serverVersion { value.serverVersion = serverVersion }
+            }
+        case "tag":
+            if let value = try modelContext.fetch(
+                FetchDescriptor<LocalTag>(
                     predicate: #Predicate { $0.scopeKey == scopeKey && $0.id == entityID }
                 )
             ).first {

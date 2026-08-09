@@ -7,7 +7,7 @@ from typing import Any
 from uuid import UUID
 
 from django.db import transaction as db_transaction
-from django.db.models import BigIntegerField, Sum, Value
+from django.db.models import BigIntegerField, Q, Sum, Value
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 from rest_framework import serializers
@@ -174,7 +174,12 @@ def _resolve_categories(
     return tuple(categories)
 
 
-def _resolve_tags(data: Mapping[str, Any], tracker: Tracker) -> tuple[Tag, ...]:
+def _resolve_tags(
+    data: Mapping[str, Any],
+    tracker: Tracker,
+    *,
+    permitted_archived_ids: Iterable[UUID] = (),
+) -> tuple[Tag, ...]:
     tag_ids: Iterable[UUID] = data.get("tag_ids", ())
     requested_tag_ids = list(dict.fromkeys(tag_ids))
     tags = tuple(
@@ -182,8 +187,7 @@ def _resolve_tags(data: Mapping[str, Any], tracker: Tracker) -> tuple[Tag, ...]:
             id__in=requested_tag_ids,
             tracker=tracker,
             deleted_at__isnull=True,
-            archived_at__isnull=True,
-        )
+        ).filter(Q(archived_at__isnull=True) | Q(id__in=tuple(permitted_archived_ids)))
     )
     if len(tags) != len(requested_tag_ids):
         raise serializers.ValidationError({"tag_ids": "One or more tags are unavailable."})
@@ -283,7 +287,12 @@ def _resolve_merchant(data: Mapping[str, Any], tracker: Tracker) -> Merchant | N
     return merchant
 
 
-def _resolve_transaction_parts(data: Mapping[str, Any], actor: User) -> TransactionParts:
+def _resolve_transaction_parts(
+    data: Mapping[str, Any],
+    actor: User,
+    *,
+    permitted_archived_tag_ids: Iterable[UUID] = (),
+) -> TransactionParts:
     try:
         tracker = Tracker.objects.get(id=data["tracker_id"], deleted_at__isnull=True)
     except Tracker.DoesNotExist as exc:
@@ -300,7 +309,11 @@ def _resolve_transaction_parts(data: Mapping[str, Any], actor: User) -> Transact
     categories = _resolve_categories(
         data=data, tracker=tracker, kind=kind, amount_minor=amount_minor
     )
-    tags = _resolve_tags(data, tracker)
+    tags = _resolve_tags(
+        data,
+        tracker,
+        permitted_archived_ids=permitted_archived_tag_ids,
+    )
     refund_of = _resolve_refund(data, tracker, kind)
     merchant = _resolve_merchant(data, tracker)
 
@@ -487,7 +500,11 @@ def replace_financial_transaction(
         raise serializers.ValidationError(
             {"external_event_id": "External event identity is immutable."}
         )
-    parts = _resolve_transaction_parts(data, actor)
+    parts = _resolve_transaction_parts(
+        data,
+        actor,
+        permitted_archived_tag_ids=locked.transaction_tags.values_list("tag_id", flat=True),
+    )
     snapshot_transaction(locked, editor=actor, reason="update")
     for field, value in parts.transaction_values.items():
         setattr(locked, field, value)

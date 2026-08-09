@@ -23,6 +23,8 @@ struct TransactionsView: View {
     @Query private var trackers: [LocalTracker]
     @Query private var accounts: [LocalAccount]
     @Query private var categories: [LocalCategory]
+    @Query private var tags: [LocalTag]
+    @Query private var transactionTags: [LocalTransactionTag]
     @State private var searchText = ""
     @State private var criteria = TransactionListCriteria()
     @State private var showDeleted = false
@@ -52,14 +54,25 @@ struct TransactionsView: View {
             filter: #Predicate { $0.scopeKey == scopeKey && $0.deletedAt == nil },
             sort: \LocalCategory.sortOrder
         )
+        _tags = Query(
+            filter: #Predicate { $0.scopeKey == scopeKey && $0.deletedAt == nil },
+            sort: \LocalTag.name
+        )
+        _transactionTags = Query(filter: #Predicate { $0.scopeKey == scopeKey })
     }
 
     private var filteredTransactions: [LedgerTransaction] {
         let visibleTrackerIDs = Set(trackers.map(\.id))
+        let tagNames = Dictionary(uniqueKeysWithValues: tags.map { ($0.id, $0.name) })
+        let groupedTagLinks = Dictionary(grouping: transactionTags, by: \.transactionID)
         let searchContext = TransactionSearchContext(
             trackerNames: Dictionary(uniqueKeysWithValues: trackers.map { ($0.id, $0.name) }),
             accountNames: Dictionary(uniqueKeysWithValues: accounts.map { ($0.id, $0.name) }),
-            categoryNames: Dictionary(uniqueKeysWithValues: categories.map { ($0.id, $0.name) })
+            categoryNames: Dictionary(uniqueKeysWithValues: categories.map { ($0.id, $0.name) }),
+            tagNamesByTransaction: groupedTagLinks.mapValues { links in
+                links.compactMap { tagNames[$0.tagID] }
+            },
+            tagIDsByTransaction: groupedTagLinks.mapValues { Set($0.map(\.tagID)) }
         )
         let now = Date.now
         let calendar = Calendar.autoupdatingCurrent
@@ -95,6 +108,13 @@ struct TransactionsView: View {
 
     private var availableFilterCategories: [LocalCategory] {
         categories.filter {
+            $0.archivedAt == nil &&
+                (criteria.trackerID == nil || $0.trackerID == criteria.trackerID)
+        }
+    }
+
+    private var availableFilterTags: [LocalTag] {
+        tags.filter {
             $0.archivedAt == nil &&
                 (criteria.trackerID == nil || $0.trackerID == criteria.trackerID)
         }
@@ -152,13 +172,15 @@ struct TransactionsView: View {
                                     TransactionRow(transaction: transaction)
                                 }
                                 .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                    if transaction.deletedAt == nil {
-                                        Button("Delete", role: .destructive) {
-                                            setDeleted(transaction, true)
+                                    if canEdit(transaction: transaction) {
+                                        if transaction.deletedAt == nil {
+                                            Button("Delete", role: .destructive) {
+                                                setDeleted(transaction, true)
+                                            }
+                                        } else {
+                                            Button("Restore") { setDeleted(transaction, false) }
+                                                .tint(LedgerTheme.positive)
                                         }
-                                    } else {
-                                        Button("Restore") { setDeleted(transaction, false) }
-                                            .tint(LedgerTheme.positive)
                                     }
                                 }
                             }
@@ -183,7 +205,7 @@ struct TransactionsView: View {
         .navigationTitle(
             showDeleted ? String(localized: "Recently deleted") : String(localized: "Transactions")
         )
-        .searchable(text: $searchText, prompt: "Merchant, note, category, account, or amount")
+        .searchable(text: $searchText, prompt: "Merchant, note, tag, account, or amount")
         .onSubmit(of: .search) { applySearchImmediately() }
         .onChange(of: searchText) { _, value in debounceSearch(value) }
         .onChange(of: criteria.trackerID) { _, _ in validateDependentFilters() }
@@ -207,6 +229,12 @@ struct TransactionsView: View {
                         Text("All categories").tag(UUID?.none)
                         ForEach(availableFilterCategories) { category in
                             Text(category.name).tag(Optional(category.id))
+                        }
+                    }
+                    Picker("Tag", selection: $criteria.tagID) {
+                        Text("All tags").tag(UUID?.none)
+                        ForEach(availableFilterTags) { tag in
+                            Text(tag.name).tag(Optional(tag.id))
                         }
                     }
                     Picker("Type", selection: $criteria.kind) {
@@ -302,6 +330,13 @@ struct TransactionsView: View {
         if !availableFilterCategories.contains(where: { $0.id == criteria.categoryID }) {
             criteria.categoryID = nil
         }
+        if !availableFilterTags.contains(where: { $0.id == criteria.tagID }) {
+            criteria.tagID = nil
+        }
+    }
+
+    private func canEdit(transaction: LedgerTransaction) -> Bool {
+        trackers.first { $0.id == transaction.trackerID }?.role.canEditFinancialData == true
     }
 
     private func resetFilters() {

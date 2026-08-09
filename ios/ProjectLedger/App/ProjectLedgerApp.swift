@@ -75,11 +75,14 @@ private struct LocalStoreBootstrap {
         if let configuration {
             return try ModelContainer(
                 for: LocalTracker.self,
+                LocalTrackerMembership.self,
                 LocalAccount.self,
                 LocalCategory.self,
+                LocalTag.self,
                 LedgerTransaction.self,
                 LocalAccountMovement.self,
                 LocalCategoryAllocation.self,
+                LocalTransactionTag.self,
                 OutboxMutation.self,
                 AttachmentTransfer.self,
                 SyncCursor.self,
@@ -90,11 +93,14 @@ private struct LocalStoreBootstrap {
         }
         return try ModelContainer(
             for: LocalTracker.self,
+            LocalTrackerMembership.self,
             LocalAccount.self,
             LocalCategory.self,
+            LocalTag.self,
             LedgerTransaction.self,
             LocalAccountMovement.self,
             LocalCategoryAllocation.self,
+            LocalTransactionTag.self,
             OutboxMutation.self,
             AttachmentTransfer.self,
             SyncCursor.self,

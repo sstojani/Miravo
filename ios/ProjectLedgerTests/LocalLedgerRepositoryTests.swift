@@ -52,7 +52,8 @@ struct LocalLedgerRepositoryTests {
             money: revisedMoney,
             merchant: "Updated merchant",
             note: "local edit",
-            occurredAt: transaction.occurredAt
+            occurredAt: transaction.occurredAt,
+            tags: []
         )
         try repository.setTransactionDeleted(transaction, deleted: true)
         try repository.setTransactionDeleted(transaction, deleted: false)
@@ -343,15 +344,96 @@ struct LocalLedgerRepositoryTests {
         #expect(rawPayload["refund_of_id"] as? String == expense.id.uuidString)
     }
 
+    @Test func tagsAreSyncableAssignedAtomicallyAndPreservedByDuplicate() throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let repository = LocalLedgerRepository(context: context)
+        let tracker = try repository.bootstrapDefaults(scopeKey: scope)
+        let account = try #require(context.fetch(FetchDescriptor<LocalAccount>()).first)
+        let tag = try repository.createTag(scopeKey: scope, tracker: tracker, name: "Trip")
+
+        let transaction = try repository.createTransaction(
+            scopeKey: scope,
+            tracker: tracker,
+            account: account,
+            category: nil,
+            kind: .expense,
+            money: Money(minorUnits: 900, currencyCode: "ALL", exponent: 2),
+            merchant: "Train",
+            tags: [tag]
+        )
+        let duplicate = try repository.duplicate(transaction)
+        let links = try context.fetch(FetchDescriptor<LocalTransactionTag>())
+        let mutation = try #require(
+            context.fetch(FetchDescriptor<OutboxMutation>())
+                .first { $0.entityID == transaction.id }
+        )
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        let payload = try decoder.decode(TransactionMutationPayload.self, from: mutation.payloadJSON)
+
+        #expect(payload.tagIDs == [tag.id])
+        #expect(Set(links.map(\.transactionID)) == Set([transaction.id, duplicate.id]))
+        #expect(links.allSatisfy { $0.tagID == tag.id })
+
+        try repository.renameTag(tag, name: "Summer trip")
+        try repository.setTagArchived(tag, archived: true)
+        try repository.updateTransaction(
+            transaction,
+            tracker: tracker,
+            account: account,
+            category: nil,
+            money: Money(minorUnits: 950, currencyCode: "ALL", exponent: 2),
+            merchant: "Train updated",
+            note: "Archived tag retained",
+            occurredAt: transaction.occurredAt,
+            tags: [tag]
+        )
+        try repository.setTagArchived(tag, archived: false)
+        let tagMutations = try context.fetch(FetchDescriptor<OutboxMutation>())
+            .filter { $0.entityID == tag.id }
+            .sorted { $0.localSequence < $1.localSequence }
+        #expect(tagMutations.map(\.command) == ["create", "update", "archive", "restore"])
+    }
+
+    @Test func viewerRoleRejectsOfflineWritesWithoutAppendingOutbox() throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let repository = LocalLedgerRepository(context: context)
+        let tracker = try repository.bootstrapDefaults(scopeKey: scope)
+        let account = try #require(context.fetch(FetchDescriptor<LocalAccount>()).first)
+        tracker.roleRaw = TrackerRole.viewer.rawValue
+        try context.save()
+        let before = try context.fetch(FetchDescriptor<OutboxMutation>()).count
+
+        #expect(throws: LocalLedgerError.permissionDenied) {
+            try repository.createTransaction(
+                scopeKey: scope,
+                tracker: tracker,
+                account: account,
+                category: nil,
+                kind: .expense,
+                money: Money(minorUnits: 100, currencyCode: "ALL", exponent: 2),
+                merchant: "Blocked"
+            )
+        }
+        #expect(try context.fetch(FetchDescriptor<LedgerTransaction>()).isEmpty)
+        #expect(try context.fetch(FetchDescriptor<OutboxMutation>()).count == before)
+    }
+
     private func makeContainer() throws -> ModelContainer {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
         return try ModelContainer(
             for: LocalTracker.self,
+            LocalTrackerMembership.self,
             LocalAccount.self,
             LocalCategory.self,
+            LocalTag.self,
             LedgerTransaction.self,
             LocalAccountMovement.self,
             LocalCategoryAllocation.self,
+            LocalTransactionTag.self,
             OutboxMutation.self,
             AttachmentTransfer.self,
             SyncCursor.self,

@@ -4,6 +4,7 @@ enum LocalMutationEntity: String, Codable, Sendable {
     case tracker
     case account
     case category
+    case tag
     case transaction
 }
 
@@ -63,6 +64,16 @@ struct CategoryMutationPayload: Codable, Sendable {
     let deletedAt: Date?
 }
 
+struct TagMutationPayload: Codable, Sendable {
+    let clientPayloadVersion = 1
+    let id: UUID
+    let trackerID: UUID
+    let name: String
+    let color: String
+    let archivedAt: Date?
+    let deletedAt: Date?
+}
+
 struct TransactionMutationPayload: Codable, Sendable {
     let clientPayloadVersion = 1
     let id: UUID
@@ -87,5 +98,6 @@ struct TransactionMutationPayload: Codable, Sendable {
     let note: String
     let occurredAt: Date
     let refundOfID: UUID?
+    let tagIDs: [UUID]
     let deletedAt: Date?
 }

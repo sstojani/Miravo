@@ -5,18 +5,22 @@ private enum LocalDataSheet: Identifiable {
     case addTracker
     case addAccount
     case addCategory
+    case addTag
     case renameTracker(LocalTracker)
     case renameAccount(LocalAccount)
     case renameCategory(LocalCategory)
+    case renameTag(LocalTag)
 
     var id: String {
         switch self {
         case .addTracker: "add-tracker"
         case .addAccount: "add-account"
         case .addCategory: "add-category"
+        case .addTag: "add-tag"
         case let .renameTracker(item): "tracker-\(item.id)"
         case let .renameAccount(item): "account-\(item.id)"
         case let .renameCategory(item): "category-\(item.id)"
+        case let .renameTag(item): "tag-\(item.id)"
         }
     }
 }
@@ -25,9 +29,13 @@ struct LocalDataSettingsView: View {
     let scopeKey: String
 
     @Environment(\.modelContext) private var modelContext
+    @EnvironmentObject private var session: SessionController
+    @EnvironmentObject private var sync: SyncController
     @Query private var trackers: [LocalTracker]
+    @Query private var memberships: [LocalTrackerMembership]
     @Query private var accounts: [LocalAccount]
     @Query private var categories: [LocalCategory]
+    @Query private var tags: [LocalTag]
     @State private var sheet: LocalDataSheet?
     @State private var safeError: String?
 
@@ -41,6 +49,12 @@ struct LocalDataSettingsView: View {
             },
             sort: \LocalTracker.sortOrder
         )
+        _memberships = Query(
+            filter: #Predicate {
+                $0.scopeKey == scopeKey && $0.deletedAt == nil && $0.stateRaw == "active"
+            },
+            sort: \LocalTrackerMembership.email
+        )
         _accounts = Query(
             filter: #Predicate { $0.scopeKey == scopeKey && $0.deletedAt == nil },
             sort: \LocalAccount.name
@@ -49,10 +63,18 @@ struct LocalDataSettingsView: View {
             filter: #Predicate { $0.scopeKey == scopeKey && $0.deletedAt == nil },
             sort: \LocalCategory.sortOrder
         )
+        _tags = Query(
+            filter: #Predicate { $0.scopeKey == scopeKey && $0.deletedAt == nil },
+            sort: \LocalTag.name
+        )
     }
 
     private var activeTrackers: [LocalTracker] {
         trackers.filter { $0.archivedAt == nil }
+    }
+
+    private var editableTrackers: [LocalTracker] {
+        activeTrackers.filter { $0.role.canEditFinancialData }
     }
 
     private var visibleAccounts: [LocalAccount] {
@@ -65,25 +87,53 @@ struct LocalDataSettingsView: View {
         return categories.filter { trackerIDs.contains($0.trackerID) }
     }
 
+    private var visibleTags: [LocalTag] {
+        let trackerIDs = Set(trackers.map(\.id))
+        return tags.filter { trackerIDs.contains($0.trackerID) }
+    }
+
     var body: some View {
         List {
             Section("Trackers") {
                 ForEach(trackers) { tracker in
                     EntityRow(
                         name: tracker.name,
-                        detail: tracker.baseCurrencyCode,
+                        detail: "\(tracker.baseCurrencyCode) · \(tracker.role.displayName)",
                         symbol: tracker.icon,
                         colorHex: tracker.colorHex,
                         archived: tracker.archivedAt != nil
                     )
                     .contentShape(Rectangle())
-                    .onTapGesture { sheet = .renameTracker(tracker) }
+                    .onTapGesture {
+                        if tracker.role.canManageTracker { sheet = .renameTracker(tracker) }
+                    }
                     .swipeActions {
-                        archiveButton(archived: tracker.archivedAt != nil) {
-                            try repository.setTrackerArchived(tracker, archived: tracker.archivedAt == nil)
+                        if tracker.role.canManageTracker {
+                            archiveButton(archived: tracker.archivedAt != nil) {
+                                try repository.setTrackerArchived(
+                                    tracker,
+                                    archived: tracker.archivedAt == nil
+                                )
+                            }
                         }
                     }
                 }
+            }
+
+            Section("Collaborators") {
+                ForEach(memberships.filter { member in
+                    trackers.contains { $0.id == member.trackerID }
+                }) { member in
+                    EntityRow(
+                        name: member.email,
+                        detail: "\(trackerName(id: member.trackerID)) · \(member.role.displayName)",
+                        symbol: "person.crop.circle",
+                        colorHex: "#73819B",
+                        archived: false
+                    )
+                }
+            } footer: {
+                Text("The synchronized roster remains visible offline. Invitations and role changes require a connection.")
             }
 
             Section("Accounts") {
@@ -96,10 +146,19 @@ struct LocalDataSettingsView: View {
                         archived: account.archivedAt != nil
                     )
                     .contentShape(Rectangle())
-                    .onTapGesture { sheet = .renameAccount(account) }
+                    .onTapGesture {
+                        if canEdit(trackerID: account.trackerID) {
+                            sheet = .renameAccount(account)
+                        }
+                    }
                     .swipeActions {
-                        archiveButton(archived: account.archivedAt != nil) {
-                            try repository.setAccountArchived(account, archived: account.archivedAt == nil)
+                        if canEdit(trackerID: account.trackerID) {
+                            archiveButton(archived: account.archivedAt != nil) {
+                                try repository.setAccountArchived(
+                                    account,
+                                    archived: account.archivedAt == nil
+                                )
+                            }
                         }
                     }
                 }
@@ -115,10 +174,42 @@ struct LocalDataSettingsView: View {
                         archived: category.archivedAt != nil
                     )
                     .contentShape(Rectangle())
-                    .onTapGesture { sheet = .renameCategory(category) }
+                    .onTapGesture {
+                        if canEdit(trackerID: category.trackerID) {
+                            sheet = .renameCategory(category)
+                        }
+                    }
                     .swipeActions {
-                        archiveButton(archived: category.archivedAt != nil) {
-                            try repository.setCategoryArchived(category, archived: category.archivedAt == nil)
+                        if canEdit(trackerID: category.trackerID) {
+                            archiveButton(archived: category.archivedAt != nil) {
+                                try repository.setCategoryArchived(
+                                    category,
+                                    archived: category.archivedAt == nil
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            Section("Tags") {
+                ForEach(visibleTags) { tag in
+                    EntityRow(
+                        name: tag.name,
+                        detail: trackerName(id: tag.trackerID),
+                        symbol: "tag",
+                        colorHex: tag.colorHex,
+                        archived: tag.archivedAt != nil
+                    )
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        if canEdit(trackerID: tag.trackerID) { sheet = .renameTag(tag) }
+                    }
+                    .swipeActions {
+                        if canEdit(trackerID: tag.trackerID) {
+                            archiveButton(archived: tag.archivedAt != nil) {
+                                try repository.setTagArchived(tag, archived: tag.archivedAt == nil)
+                            }
                         }
                     }
                 }
@@ -133,11 +224,15 @@ struct LocalDataSettingsView: View {
                 Button("New account", systemImage: "creditcard") {
                     sheet = .addAccount
                 }
-                .disabled(activeTrackers.isEmpty)
+                .disabled(editableTrackers.isEmpty)
                 Button("New category", systemImage: "tag") {
                     sheet = .addCategory
                 }
-                .disabled(activeTrackers.isEmpty)
+                .disabled(editableTrackers.isEmpty)
+                Button("New tag", systemImage: "tag.fill") {
+                    sheet = .addTag
+                }
+                .disabled(editableTrackers.isEmpty)
             } label: {
                 Label("Add", systemImage: "plus")
             }
@@ -147,20 +242,30 @@ struct LocalDataSettingsView: View {
             case .addTracker:
                 AddTrackerSheet(scopeKey: scopeKey)
             case .addAccount:
-                AddAccountSheet(scopeKey: scopeKey, trackers: activeTrackers)
+                AddAccountSheet(scopeKey: scopeKey, trackers: editableTrackers)
             case .addCategory:
-                AddCategorySheet(scopeKey: scopeKey, trackers: activeTrackers)
+                AddCategorySheet(scopeKey: scopeKey, trackers: editableTrackers)
+            case .addTag:
+                AddTagSheet(scopeKey: scopeKey, trackers: editableTrackers)
             case let .renameTracker(item):
                 RenameSheet(title: "Rename tracker", currentName: item.name) { name in
                     try repository.renameTracker(item, name: name)
+                    requestSync()
                 }
             case let .renameAccount(item):
                 RenameSheet(title: "Rename account", currentName: item.name) { name in
                     try repository.renameAccount(item, name: name)
+                    requestSync()
                 }
             case let .renameCategory(item):
                 RenameSheet(title: "Rename category", currentName: item.name) { name in
                     try repository.renameCategory(item, name: name)
+                    requestSync()
+                }
+            case let .renameTag(item):
+                RenameSheet(title: "Rename tag", currentName: item.name) { name in
+                    try repository.renameTag(item, name: name)
+                    requestSync()
                 }
             }
         }
@@ -178,6 +283,18 @@ struct LocalDataSettingsView: View {
         LocalLedgerRepository(context: modelContext)
     }
 
+    private func canEdit(trackerID: UUID) -> Bool {
+        trackers.first { $0.id == trackerID }?.role.canEditFinancialData == true
+    }
+
+    private func trackerName(id: UUID) -> String {
+        trackers.first { $0.id == id }?.name ?? String(localized: "Unknown tracker")
+    }
+
+    private func requestSync() {
+        Task { await sync.synchronize(session: session) }
+    }
+
     private func archiveButton(
         archived: Bool,
         action: @escaping () throws -> Void
@@ -185,6 +302,7 @@ struct LocalDataSettingsView: View {
         Button(archived ? "Restore" : "Archive") {
             do {
                 try action()
+                requestSync()
             } catch {
                 safeError = String(localized: "The local change could not be saved.")
             }
@@ -273,6 +391,8 @@ private struct AddTrackerSheet: View {
 
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var session: SessionController
+    @EnvironmentObject private var sync: SyncController
     @State private var name = ""
     @State private var currency = "ALL"
     @State private var safeError: String?
@@ -302,6 +422,7 @@ private struct AddTrackerSheet: View {
                 currencyCode: currency,
                 currencyExponent: CurrencyCatalog.exponent(for: currency) ?? 2
             )
+            Task { await sync.synchronize(session: session) }
             dismiss()
         } catch {
             safeError = String(localized: "Enter valid tracker details.")
@@ -315,6 +436,8 @@ private struct AddAccountSheet: View {
 
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var session: SessionController
+    @EnvironmentObject private var sync: SyncController
     @State private var name = ""
     @State private var trackerID: UUID?
     @State private var type = LocalAccountType.cash
@@ -356,6 +479,7 @@ private struct AddAccountSheet: View {
                 currencyCode: currency,
                 currencyExponent: CurrencyCatalog.exponent(for: currency) ?? 2
             )
+            Task { await sync.synchronize(session: session) }
             dismiss()
         } catch {
             safeError = String(localized: "Enter valid account details.")
@@ -369,6 +493,8 @@ private struct AddCategorySheet: View {
 
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var session: SessionController
+    @EnvironmentObject private var sync: SyncController
     @State private var name = ""
     @State private var trackerID: UUID?
     @State private var kind = LocalCategoryKind.expense
@@ -404,9 +530,54 @@ private struct AddCategorySheet: View {
                 name: name,
                 kind: kind
             )
+            Task { await sync.synchronize(session: session) }
             dismiss()
         } catch {
             safeError = String(localized: "Enter valid category details.")
+        }
+    }
+}
+
+private struct AddTagSheet: View {
+    let scopeKey: String
+    let trackers: [LocalTracker]
+
+    @Environment(\.modelContext) private var modelContext
+    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var session: SessionController
+    @EnvironmentObject private var sync: SyncController
+    @State private var name = ""
+    @State private var trackerID: UUID?
+    @State private var safeError: String?
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                TextField("Name", text: $name)
+                Picker("Tracker", selection: $trackerID) {
+                    ForEach(trackers) { item in Text(item.name).tag(Optional(item.id)) }
+                }
+                if let safeError { Text(safeError).foregroundStyle(LedgerTheme.negative) }
+            }
+            .navigationTitle("New tag")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { editorToolbar(save: save, dismiss: dismiss) }
+            .onAppear { trackerID = trackerID ?? trackers.first?.id }
+        }
+    }
+
+    private func save() {
+        guard let tracker = trackers.first(where: { $0.id == trackerID }) else { return }
+        do {
+            try LocalLedgerRepository(context: modelContext).createTag(
+                scopeKey: scopeKey,
+                tracker: tracker,
+                name: name
+            )
+            Task { await sync.synchronize(session: session) }
+            dismiss()
+        } catch {
+            safeError = String(localized: "Enter a unique nonempty tag name.")
         }
     }
 }
@@ -439,6 +610,17 @@ private extension LocalCategoryKind {
         switch self {
         case .expense: String(localized: "Expense")
         case .income: String(localized: "Income")
+        }
+    }
+}
+
+private extension TrackerRole {
+    var displayName: String {
+        switch self {
+        case .owner: String(localized: "Owner")
+        case .admin: String(localized: "Admin")
+        case .editor: String(localized: "Editor")
+        case .viewer: String(localized: "Viewer")
         }
     }
 }

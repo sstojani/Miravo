@@ -297,3 +297,41 @@ Begin Milestone 5 with a coherent offline vertical slice: transfer entry and lin
 ### Next exact action
 
 Continue Milestone 5 with synchronized tags and role-aware tracker/member controls, then build deterministic 50,000-record performance fixtures and complete the core accessibility/state audit. Run the existing macOS workflow as soon as a repository runner is available and fix all compile/runtime findings before upgrading native verification.
+
+## 2026-08-09 — Milestone 5 tags and offline role boundary checkpoint
+
+### Acceptance checks established
+
+- Tag create/update/archive/restore and transaction assignment write local models and ordered outbox commands atomically, synchronize with client UUIDs, bootstrap/pull as typed rows, and remain searchable/filterable offline.
+- Archiving prevents a tag from being newly assigned but does not silently strip the tag from an existing transaction when another field is edited.
+- Current membership roles are server-authoritative. The offline repository rejects viewer financial/taxonomy writes even if a UI action is stale; views expose explicit read-only states and retain an offline collaborator roster.
+- The 50,000-record test is a deterministic authored regression with a measurable in-memory filter ceiling, not a claim about SwiftData rendering until macOS executes it.
+
+### Material work
+
+- Added strict tag sync payloads/handlers and transaction `tag_ids` to the backend command path. Tag lifecycle operations enforce editor access, versions, audit, same-tracker validation, and ordinary idempotency receipts.
+- Preserved existing archived tag assignments during full transaction replacement while continuing to reject archived tags on new records.
+- Added scoped `LocalTag`, `LocalTransactionTag`, and `LocalTrackerMembership` SwiftData models. Local tag/transaction child/outbox changes share one rollback boundary; duplicate copies only assignable tags.
+- Extended native wire models/bootstrap/pull/reconcile/tombstone handling for tags, transaction tag IDs, membership email/joined state, and role changes. Bootstrap validates tag-to-tracker relationships and transaction tag scope.
+- Added tag selection to Quick Add/edit/detail, tag CRUD to Local Data, tag search/filtering, synchronized collaborator roster, role labels, and repository/view enforcement for viewer/editor/admin boundaries.
+- Added English and Albanian copy for the new states, a source accessibility audit, authored tag/role/bootstrap tests, and a deterministic 50,000-record combined-filter XCTest.
+
+### Commands and outcomes
+
+- `.venv/bin/pytest backend/tests/test_sync.py -q`: **11 passed locally**.
+- `make schema && make check`: **passed locally** — 52 tests, 83.02% branch-aware coverage, Ruff format/lint, Django checks, strict mypy over 69 source files, and current validated OpenAPI.
+- `manage.py makemigrations --check --dry-run`: **no changes detected**.
+- `ios/check-localizations.sh`: **passed locally** — 264 literal UI keys with identical English/Albanian key sets and compatible placeholders.
+- `python3 ios/check-project-contract.py`, plist/YAML parsing, and `git diff --check`: **passed locally**.
+- Parsed all 63 Swift source/test files with the existing `tree-sitter-swift` 0.7.1 harness after excluding conditional branches and that parser's unsupported iOS 18 `#Unique` grammar: **no remaining syntax-tree errors or missing nodes**.
+
+### Verification boundary
+
+- Django/SQLite tag lifecycle, idempotent sync assignment, archived-tag preservation, permissions, OpenAPI freshness, and the complete backend gate: **verified locally on Linux**.
+- Native localization/project contracts and independent syntax-tree structure: **verified locally on Linux**.
+- Swift 6 type/concurrency checking, XcodeGen regeneration, SwiftFormat, SwiftData tag/membership behavior, authored native tests, 50,000-record timing, simulator accessibility, and physical-device interaction: **unverified until hosted macOS/device execution**.
+- Docker/PostgreSQL/Redis, GitHub Actions, real server/Funnel, signing, and physical iPhone were not contacted.
+
+### Next exact action
+
+Run the macOS iOS workflow when a repository is available and fix every compile/runtime/accessibility finding. Independently, continue Milestone 5 source work with tracker presentation/reordering and the remaining core empty/offline/permission states before starting the scoped Shortcut credential API.

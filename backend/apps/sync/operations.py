@@ -16,11 +16,12 @@ from rest_framework import serializers, status
 from rest_framework.exceptions import APIException, NotFound
 
 from apps.audit.services import record_audit_event
-from apps.ledger.models import Account, Category, Tracker, TrackerMembership, Transaction
+from apps.ledger.models import Account, Category, Tag, Tracker, TrackerMembership, Transaction
 from apps.ledger.permissions import require_tracker_role
 from apps.ledger.serializers import (
     AccountSerializer,
     CategorySerializer,
+    TagSerializer,
     TransactionWriteSerializer,
 )
 from apps.ledger.services.collaboration import create_tracker, request_id
@@ -130,6 +131,10 @@ def _category_values(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _tag_values(payload: dict[str, Any]) -> dict[str, Any]:
+    return {field: payload[field] for field in ("tracker_id", "name", "color")}
+
+
 def _transaction_values(payload: dict[str, Any]) -> dict[str, Any]:
     result: dict[str, Any] = {
         "tracker_id": payload["tracker_id"],
@@ -146,6 +151,7 @@ def _transaction_values(payload: dict[str, Any]) -> dict[str, Any]:
         "note": payload.get("note", ""),
         "occurred_at": payload["occurred_at"],
         "refund_of_id": payload.get("refund_of_id"),
+        "tag_ids": payload.get("tag_ids", []),
     }
     for field in (
         "base_amount_minor",
@@ -375,6 +381,56 @@ def _apply_category(operation: dict[str, Any], actor: User, request: Any) -> Cat
     return category
 
 
+def _apply_tag(operation: dict[str, Any], actor: User, request: Any) -> Tag:
+    entity_id = operation["entity_id"]
+    payload = operation["payload"]
+    command = operation["command"]
+    values = _tag_values(payload)
+    if command == "create":
+        _ensure_available(Tag, entity_id)
+        tracker = Tracker.objects.get(id=payload["tracker_id"], deleted_at__isnull=True)
+        require_tracker_role(actor, tracker, TrackerMembership.Role.EDITOR)
+        serializer = TagSerializer(data=values)
+        serializer.is_valid(raise_exception=True)
+        tag = cast(
+            Tag,
+            serializer.save(
+                id=entity_id,
+                archived_at=timezone.now() if payload.get("archived_at") is not None else None,
+            ),
+        )
+        _audit(actor=actor, instance=tag, action="tag.created", request=request)
+        return tag
+
+    tag = Tag.objects.select_related("tracker").select_for_update().get(id=entity_id)
+    require_tracker_role(actor, tag.tracker, TrackerMembership.Role.EDITOR)
+    _require_version(
+        instance=tag,
+        expected=operation["base_server_version"],
+        entity_type=SyncChange.EntityType.TAG,
+        actor=actor,
+        proposed=payload,
+    )
+    if payload["tracker_id"] != tag.tracker_id:
+        raise serializers.ValidationError({"tracker_id": "A tag cannot change tracker."})
+    if command == "update":
+        serializer = TagSerializer(tag, data=values)
+        serializer.is_valid(raise_exception=True)
+        tag = cast(Tag, serializer.save(version=tag.version + 1))
+        _audit(actor=actor, instance=tag, action="tag.updated", request=request)
+    elif command in ("archive", "delete") and tag.archived_at is None:
+        tag.archived_at = timezone.now()
+        tag.version += 1
+        tag.save(update_fields=("archived_at", "version", "updated_at"))
+        _audit(actor=actor, instance=tag, action="tag.archived", request=request)
+    elif command == "restore" and tag.archived_at is not None:
+        tag.archived_at = None
+        tag.version += 1
+        tag.save(update_fields=("archived_at", "version", "updated_at"))
+        _audit(actor=actor, instance=tag, action="tag.restored", request=request)
+    return tag
+
+
 def _apply_transaction(operation: dict[str, Any], actor: User, request: Any) -> Transaction:
     entity_id = operation["entity_id"]
     payload = operation["payload"]
@@ -431,6 +487,7 @@ def apply_operation(operation: dict[str, Any], actor: User, request: Any) -> Any
         SyncChange.EntityType.TRACKER: _apply_tracker,
         SyncChange.EntityType.ACCOUNT: _apply_account,
         SyncChange.EntityType.CATEGORY: _apply_category,
+        SyncChange.EntityType.TAG: _apply_tag,
         SyncChange.EntityType.TRANSACTION: _apply_transaction,
     }[operation["entity_type"]]
     return handler(operation, actor, request)
