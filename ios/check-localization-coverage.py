@@ -30,11 +30,13 @@ EXPLICIT_LOCALIZED_KEYS = {
     "Archived detail format",
     "Expenses",
     "Income",
+    "My pending version",
     "Pending count format",
     "Rename account",
     "Rename category",
     "Rename tracker",
     "Request ID format",
+    "Server version",
     "Spending",
 }
 

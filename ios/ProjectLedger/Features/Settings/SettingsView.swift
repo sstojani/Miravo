@@ -5,7 +5,10 @@ struct SettingsView: View {
     let scopeKey: String
 
     @EnvironmentObject private var session: SessionController
+    @EnvironmentObject private var sync: SyncController
     @Query private var outbox: [OutboxMutation]
+    @Query private var cursors: [SyncCursor]
+    @Query private var conflicts: [SyncConflict]
     @State private var signingOut = false
 
     init(scopeKey: String) {
@@ -14,11 +17,19 @@ struct SettingsView: View {
             filter: #Predicate { $0.scopeKey == scopeKey },
             sort: \OutboxMutation.createdAt
         )
+        _cursors = Query(filter: #Predicate { $0.scopeKey == scopeKey })
+        _conflicts = Query(
+            filter: #Predicate { $0.scopeKey == scopeKey && $0.resolvedAt == nil },
+            sort: \SyncConflict.createdAt,
+            order: .reverse
+        )
     }
 
     private var pendingCount: Int {
-        outbox.filter { $0.state == .pending || $0.state == .failed }.count
+        outbox.filter { $0.state == .pending || $0.state == .syncing }.count
     }
+
+    private var cursor: SyncCursor? { cursors.first }
 
     var body: some View {
         Form {
@@ -44,12 +55,61 @@ struct SettingsView: View {
             }
 
             Section("Synchronization") {
+                if sync.isRunning || cursor?.isSyncing == true {
+                    HStack {
+                        ProgressView()
+                        Text("Synchronizing…")
+                    }
+                }
                 LabeledContent("Pending operations", value: pendingCount, format: .number)
                 LabeledContent("Failed operations", value: outbox.filter { $0.state == .failed }.count, format: .number)
-                LabeledContent("Last successful sync", value: String(localized: "Not synchronized yet"))
-                Text("Manual retry, server cursors, and conflict review are implemented with the synchronization milestone. Local saving does not depend on them.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+                NavigationLink {
+                    SyncConflictsView(scopeKey: scopeKey)
+                } label: {
+                    LabeledContent("Conflicts", value: conflicts.count, format: .number)
+                }
+                .disabled(conflicts.isEmpty)
+
+                if let lastSync = cursor?.lastSuccessfulSyncAt {
+                    LabeledContent("Last successful sync") {
+                        Text(lastSync, format: .dateTime.day().month().year().hour().minute())
+                    }
+                } else {
+                    LabeledContent("Last successful sync", value: String(localized: "Not synchronized yet"))
+                }
+
+                if cursor?.bootstrapRequired != false {
+                    Label("Initial server download required", systemImage: "arrow.down.circle")
+                        .foregroundStyle(.secondary)
+                }
+
+                if let errorCode = cursor?.lastSafeErrorCode {
+                    LabeledContent("Last sync status") {
+                        Text(verbatim: errorCode)
+                            .font(.caption.monospaced())
+                            .textSelection(.enabled)
+                    }
+                }
+
+                Button {
+                    Task { await sync.synchronize(session: session) }
+                } label: {
+                    Label("Synchronize now", systemImage: "arrow.triangle.2.circlepath")
+                }
+                .disabled(sync.isRunning)
+
+                if outbox.contains(where: { $0.state == .failed }) {
+                    Button {
+                        Task {
+                            await sync.retryFailed(scopeKey: scopeKey, session: session)
+                        }
+                    } label: {
+                        Label("Retry failed operations", systemImage: "arrow.clockwise")
+                    }
+                    .disabled(sync.isRunning)
+                }
+            } footer: {
+                Text("Local changes remain available while offline. Failed and conflicting operations stay on this iPhone until you retry or resolve them.")
             }
 
             Section("Advanced") {
@@ -84,6 +144,9 @@ struct SettingsView: View {
             }
         }
         .navigationTitle("Settings")
+        .task {
+            await sync.refreshDiagnostics(scopeKey: scopeKey)
+        }
         .alert("Session notice", isPresented: Binding(
             get: { session.logoutWarning != nil },
             set: { if !$0 { session.logoutWarning = nil } }
@@ -91,6 +154,14 @@ struct SettingsView: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text(session.logoutWarning ?? "")
+        }
+        .alert("Synchronization notice", isPresented: Binding(
+            get: { sync.message != nil },
+            set: { if !$0 { sync.message = nil } }
+        )) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(sync.message ?? "")
         }
     }
 }

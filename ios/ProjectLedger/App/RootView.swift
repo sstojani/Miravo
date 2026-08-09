@@ -7,6 +7,7 @@ struct RootView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @EnvironmentObject private var session: SessionController
+    @EnvironmentObject private var sync: SyncController
 
     var body: some View {
         Group {
@@ -35,8 +36,23 @@ struct RootView: View {
                 if let scopeKey = session.scopeKey {
                     MainTabView(scopeKey: scopeKey)
                         .task {
-                            try? LocalLedgerRepository(context: modelContext)
-                                .bootstrapDefaults(scopeKey: scopeKey)
+                            #if DEBUG
+                                if ProcessInfo.processInfo.arguments.contains(
+                                    "-ui-testing-authenticated"
+                                ) {
+                                    try? LocalLedgerRepository(context: modelContext)
+                                        .bootstrapDefaults(scopeKey: scopeKey)
+                                    return
+                                }
+                            #endif
+                            await sync.refreshDiagnostics(scopeKey: scopeKey)
+                            let needsInitialProvisioning = sync.diagnostics.bootstrapRequired
+                            await sync.synchronize(session: session)
+                            if needsInitialProvisioning && !sync.diagnostics.bootstrapRequired {
+                                try? LocalLedgerRepository(context: modelContext)
+                                    .bootstrapDefaults(scopeKey: scopeKey)
+                                await sync.synchronize(session: session)
+                            }
                         }
                 } else {
                     ProgressView("Opening local data…")
@@ -62,6 +78,9 @@ private struct LocalStoreRecoveryView: View {
 
 private struct MainTabView: View {
     let scopeKey: String
+
+    @EnvironmentObject private var session: SessionController
+    @EnvironmentObject private var sync: SyncController
 
     var body: some View {
         TabView {
@@ -105,6 +124,17 @@ private struct MainTabView: View {
             }
             .tabItem {
                 Label("Settings", systemImage: "gearshape")
+            }
+        }
+        .task(id: scopeKey) {
+            let clock = ContinuousClock()
+            while !Task.isCancelled {
+                do {
+                    try await clock.sleep(for: .seconds(60))
+                } catch {
+                    return
+                }
+                await sync.synchronize(session: session)
             }
         }
     }

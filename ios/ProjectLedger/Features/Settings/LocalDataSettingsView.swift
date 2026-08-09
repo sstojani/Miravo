@@ -34,7 +34,11 @@ struct LocalDataSettingsView: View {
     init(scopeKey: String) {
         self.scopeKey = scopeKey
         _trackers = Query(
-            filter: #Predicate { $0.scopeKey == scopeKey && $0.deletedAt == nil },
+            filter: #Predicate {
+                $0.scopeKey == scopeKey &&
+                    $0.deletedAt == nil &&
+                    $0.accessRevokedAt == nil
+            },
             sort: \LocalTracker.sortOrder
         )
         _accounts = Query(
@@ -49,6 +53,16 @@ struct LocalDataSettingsView: View {
 
     private var activeTrackers: [LocalTracker] {
         trackers.filter { $0.archivedAt == nil }
+    }
+
+    private var visibleAccounts: [LocalAccount] {
+        let trackerIDs = Set(trackers.map(\.id))
+        return accounts.filter { trackerIDs.contains($0.trackerID) }
+    }
+
+    private var visibleCategories: [LocalCategory] {
+        let trackerIDs = Set(trackers.map(\.id))
+        return categories.filter { trackerIDs.contains($0.trackerID) }
     }
 
     var body: some View {
@@ -73,7 +87,7 @@ struct LocalDataSettingsView: View {
             }
 
             Section("Accounts") {
-                ForEach(accounts) { account in
+                ForEach(visibleAccounts) { account in
                     EntityRow(
                         name: account.name,
                         detail: "\(account.type.displayName) · \(account.currencyCode)",
@@ -92,7 +106,7 @@ struct LocalDataSettingsView: View {
             }
 
             Section("Categories") {
-                ForEach(categories) { category in
+                ForEach(visibleCategories) { category in
                     EntityRow(
                         name: category.name,
                         detail: category.kind.displayName,

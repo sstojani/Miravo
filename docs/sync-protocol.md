@@ -17,7 +17,7 @@ If step 2 fails, neither entity nor outbox persists. Undo is another auditable l
 - One synchronization actor sends bounded batches ordered by the durable local sequence. An immediate edit or tombstone can never sort ahead of its create merely because both share a clock tick.
 - Operations carry independent IDs and base versions. Server processing is transactional per operation and returns accepted, duplicate, rejected, unauthorized, or conflict.
 - Structural envelopes and typed payloads reject unknown fields. A per-user receipt stores the operation fingerprint/result for 120 days; exact replay is safe even after re-login, while a changed fingerprint conflicts.
-- Edits to a never-synchronized local create are coalesced into that create before transport. Server updates/deletes otherwise require an explicit positive base version.
+- At most one operation for a given entity is sent in a batch. Its persisted payload and operation ID never change after an attempt; after acceptance, the next queued edit is rebased to the returned server version and sent in sequence. This preserves the idempotency fingerprint when a response is lost. Server updates/deletes require an explicit positive base version.
 - Lost responses are retried with identical IDs. Validation/permission/revocation failures stop automatic retry; transient failures use exponential backoff with jitter.
 - Conflicts and permanent failures do not block unrelated operations.
 - Binary attachments use a separate checksum/idempotency queue and never ride in the mutation batch.
@@ -34,12 +34,14 @@ If step 2 fails, neither entity nor outbox persists. Undo is another auditable l
 ## Full bootstrap
 
 1. Preserve unsent outbox commands and locally referenced files.
-2. Download bounded bootstrap pages into a staging store/snapshot.
-3. Validate counts, relationships, currency values, and final cursor.
-4. Atomically replace/reconcile synchronized state while retaining unsent commands.
-5. Rebase/replay those commands against downloaded versions, producing conflicts where required.
+2. The server fixes an upper change-log sequence on the first request and returns UUID-ordered pages using a signed, user-bound bootstrap cursor.
+3. Persist each page under a local bootstrap generation without changing the visible ledger or normal pull cursor.
+4. Require every page to retain the same target cursor; decode all typed records and validate core tracker/account/category/transaction relationships.
+5. Publish the reconciled snapshot and final pull cursor in one SwiftData save, retaining every entity with a queued local mutation.
+6. Immediately pull from the fixed cursor so changes committed while pages were downloading are not deferred to a later launch.
+7. Rebase/replay retained commands against downloaded versions, producing conflicts where required.
 
-A bootstrap failure leaves the prior local store/cursor usable.
+A page or publish failure rolls back its entire local transaction. Completed staging pages remain resumable, while the prior visible store/cursor and unsent outbox stay usable.
 
 ## Conflict rules
 

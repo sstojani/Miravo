@@ -15,7 +15,11 @@ struct LocalLedgerRepository {
     @discardableResult
     func bootstrapDefaults(scopeKey: String) throws -> LocalTracker {
         let descriptor = FetchDescriptor<LocalTracker>(
-            predicate: #Predicate { $0.scopeKey == scopeKey && $0.deletedAt == nil }
+            predicate: #Predicate {
+                $0.scopeKey == scopeKey &&
+                    $0.deletedAt == nil &&
+                    $0.accessRevokedAt == nil
+            }
         )
         if let existing = try context.fetch(descriptor).first {
             return existing
@@ -56,6 +60,7 @@ struct LocalLedgerRepository {
         try enqueue(tracker, command: .create)
         try enqueue(account, command: .create)
         try enqueue(category, command: .create)
+        try enqueue(tracker, command: .update)
         try saveOrRollback()
         return tracker
     }
@@ -82,6 +87,7 @@ struct LocalLedgerRepository {
     }
 
     func renameTracker(_ tracker: LocalTracker, name: String) throws {
+        try validateAccess(to: tracker, scopeKey: tracker.scopeKey)
         tracker.name = try validatedName(name)
         touch(tracker)
         try enqueue(tracker, command: .update)
@@ -89,6 +95,7 @@ struct LocalLedgerRepository {
     }
 
     func setTrackerArchived(_ tracker: LocalTracker, archived: Bool) throws {
+        try validateAccess(to: tracker, scopeKey: tracker.scopeKey)
         tracker.archivedAt = archived ? .now : nil
         touch(tracker)
         try enqueue(tracker, command: archived ? .archive : .restore)
@@ -122,6 +129,7 @@ struct LocalLedgerRepository {
     }
 
     func renameAccount(_ account: LocalAccount, name: String) throws {
+        try validateTrackerAccess(id: account.trackerID, scopeKey: account.scopeKey)
         account.name = try validatedName(name)
         touch(account)
         try enqueue(account, command: .update)
@@ -129,6 +137,7 @@ struct LocalLedgerRepository {
     }
 
     func setAccountArchived(_ account: LocalAccount, archived: Bool) throws {
+        try validateTrackerAccess(id: account.trackerID, scopeKey: account.scopeKey)
         account.archivedAt = archived ? .now : nil
         touch(account)
         try enqueue(account, command: archived ? .archive : .restore)
@@ -156,6 +165,7 @@ struct LocalLedgerRepository {
     }
 
     func renameCategory(_ category: LocalCategory, name: String) throws {
+        try validateTrackerAccess(id: category.trackerID, scopeKey: category.scopeKey)
         category.name = try validatedName(name)
         touch(category)
         try enqueue(category, command: .update)
@@ -163,6 +173,7 @@ struct LocalLedgerRepository {
     }
 
     func setCategoryArchived(_ category: LocalCategory, archived: Bool) throws {
+        try validateTrackerAccess(id: category.trackerID, scopeKey: category.scopeKey)
         category.archivedAt = archived ? .now : nil
         touch(category)
         try enqueue(category, command: archived ? .archive : .restore)
@@ -206,6 +217,7 @@ struct LocalLedgerRepository {
             occurredAt: occurredAt
         )
         context.insert(transaction)
+        insertChildren(for: transaction, account: account, category: category)
         try enqueue(transaction, command: .create)
         try saveOrRollback()
         return transaction
@@ -249,11 +261,13 @@ struct LocalLedgerRepository {
         transaction.occurredAt = occurredAt
         transaction.updatedAt = .now
         transaction.syncStateRaw = LocalSyncState.pending.rawValue
+        try replaceChildren(for: transaction, account: account, category: category)
         try enqueue(transaction, command: .update)
         try saveOrRollback()
     }
 
     func setTransactionDeleted(_ transaction: LedgerTransaction, deleted: Bool) throws {
+        try validateTrackerAccess(id: transaction.trackerID, scopeKey: transaction.scopeKey)
         transaction.deletedAt = deleted ? .now : nil
         transaction.updatedAt = .now
         transaction.syncStateRaw = LocalSyncState.pending.rawValue
@@ -263,6 +277,7 @@ struct LocalLedgerRepository {
 
     @discardableResult
     func duplicate(_ transaction: LedgerTransaction) throws -> LedgerTransaction {
+        try validateTrackerAccess(id: transaction.trackerID, scopeKey: transaction.scopeKey)
         guard let money = transaction.money else {
             throw MoneyError.invalidAmount
         }
@@ -283,6 +298,24 @@ struct LocalLedgerRepository {
             occurredAt: .now
         )
         context.insert(copy)
+        let accountID = copy.accountID
+        let scopeKey = copy.scopeKey
+        let account = try context.fetch(
+            FetchDescriptor<LocalAccount>(
+                predicate: #Predicate { $0.id == accountID && $0.scopeKey == scopeKey }
+            )
+        ).first
+        let category = if let categoryID = copy.categoryID {
+            try context.fetch(
+                FetchDescriptor<LocalCategory>(
+                    predicate: #Predicate { $0.id == categoryID && $0.scopeKey == scopeKey }
+                )
+            ).first
+        } else {
+            nil
+        }
+        guard let account else { throw LocalLedgerError.invalidReference }
+        insertChildren(for: copy, account: account, category: category)
         try enqueue(copy, command: .create)
         try saveOrRollback()
         return copy
@@ -295,10 +328,28 @@ struct LocalLedgerRepository {
     }
 
     private func validate(tracker: LocalTracker, scopeKey: String) throws {
-        guard tracker.scopeKey == scopeKey, tracker.deletedAt == nil else {
+        try validateAccess(to: tracker, scopeKey: scopeKey)
+        guard tracker.archivedAt == nil else { throw LocalLedgerError.archivedReference }
+    }
+
+    private func validateAccess(to tracker: LocalTracker, scopeKey: String) throws {
+        guard tracker.scopeKey == scopeKey,
+              tracker.deletedAt == nil,
+              tracker.accessRevokedAt == nil
+        else {
             throw LocalLedgerError.invalidReference
         }
-        guard tracker.archivedAt == nil else { throw LocalLedgerError.archivedReference }
+    }
+
+    private func validateTrackerAccess(id: UUID, scopeKey: String) throws {
+        guard let tracker = try context.fetch(
+            FetchDescriptor<LocalTracker>(
+                predicate: #Predicate { $0.scopeKey == scopeKey && $0.id == id }
+            )
+        ).first else {
+            throw LocalLedgerError.invalidReference
+        }
+        try validateAccess(to: tracker, scopeKey: scopeKey)
     }
 
     private func validate(
@@ -348,6 +399,63 @@ struct LocalLedgerRepository {
         category.syncStateRaw = LocalSyncState.pending.rawValue
     }
 
+    private func insertChildren(
+        for transaction: LedgerTransaction,
+        account: LocalAccount,
+        category: LocalCategory?
+    ) {
+        let signedAmount = transaction.kind == .income
+            ? transaction.accountAmountMinor
+            : -transaction.accountAmountMinor
+        context.insert(
+            LocalAccountMovement(
+                scopeKey: transaction.scopeKey,
+                transactionID: transaction.id,
+                accountID: account.id,
+                signedAmountMinor: signedAmount,
+                currencyCode: account.currencyCode,
+                currencyExponent: account.currencyExponent
+            )
+        )
+        if let category {
+            context.insert(
+                LocalCategoryAllocation(
+                    scopeKey: transaction.scopeKey,
+                    transactionID: transaction.id,
+                    categoryID: category.id,
+                    amountMinor: transaction.amountMinor,
+                    categoryVersion: category.serverVersion ?? 1
+                )
+            )
+        }
+    }
+
+    private func replaceChildren(
+        for transaction: LedgerTransaction,
+        account: LocalAccount,
+        category: LocalCategory?
+    ) throws {
+        let transactionID = transaction.id
+        let scopeKey = transaction.scopeKey
+        let movements = try context.fetch(
+            FetchDescriptor<LocalAccountMovement>(
+                predicate: #Predicate {
+                    $0.transactionID == transactionID && $0.scopeKey == scopeKey
+                }
+            )
+        )
+        let allocations = try context.fetch(
+            FetchDescriptor<LocalCategoryAllocation>(
+                predicate: #Predicate {
+                    $0.transactionID == transactionID && $0.scopeKey == scopeKey
+                }
+            )
+        )
+        for movement in movements { context.delete(movement) }
+        for allocation in allocations { context.delete(allocation) }
+        insertChildren(for: transaction, account: account, category: category)
+    }
+
     private func enqueue(_ tracker: LocalTracker, command: LocalMutationCommand) throws {
         let payload = TrackerMutationPayload(
             id: tracker.id,
@@ -358,6 +466,8 @@ struct LocalLedgerRepository {
             baseCurrency: tracker.baseCurrencyCode,
             baseCurrencyExponent: tracker.baseCurrencyExponent,
             sortOrder: tracker.sortOrder,
+            defaultAccountID: tracker.defaultAccountID,
+            defaultCategoryID: tracker.defaultCategoryID,
             archivedAt: tracker.archivedAt,
             deletedAt: tracker.deletedAt
         )
@@ -464,6 +574,7 @@ struct LocalLedgerRepository {
     ) throws {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
+        encoder.keyEncodingStrategy = .convertToSnakeCase
         encoder.outputFormatting = [.sortedKeys]
         let localSequence = try allocateOutboxSequence(scopeKey: scopeKey)
         let mutation = OutboxMutation(

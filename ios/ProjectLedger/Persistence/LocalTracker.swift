@@ -3,7 +3,9 @@ import SwiftData
 
 @Model
 final class LocalTracker {
-    @Attribute(.unique) var id: UUID
+    #Unique<LocalTracker>([\.scopeKey, \.id])
+
+    var id: UUID
     var scopeKey: String
     var name: String
     var trackerDescription: String
@@ -14,12 +16,14 @@ final class LocalTracker {
     var sortOrder: Int
     var defaultAccountID: UUID?
     var defaultCategoryID: UUID?
+    var roleRaw: String
     var serverVersion: Int64?
     var syncStateRaw: String
     var createdAt: Date
     var updatedAt: Date
     var archivedAt: Date?
     var deletedAt: Date?
+    var accessRevokedAt: Date?
 
     init(
         id: UUID = UUID(),
@@ -43,6 +47,7 @@ final class LocalTracker {
         self.baseCurrencyCode = baseCurrencyCode
         self.baseCurrencyExponent = baseCurrencyExponent
         self.sortOrder = sortOrder
+        roleRaw = "owner"
         syncStateRaw = syncState.rawValue
         self.createdAt = createdAt
         updatedAt = createdAt

@@ -2,6 +2,8 @@ import SwiftData
 import SwiftUI
 
 struct OverviewView: View {
+    @EnvironmentObject private var session: SessionController
+    @EnvironmentObject private var sync: SyncController
     @Query private var transactions: [LedgerTransaction]
     @Query private var trackers: [LocalTracker]
     @Query private var accounts: [LocalAccount]
@@ -17,7 +19,10 @@ struct OverviewView: View {
         )
         _trackers = Query(
             filter: #Predicate {
-                $0.scopeKey == scopeKey && $0.deletedAt == nil && $0.archivedAt == nil
+                $0.scopeKey == scopeKey &&
+                    $0.deletedAt == nil &&
+                    $0.archivedAt == nil &&
+                    $0.accessRevokedAt == nil
             },
             sort: \LocalTracker.sortOrder
         )
@@ -156,6 +161,9 @@ struct OverviewView: View {
                 }
             }
             .padding()
+        }
+        .refreshable {
+            await sync.synchronize(session: session)
         }
         .navigationTitle("Overview")
     }

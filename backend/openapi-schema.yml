@@ -799,6 +799,19 @@ paths:
   /api/v1/sync/bootstrap:
     get:
       operationId: sync_bootstrap_retrieve
+      parameters:
+      - in: query
+        name: bootstrap_cursor
+        schema:
+          type: string
+          maxLength: 1024
+      - in: query
+        name: limit
+        schema:
+          type: integer
+          maximum: 500
+          minimum: 1
+          default: 100
       tags:
       - sync
       security:
@@ -2936,11 +2949,17 @@ components:
           format: date-time
         cursor:
           type: string
+        bootstrap_cursor:
+          type: string
+          nullable: true
+        has_more:
+          type: boolean
         data: {}
       required:
       - cursor
       - data
       - generated_at
+      - has_more
       - protocol_version
     SyncChangeOutput:
       type: object
@@ -3209,6 +3228,9 @@ components:
         base_currency:
           type: string
           maxLength: 3
+        base_currency_exponent:
+          type: integer
+          readOnly: true
         sort_order:
           type: integer
           maximum: 9223372036854775807
@@ -3240,6 +3262,7 @@ components:
           readOnly: true
       required:
       - archived_at
+      - base_currency_exponent
       - created_at
       - id
       - name

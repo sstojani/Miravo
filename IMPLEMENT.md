@@ -173,3 +173,45 @@ Add the synchronization app/models/signals, strict wire serializers, operation d
 ### Next exact action
 
 Checkpoint the verified server slice, then implement the iOS synchronization actor: snake-case wire encoding, never-synced mutation coalescing, access-token refresh, ordered push result application, retry classification/backoff, atomic pull pages, conflict persistence, bootstrap staging, and diagnostics.
+
+## 2026-08-09 — Milestone 4 native synchronization checkpoint
+
+### Acceptance checks established
+
+- An attempted operation retains the same UUID and fingerprint across transport/token failures; only one queued operation per entity enters a batch, and later commands rebase in local-sequence order.
+- Pull page data and its cursor either save together or both roll back. Bootstrap pages are bounded, resumable, tied to one fixed normal cursor, and cannot replace visible data until the typed snapshot validates.
+- A full bootstrap retains every unsent local entity/outbox command, removes only remote-absent synchronized entities, and immediately pulls changes committed after the snapshot target.
+- Membership removal is server-authoritative: cached tracker data becomes inaccessible to normal views and stale local write methods reject it without deleting recoverable rows.
+- Version conflicts preserve current/proposed data and expose keep-server, keep-mine-as-new-operation, and field comparison. Fingerprint conflicts without a mergeable representation become permanent failures rather than unresolvable merge screens.
+- Native compile/runtime claims remain open until Xcode executes the authored tests.
+
+### Material work
+
+- Replaced one-shot server bootstrap with signed, user-bound entity/UUID pagination. Every page carries the first page's upper change sequence; the ninth sync backend test proves bounded/resumable traversal and cross-user cursor rejection.
+- Added the server-derived tracker base-currency exponent to REST/sync representations so the native client can accept the full backend ISO currency catalog without guessing.
+- Added explicit snake-case Codable wire contracts for push, pull, acknowledgement, and bootstrap plus tracker/member/account/category/transaction/movement/allocation snapshots. Explicit `*_id` coding keys avoid acronym conversion ambiguity.
+- Added a `@ModelActor` synchronization engine with access-token refresh/Keychain rotation, stable ordered push batching, per-result handling, exponential backoff with jitter, atomic pull pages, tombstones, resumable bootstrap staging, relationship validation, reconciliation, post-bootstrap pull, and acknowledgements.
+- Added transaction movement/allocation persistence, bootstrap generation rows, durable conflict rows, expanded cursor diagnostics, and iOS 18 compound `(scopeKey, id)` uniqueness for objects shared across user caches.
+- Added explicit rollback boundaries around push response, pull page, bootstrap page/publication, and conflict-decision application so later error recording cannot save a partial server page.
+- Added foreground/periodic/local-save/pull-to-refresh triggers, manual sync/retry, last status/counts, access-revocation filtering, and an English/Albanian field-by-field conflict review UI.
+- Changed initial provisioning to bootstrap the server first, preventing reinstall from pushing an unwanted default tracker into a nonempty account.
+- Authored deterministic native tests for exact wire keys, snapshot acronym IDs, retry bounds, compound scoped identity, child movements/allocations, revoked writes, accepted outbox acknowledgement, conflict rebase, paginated bootstrap/catch-up, and pull-page rollback.
+
+### Commands and outcomes
+
+- `make schema`: regenerated and validated the committed paginated-bootstrap/currency-exponent OpenAPI contract without warnings.
+- `make check`: **passed locally** — 47 tests, 83.55% branch-aware coverage, Ruff, Django system checks, strict mypy over 66 source files, OpenAPI validation, and schema freshness.
+- `ios/check-localizations.sh`: **passed locally** — 199 implemented literal UI keys covered; English/Albanian key sets and format placeholders match.
+- `python3 ios/check-project-contract.py`, plist/PyYAML parsing, `git diff --check`, and the iOS production-secret pattern scan: **passed locally**.
+- Parsed every Swift source/test with `tree-sitter-swift` after excluding debug conditionals and the parser version's unsupported iOS 18 `#Unique` line grammar: **no other syntax-tree error/missing node**. Apple documents the checked-in compound uniqueness syntax; this is not a compiler result.
+
+### Verification boundary
+
+- Backend SQLite/Linux protocol behavior and schema: **verified locally**.
+- Native source/resource/static contracts: **verified locally on Linux**.
+- Swift 6 concurrency/type checking, `#Unique` macro expansion, SwiftData cross-context rollback/publication, SwiftFormat, simulator tests, and UI behavior: **authored but unverified** because Swift/Xcode/macOS are unavailable.
+- PostgreSQL concurrency, Redis/Channels, Docker, hosted workflows, device signing, physical iPhone, and real server behavior: **not yet verified**.
+
+### Next exact action
+
+Commit this recovery-focused checkpoint, then finish Milestone 4 with the separate attachment transfer queue scaffold and optional foreground WebSocket invalidation. After that, run the macOS workflow as soon as a remote repository is available and fix every compiler/runtime failure before marking native acceptance.

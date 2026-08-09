@@ -1,3 +1,4 @@
+import Foundation
 import SwiftData
 import Testing
 @testable import ProjectLedger
@@ -19,9 +20,9 @@ struct LocalLedgerRepositoryTests {
         #expect(trackers.map(\.id) == [tracker.id])
         #expect(accounts.first?.id == tracker.defaultAccountID)
         #expect(categories.first?.id == tracker.defaultCategoryID)
-        #expect(outbox.count == 3)
+        #expect(outbox.count == 4)
         #expect(outbox.allSatisfy { !$0.payloadJSON.isEmpty })
-        #expect(outbox.map(\.localSequence).sorted() == [1, 2, 3])
+        #expect(outbox.map(\.localSequence).sorted() == [1, 2, 3, 4])
     }
 
     @Test func createEditDeleteAndRestoreEachAppendDurableMutation() throws {
@@ -57,12 +58,18 @@ struct LocalLedgerRepositoryTests {
         try repository.setTransactionDeleted(transaction, deleted: false)
 
         let persisted = try context.fetch(FetchDescriptor<LedgerTransaction>())
+        let movements = try context.fetch(FetchDescriptor<LocalAccountMovement>())
+        let allocations = try context.fetch(FetchDescriptor<LocalCategoryAllocation>())
         let mutations = try context.fetch(FetchDescriptor<OutboxMutation>())
             .filter { $0.entityID == transaction.id }
             .sorted { $0.localSequence < $1.localSequence }
         #expect(persisted.map(\.id) == [transaction.id])
         #expect(transaction.amountMinor == 725)
         #expect(transaction.deletedAt == nil)
+        #expect(movements.count == 1)
+        #expect(movements.first?.signedAmountMinor == -725)
+        #expect(allocations.count == 1)
+        #expect(allocations.first?.amountMinor == 725)
         #expect(mutations.map(\.command) == ["create", "update", "delete", "restore"])
     }
 
@@ -88,13 +95,58 @@ struct LocalLedgerRepositoryTests {
         )
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
         let payload = try decoder.decode(TransactionMutationPayload.self, from: mutation.payloadJSON)
+        let rawPayload = try #require(
+            JSONSerialization.jsonObject(with: mutation.payloadJSON) as? [String: Any]
+        )
 
         #expect(payload.id == transaction.id)
         #expect(payload.amountMinor == 1_250)
         #expect(payload.currency == "ALL")
         #expect(payload.trackerID == tracker.id)
         #expect(mutation.scopeKey == scope)
+        #expect(rawPayload["amount_minor"] as? Int == 1_250)
+        #expect(rawPayload["amountMinor"] == nil)
+    }
+
+    @Test func compoundIdentityAllowsSharedUUIDInSeparateUserScopes() throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let sharedID = UUID()
+        let secondScope = "https://ledger.example|20000000-0000-0000-0000-000000000002"
+        context.insert(LocalTracker(id: sharedID, scopeKey: scope, name: "First user"))
+        context.insert(LocalTracker(id: sharedID, scopeKey: secondScope, name: "Second user"))
+        try context.save()
+
+        let trackers = try context.fetch(FetchDescriptor<LocalTracker>())
+        #expect(trackers.count == 2)
+        #expect(Set(trackers.map(\.scopeKey)) == Set([scope, secondScope]))
+    }
+
+    @Test func revokedTrackerRejectsNewLocalFinancialMutations() throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let repository = LocalLedgerRepository(context: context)
+        let tracker = try repository.bootstrapDefaults(scopeKey: scope)
+        let account = try #require(context.fetch(FetchDescriptor<LocalAccount>()).first)
+        tracker.accessRevokedAt = .now
+        try context.save()
+        let before = try context.fetch(FetchDescriptor<OutboxMutation>()).count
+
+        #expect(throws: LocalLedgerError.invalidReference) {
+            try repository.createTransaction(
+                scopeKey: scope,
+                tracker: tracker,
+                account: account,
+                category: nil,
+                kind: .expense,
+                money: Money(minorUnits: 100, currencyCode: "ALL", exponent: 2),
+                merchant: "Rejected"
+            )
+        }
+        #expect(try context.fetch(FetchDescriptor<LedgerTransaction>()).isEmpty)
+        #expect(try context.fetch(FetchDescriptor<OutboxMutation>()).count == before)
     }
 
     @Test func crossScopeReferenceIsRejectedWithoutPartialMutation() throws {
@@ -136,8 +188,12 @@ struct LocalLedgerRepositoryTests {
             LocalAccount.self,
             LocalCategory.self,
             LedgerTransaction.self,
+            LocalAccountMovement.self,
+            LocalCategoryAllocation.self,
             OutboxMutation.self,
             SyncCursor.self,
+            SyncConflict.self,
+            BootstrapStagedEntity.self,
             configurations: configuration
         )
     }

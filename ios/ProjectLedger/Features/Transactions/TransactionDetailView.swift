@@ -16,7 +16,11 @@ struct TransactionDetailView: View {
     init(scopeKey: String, transaction: LedgerTransaction) {
         self.scopeKey = scopeKey
         self.transaction = transaction
-        _trackers = Query(filter: #Predicate { $0.scopeKey == scopeKey && $0.deletedAt == nil })
+        _trackers = Query(filter: #Predicate {
+            $0.scopeKey == scopeKey &&
+                $0.deletedAt == nil &&
+                $0.accessRevokedAt == nil
+        })
         _accounts = Query(filter: #Predicate { $0.scopeKey == scopeKey && $0.deletedAt == nil })
         _categories = Query(filter: #Predicate { $0.scopeKey == scopeKey && $0.deletedAt == nil })
     }

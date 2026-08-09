@@ -25,6 +25,8 @@ struct TrackerMutationPayload: Codable, Sendable {
     let baseCurrency: String
     let baseCurrencyExponent: Int
     let sortOrder: Int
+    let defaultAccountID: UUID?
+    let defaultCategoryID: UUID?
     let archivedAt: Date?
     let deletedAt: Date?
 }

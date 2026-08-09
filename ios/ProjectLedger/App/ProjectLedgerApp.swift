@@ -4,15 +4,28 @@ import SwiftUI
 @main
 struct ProjectLedgerApp: App {
     @Environment(\.scenePhase) private var scenePhase
-    @StateObject private var sessionController = SessionController()
-    private let store = LocalStoreBootstrap.make()
+    @StateObject private var sessionController: SessionController
+    @StateObject private var syncController: SyncController
+    private let store: LocalStoreBootstrap
+
+    init() {
+        let store = LocalStoreBootstrap.make()
+        self.store = store
+        _sessionController = StateObject(wrappedValue: SessionController())
+        _syncController = StateObject(
+            wrappedValue: SyncController(modelContainer: store.container)
+        )
+    }
 
     var body: some Scene {
         WindowGroup {
             RootView(storeUnavailable: store.persistentStoreUnavailable)
                 .environmentObject(sessionController)
+                .environmentObject(syncController)
                 .onChange(of: scenePhase) { _, newPhase in
-                    if newPhase != .active {
+                    if newPhase == .active {
+                        Task { await syncController.synchronize(session: sessionController) }
+                    } else {
                         sessionController.lockIfNeeded()
                     }
                 }
@@ -53,8 +66,12 @@ private struct LocalStoreBootstrap {
                 LocalAccount.self,
                 LocalCategory.self,
                 LedgerTransaction.self,
+                LocalAccountMovement.self,
+                LocalCategoryAllocation.self,
                 OutboxMutation.self,
                 SyncCursor.self,
+                SyncConflict.self,
+                BootstrapStagedEntity.self,
                 configurations: configuration
             )
         }
@@ -63,8 +80,12 @@ private struct LocalStoreBootstrap {
             LocalAccount.self,
             LocalCategory.self,
             LedgerTransaction.self,
+            LocalAccountMovement.self,
+            LocalCategoryAllocation.self,
             OutboxMutation.self,
-            SyncCursor.self
+            SyncCursor.self,
+            SyncConflict.self,
+            BootstrapStagedEntity.self
         )
     }
 }

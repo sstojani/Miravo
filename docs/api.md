@@ -70,13 +70,13 @@ The write representation accepts account IDs and exact category allocations; it 
 | `POST /sync/push` | Active access JWT/device session | Strict version-1 ordered operation batch; one transaction/result per operation |
 | `GET /sync/pull?cursor=…&limit=…` | Active access JWT | Bounded authorized changes, tombstones, opaque next cursor, and `has_more` |
 | `POST /sync/ack` | Active access JWT/device session | Monotonically acknowledge a signed cursor for that exact session |
-| `GET /sync/bootstrap` | Active access JWT | Current authorized tracker/member/account/category/tag/merchant/transaction snapshot plus cursor |
+| `GET /sync/bootstrap?bootstrap_cursor=…&limit=…` | Active access JWT | Bounded current authorized snapshot page, fixed normal pull cursor, signed next bootstrap cursor, and `has_more` |
 
 Push currently accepts the four locally implemented aggregate roots: tracker, account, category, and transaction. Each operation contains `operation_id`, positive ascending `local_sequence`, `entity_type`, client `entity_id`, command, nullable `base_server_version`, and a strict versioned payload. The server preserves client UUIDs. Creates omit a base version; later updates/archive/restore/delete require one. The full batch is structurally validated, then each operation commits or rolls back independently.
 
 Receipts are scoped to the user rather than a transient login session. Exact replay returns `duplicate` without another domain write. Reusing an operation UUID for a different normalized fingerprint returns `idempotency_fingerprint_mismatch`. Stale edits return `conflict` with base version, current server representation, and the proposed payload; unrelated operations continue.
 
-Pull cursors are signed and user-bound. A cursor below the retained global floor returns HTTP 410 with `sync_cursor_expired`; the client must bootstrap without discarding unsent local mutations. Change retention defaults to 90 days and receipt retention to 120 days.
+Pull and bootstrap cursors are independently signed and user-bound. Bootstrap fixes the current maximum change sequence on its first page and carries it through every entity/UUID-ordered page; the client pulls from that fixed cursor after publishing its staged snapshot. A normal cursor below the retained global floor returns HTTP 410 with `sync_cursor_expired`; the client must bootstrap without discarding unsent local mutations. Change retention defaults to 90 days and receipt retention to 120 days. Tracker responses include the server-derived base-currency minor-unit exponent.
 
 ## Planned resource surface
 

@@ -22,6 +22,7 @@ struct TransactionsView: View {
 
     @Environment(\.modelContext) private var modelContext
     @Query private var transactions: [LedgerTransaction]
+    @Query private var trackers: [LocalTracker]
     @State private var searchText = ""
     @State private var filter = TransactionListFilter.all
     @State private var showDeleted = false
@@ -34,9 +35,18 @@ struct TransactionsView: View {
             sort: \LedgerTransaction.occurredAt,
             order: .reverse
         )
+        _trackers = Query(
+            filter: #Predicate {
+                $0.scopeKey == scopeKey &&
+                    $0.deletedAt == nil &&
+                    $0.accessRevokedAt == nil
+            },
+            sort: \LocalTracker.sortOrder
+        )
     }
 
     private var filteredTransactions: [LedgerTransaction] {
+        let visibleTrackerIDs = Set(trackers.map(\.id))
         transactions.filter { transaction in
             let deletionMatches = showDeleted ? transaction.deletedAt != nil : transaction.deletedAt == nil
             let kindMatches = filter == .all || transaction.kindRaw == filter.rawValue
@@ -45,7 +55,8 @@ struct TransactionsView: View {
                 transaction.merchant.localizedCaseInsensitiveContains(normalizedSearch) ||
                 transaction.note.localizedCaseInsensitiveContains(normalizedSearch) ||
                 (transaction.money?.formatted(locale: .current) ?? "").localizedCaseInsensitiveContains(normalizedSearch)
-            return deletionMatches && kindMatches && searchMatches
+            return visibleTrackerIDs.contains(transaction.trackerID) &&
+                deletionMatches && kindMatches && searchMatches
         }
     }
 

@@ -39,7 +39,26 @@ struct APIClientError: Error, Equatable, LocalizedError, Sendable {
     var errorDescription: String? { message }
 }
 
-actor APIClient {
+protocol SyncTransport: Sendable {
+    func refresh(refreshToken: String) async throws -> SessionTokenBundle
+    func push(
+        _ payload: SyncPushRequest,
+        accessToken: String
+    ) async throws -> SyncPushResponse
+    func pull(
+        cursor: String?,
+        limit: Int,
+        accessToken: String
+    ) async throws -> SyncPullResponse
+    func bootstrap(
+        cursor: String?,
+        limit: Int,
+        accessToken: String
+    ) async throws -> SyncBootstrapResponse
+    func acknowledge(cursor: String, accessToken: String) async throws -> SyncAckResponse
+}
+
+actor APIClient: SyncTransport {
     private struct LoginRequest: Encodable {
         let email: String
         let password: String
@@ -70,6 +89,18 @@ actor APIClient {
         }
 
         let error: Body
+    }
+
+    private struct RefreshRequest: Encodable {
+        let refreshToken: String
+
+        enum CodingKeys: String, CodingKey {
+            case refreshToken = "refresh_token"
+        }
+    }
+
+    private struct AckRequest: Encodable {
+        let cursor: String
     }
 
     private let baseURL: URL
@@ -147,16 +178,132 @@ actor APIClient {
         }
     }
 
+    func refresh(refreshToken: String) async throws -> SessionTokenBundle {
+        try await send(
+            SessionTokenBundle.self,
+            path: "api/v1/auth/refresh",
+            method: "POST",
+            body: encoder.encode(RefreshRequest(refreshToken: refreshToken))
+        )
+    }
+
+    func push(
+        _ payload: SyncPushRequest,
+        accessToken: String
+    ) async throws -> SyncPushResponse {
+        try await send(
+            SyncPushResponse.self,
+            path: "api/v1/sync/push",
+            method: "POST",
+            accessToken: accessToken,
+            body: encoder.encode(payload),
+            maximumResponseBytes: 16_777_216
+        )
+    }
+
+    func pull(
+        cursor: String?,
+        limit: Int,
+        accessToken: String
+    ) async throws -> SyncPullResponse {
+        var query = [URLQueryItem(name: "limit", value: String(limit))]
+        if let cursor {
+            query.append(URLQueryItem(name: "cursor", value: cursor))
+        }
+        return try await send(
+            SyncPullResponse.self,
+            path: "api/v1/sync/pull",
+            method: "GET",
+            accessToken: accessToken,
+            queryItems: query,
+            maximumResponseBytes: 16_777_216
+        )
+    }
+
+    func bootstrap(
+        cursor: String?,
+        limit: Int,
+        accessToken: String
+    ) async throws -> SyncBootstrapResponse {
+        var query = [URLQueryItem(name: "limit", value: String(limit))]
+        if let cursor {
+            query.append(URLQueryItem(name: "bootstrap_cursor", value: cursor))
+        }
+        return try await send(
+            SyncBootstrapResponse.self,
+            path: "api/v1/sync/bootstrap",
+            method: "GET",
+            accessToken: accessToken,
+            queryItems: query,
+            maximumResponseBytes: 16_777_216
+        )
+    }
+
+    func acknowledge(cursor: String, accessToken: String) async throws -> SyncAckResponse {
+        try await send(
+            SyncAckResponse.self,
+            path: "api/v1/sync/ack",
+            method: "POST",
+            accessToken: accessToken,
+            body: encoder.encode(AckRequest(cursor: cursor))
+        )
+    }
+
     private func endpoint(_ path: String) -> URL {
         path.split(separator: "/").reduce(baseURL) { partial, component in
             partial.appending(path: String(component))
         }
     }
 
+    private func send<Value: Decodable>(
+        _ type: Value.Type,
+        path: String,
+        method: String,
+        accessToken: String? = nil,
+        queryItems: [URLQueryItem] = [],
+        body: Data? = nil,
+        maximumResponseBytes: Int = 1_048_576
+    ) async throws -> Value {
+        var components = URLComponents(
+            url: endpoint(path),
+            resolvingAgainstBaseURL: false
+        )
+        if !queryItems.isEmpty {
+            components?.queryItems = queryItems
+        }
+        guard let url = components?.url else {
+            throw APIClientError(
+                code: "invalid_request",
+                message: String(localized: "The request could not be completed."),
+                requestID: nil,
+                statusCode: nil
+            )
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = method
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue(UUID().uuidString.lowercased(), forHTTPHeaderField: "X-Request-ID")
+        if let accessToken {
+            request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        }
+        if let body {
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.httpBody = body
+        }
+        let (data, response) = try await session.data(for: request)
+        return try decode(
+            type,
+            from: data,
+            response: response,
+            maximumResponseBytes: maximumResponseBytes
+        )
+    }
+
     private func decode<Value: Decodable>(
         _ type: Value.Type,
         from data: Data,
-        response: URLResponse
+        response: URLResponse,
+        maximumResponseBytes: Int = 1_048_576
     ) throws -> Value {
         guard let http = response as? HTTPURLResponse else {
             throw APIClientError(
@@ -172,7 +319,7 @@ actor APIClient {
         guard (200 ..< 300).contains(http.statusCode) else {
             throw decodeError(from: data, response: http)
         }
-        guard data.count <= 1_048_576 else {
+        guard data.count <= maximumResponseBytes else {
             throw APIClientError(
                 code: "response_too_large",
                 message: String(localized: "The server response was unexpectedly large."),

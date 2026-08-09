@@ -3,6 +3,7 @@ import SwiftUI
 
 struct InsightsView: View {
     @Query private var transactions: [LedgerTransaction]
+    @Query private var trackers: [LocalTracker]
 
     init(scopeKey: String) {
         _transactions = Query(
@@ -12,10 +13,23 @@ struct InsightsView: View {
             sort: \LedgerTransaction.occurredAt,
             order: .reverse
         )
+        _trackers = Query(
+            filter: #Predicate {
+                $0.scopeKey == scopeKey &&
+                    $0.deletedAt == nil &&
+                    $0.accessRevokedAt == nil
+            },
+            sort: \LocalTracker.sortOrder
+        )
+    }
+
+    private var visibleTransactions: [LedgerTransaction] {
+        let trackerIDs = Set(trackers.map(\.id))
+        return transactions.filter { trackerIDs.contains($0.trackerID) }
     }
 
     private var merchantCounts: [(name: String, count: Int)] {
-        let expenses = transactions.filter { $0.kind == .expense }
+        let expenses = visibleTransactions.filter { $0.kind == .expense }
         let grouped = Dictionary(grouping: expenses) { transaction in
             transaction.merchant.isEmpty ? String(localized: "No merchant") : transaction.merchant
         }
@@ -28,10 +42,10 @@ struct InsightsView: View {
     var body: some View {
         List {
             Section {
-                LabeledContent("Locally available records", value: transactions.count, format: .number)
+                LabeledContent("Locally available records", value: visibleTransactions.count, format: .number)
                 LabeledContent(
                     "Pending records",
-                    value: transactions.filter { $0.syncState != .synced }.count,
+                    value: visibleTransactions.filter { $0.syncState != .synced }.count,
                     format: .number
                 )
             } header: {

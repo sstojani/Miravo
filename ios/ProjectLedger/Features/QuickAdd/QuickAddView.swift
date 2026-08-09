@@ -5,6 +5,8 @@ struct QuickAddView: View {
     let scopeKey: String
 
     @Environment(\.modelContext) private var modelContext
+    @EnvironmentObject private var session: SessionController
+    @EnvironmentObject private var sync: SyncController
     @Query private var trackers: [LocalTracker]
     @Query private var accounts: [LocalAccount]
     @Query private var categories: [LocalCategory]
@@ -23,7 +25,10 @@ struct QuickAddView: View {
         self.scopeKey = scopeKey
         _trackers = Query(
             filter: #Predicate {
-                $0.scopeKey == scopeKey && $0.deletedAt == nil && $0.archivedAt == nil
+                $0.scopeKey == scopeKey &&
+                    $0.deletedAt == nil &&
+                    $0.archivedAt == nil &&
+                    $0.accessRevokedAt == nil
             },
             sort: \LocalTracker.sortOrder
         )
@@ -183,6 +188,7 @@ struct QuickAddView: View {
             occurredAt = .now
             errorMessage = nil
             didSave = true
+            Task { await sync.synchronize(session: session) }
         } catch MoneyError.tooManyFractionDigits {
             errorMessage = String(localized: "Use no more fraction digits than this currency supports.")
         } catch {

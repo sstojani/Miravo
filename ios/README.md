@@ -2,7 +2,9 @@
 
 The source-of-truth project spec is `project.yml`; XcodeGen 2.46.0 generates `ProjectLedger.xcodeproj`. Minimum deployment is iOS 18.0. There are no app extensions or special entitlement dependencies.
 
-The checked-in Milestone 3 slice includes strict integer-minor-unit parsing, locally derived account balances, per-server/user SwiftData entities, atomic CRUD plus a monotonic outbox, onboarding, HTTPS login, device-only Keychain tokens, optional Face ID/passcode lock, quick add, transaction edit/tombstone/restore, local tracker/account/category management, diagnostics, and complete implemented-screen English/Albanian resources.
+The checked-in native slice includes strict integer-minor-unit parsing, locally derived account balances, compound per-server/user SwiftData identities, atomic CRUD plus a monotonic outbox, onboarding, HTTPS login, device-only Keychain tokens, optional Face ID/passcode lock, quick add, transaction edit/tombstone/restore, and local tracker/account/category management.
+
+The foreground synchronization actor keeps operation payloads/IDs stable, sends one queued command per entity per batch, rotates access credentials once on authorization failure, classifies permanent/transient failures, applies pull pages and cursors atomically, stages resumable bounded bootstrap pages, preserves pending local entities, pulls from the fixed bootstrap cursor, hides revoked tracker data, and persists structured field-review conflicts. Settings exposes counts, safe status, retry, and keep-server/keep-mine controls. Binary attachment transfer and optional WebSocket invalidation are not yet implemented.
 
 Release builds accept HTTPS only. Debug builds add an ATS local-network exception, while application policy still permits cleartext only for `localhost`, `127.0.0.1`, or `::1`. The Release plist has no such exception. The privacy manifest declares app-functionality collection for account-linked identity, financial/user content, device ID, and receipt media; tracking remains false.
 
@@ -15,7 +17,7 @@ ios/check-localizations.sh
 python3 ios/check-project-contract.py
 ```
 
-The Swift source and tests are **not yet compiled in this Linux environment**. Milestone 3’s final acceptance remains open until the GitHub macOS workflow generates the project and passes simulator unit/UI tests.
+The Swift source and tests are **not yet compiled in this Linux environment**. Native acceptance remains open until the GitHub macOS workflow generates the project and passes simulator unit/UI tests.
 
 On macOS:
 

@@ -94,11 +94,15 @@ def _require_version(
         raise OperationVersionMismatchError(expected, current, json_safe(proposed))
 
 
-def _tracker_values(payload: dict[str, Any]) -> dict[str, Any]:
-    return {
+def _tracker_values(payload: dict[str, Any], *, include_defaults: bool = False) -> dict[str, Any]:
+    values = {
         field: payload[field]
         for field in ("name", "description", "icon", "color", "base_currency", "sort_order")
     }
+    if include_defaults:
+        values["default_account_id"] = payload.get("default_account_id")
+        values["default_category_id"] = payload.get("default_category_id")
+    return values
 
 
 def _account_values(payload: dict[str, Any]) -> dict[str, Any]:
@@ -196,10 +200,34 @@ def _apply_tracker(operation: dict[str, Any], actor: User, request: Any) -> Trac
         proposed=payload,
     )
     if command == "update":
-        values = _tracker_values(payload)
+        values = _tracker_values(payload, include_defaults=True)
         if values["base_currency"] != tracker.base_currency and tracker.transactions.exists():
             raise serializers.ValidationError(
                 {"base_currency": "Base currency cannot change after transactions exist."}
+            )
+        account_id = values["default_account_id"]
+        if (
+            account_id is not None
+            and not Account.objects.filter(
+                id=account_id,
+                tracker=tracker,
+                deleted_at__isnull=True,
+            ).exists()
+        ):
+            raise serializers.ValidationError(
+                {"default_account_id": "Default account must belong to this tracker."}
+            )
+        category_id = values["default_category_id"]
+        if (
+            category_id is not None
+            and not Category.objects.filter(
+                id=category_id,
+                tracker=tracker,
+                deleted_at__isnull=True,
+            ).exists()
+        ):
+            raise serializers.ValidationError(
+                {"default_category_id": "Default category must belong to this tracker."}
             )
         for field, value in values.items():
             setattr(tracker, field, value)

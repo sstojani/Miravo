@@ -10,6 +10,13 @@ enum SessionPhase: Equatable {
     case locked
 }
 
+struct SyncAuthenticationContext: Sendable {
+    let scopeKey: String
+    let baseURL: URL
+    let tokens: SessionTokenBundle
+    let tokenStore: KeychainSessionTokenStore
+}
+
 @MainActor
 final class SessionController: ObservableObject {
     @Published private(set) var phase: SessionPhase = .loading
@@ -58,6 +65,22 @@ final class SessionController: ObservableObject {
     var configuredServerURL: String { preferences.serverURLString }
 
     var appLockEnabled: Bool { preferences.appLockEnabled }
+
+    func synchronizationContext() async throws -> SyncAuthenticationContext? {
+        guard phase == .authenticated,
+              let scopeKey,
+              let tokens = try await tokenStore.load(scopeKey: scopeKey)
+        else {
+            return nil
+        }
+        let baseURL = try ServerURLPolicy.validated(preferences.serverURLString)
+        return SyncAuthenticationContext(
+            scopeKey: scopeKey,
+            baseURL: baseURL,
+            tokens: tokens,
+            tokenStore: tokenStore
+        )
+    }
 
     func completeOnboarding() {
         preferences.hasCompletedOnboarding = true

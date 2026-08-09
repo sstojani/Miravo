@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from typing import Any, cast
 from uuid import UUID
 
@@ -27,6 +28,24 @@ from apps.ledger.serializers import (
 )
 from apps.sync.models import SyncChange
 from apps.users.models import User
+
+BOOTSTRAP_ENTITY_ORDER = (
+    ("trackers", SyncChange.EntityType.TRACKER),
+    ("memberships", SyncChange.EntityType.TRACKER_MEMBERSHIP),
+    ("accounts", SyncChange.EntityType.ACCOUNT),
+    ("categories", SyncChange.EntityType.CATEGORY),
+    ("tags", SyncChange.EntityType.TAG),
+    ("merchants", SyncChange.EntityType.MERCHANT),
+    ("transactions", SyncChange.EntityType.TRANSACTION),
+)
+
+
+@dataclass(frozen=True)
+class BootstrapPage:
+    data: dict[str, list[dict[str, Any]]]
+    next_entity_index: int
+    next_last_id: UUID | None
+    has_more: bool
 
 
 def json_safe(value: Any) -> Any:
@@ -95,6 +114,12 @@ def serialize_instance(
     instance = _load_instance(entity_type, entity_id)
     if instance is None:
         return None
+    return _serialize_loaded_instance(entity_type, instance, user)
+
+
+def _serialize_loaded_instance(
+    entity_type: str, instance: Any, user: User
+) -> dict[str, Any] | None:
     if entity_type == SyncChange.EntityType.TRACKER:
         data = dict(TrackerSerializer(instance).data)
         membership = active_tracker_ids(user).filter(tracker_id=instance.id).first()
@@ -156,60 +181,111 @@ def serialize_change(change: SyncChange, user: User) -> dict[str, Any]:
     }
 
 
-def bootstrap_data(user: User) -> dict[str, Any]:
-    trackers = list(
-        Tracker.objects.filter(
-            memberships__user=user,
-            memberships__state=TrackerMembership.State.ACTIVE,
-            memberships__deleted_at__isnull=True,
-            deleted_at__isnull=True,
+def _bootstrap_queryset(entity_type: str, *, user: User, tracker_ids: list[UUID]) -> QuerySet[Any]:  # noqa: PLR0911
+    if entity_type == SyncChange.EntityType.TRACKER:
+        return (
+            Tracker.objects.filter(
+                memberships__user=user,
+                memberships__state=TrackerMembership.State.ACTIVE,
+                memberships__deleted_at__isnull=True,
+                deleted_at__isnull=True,
+            )
+            .select_related("owner")
+            .distinct()
+            .order_by("id")
         )
-        .distinct()
-        .order_by("id")
+    if entity_type == SyncChange.EntityType.TRACKER_MEMBERSHIP:
+        return (
+            TrackerMembership.objects.filter(
+                tracker_id__in=tracker_ids,
+                state=TrackerMembership.State.ACTIVE,
+                deleted_at__isnull=True,
+            )
+            .select_related("user", "tracker")
+            .order_by("id")
+        )
+    if entity_type == SyncChange.EntityType.ACCOUNT:
+        return (
+            Account.objects.filter(tracker_id__in=tracker_ids, deleted_at__isnull=True)
+            .select_related("tracker")
+            .order_by("id")
+        )
+    if entity_type == SyncChange.EntityType.CATEGORY:
+        return (
+            Category.objects.filter(
+                Q(tracker_id__in=tracker_ids) | Q(tracker__isnull=True),
+                deleted_at__isnull=True,
+            )
+            .select_related("tracker", "parent")
+            .order_by("id")
+        )
+    if entity_type == SyncChange.EntityType.TAG:
+        return (
+            Tag.objects.filter(tracker_id__in=tracker_ids, deleted_at__isnull=True)
+            .select_related("tracker")
+            .order_by("id")
+        )
+    if entity_type == SyncChange.EntityType.MERCHANT:
+        return (
+            Merchant.objects.filter(tracker_id__in=tracker_ids, deleted_at__isnull=True)
+            .select_related("tracker", "default_category")
+            .order_by("id")
+        )
+    if entity_type == SyncChange.EntityType.TRANSACTION:
+        return (
+            Transaction.objects.filter(tracker_id__in=tracker_ids, deleted_at__isnull=True)
+            .select_related("tracker", "merchant", "creator", "last_editor", "refund_of")
+            .prefetch_related("movements", "allocations", "transaction_tags")
+            .order_by("id")
+        )
+    return Tracker.objects.none()
+
+
+def bootstrap_page(
+    *,
+    user: User,
+    entity_index: int,
+    last_id: UUID | None,
+    limit: int,
+) -> BootstrapPage:
+    tracker_ids = list(
+        active_tracker_ids(user)
+        .filter(tracker__deleted_at__isnull=True)
+        .values_list("tracker_id", flat=True)
     )
-    tracker_ids = [tracker.id for tracker in trackers]
-    memberships = TrackerMembership.objects.filter(
-        tracker_id__in=tracker_ids,
-        state=TrackerMembership.State.ACTIVE,
-        deleted_at__isnull=True,
-    ).order_by("id")
-    accounts = Account.objects.filter(tracker_id__in=tracker_ids, deleted_at__isnull=True).order_by(
-        "id"
+    data: dict[str, list[dict[str, Any]]] = {key: [] for key, _ in BOOTSTRAP_ENTITY_ORDER}
+    index = entity_index
+    position = last_id
+    remaining = limit
+    while index < len(BOOTSTRAP_ENTITY_ORDER) and remaining > 0:
+        key, entity_type = BOOTSTRAP_ENTITY_ORDER[index]
+        queryset = _bootstrap_queryset(entity_type, user=user, tracker_ids=tracker_ids)
+        if position is not None:
+            queryset = queryset.filter(id__gt=position)
+        rows = list(queryset[: remaining + 1])
+        if len(rows) > remaining:
+            selected = rows[:remaining]
+            for item in selected:
+                serialized = _serialize_loaded_instance(entity_type, item, user)
+                if serialized is not None:
+                    data[key].append(serialized)
+            return BootstrapPage(
+                data=data,
+                next_entity_index=index,
+                next_last_id=selected[-1].id,
+                has_more=True,
+            )
+        for item in rows:
+            serialized = _serialize_loaded_instance(entity_type, item, user)
+            if serialized is not None:
+                data[key].append(serialized)
+        remaining -= len(rows)
+        index += 1
+        position = None
+
+    return BootstrapPage(
+        data=data,
+        next_entity_index=index,
+        next_last_id=None,
+        has_more=index < len(BOOTSTRAP_ENTITY_ORDER),
     )
-    categories = Category.objects.filter(
-        Q(tracker_id__in=tracker_ids) | Q(tracker__isnull=True),
-        deleted_at__isnull=True,
-    ).order_by("id")
-    tags = Tag.objects.filter(tracker_id__in=tracker_ids, deleted_at__isnull=True).order_by("id")
-    merchants = Merchant.objects.filter(
-        tracker_id__in=tracker_ids, deleted_at__isnull=True
-    ).order_by("id")
-    transactions = (
-        Transaction.objects.filter(tracker_id__in=tracker_ids, deleted_at__isnull=True)
-        .select_related("tracker", "merchant", "creator", "last_editor", "refund_of")
-        .prefetch_related("movements", "allocations", "transaction_tags")
-        .order_by("id")
-    )
-    return {
-        "trackers": [
-            serialize_instance(SyncChange.EntityType.TRACKER, item.id, user) for item in trackers
-        ],
-        "memberships": [
-            serialize_instance(SyncChange.EntityType.TRACKER_MEMBERSHIP, item.id, user)
-            for item in memberships
-        ],
-        "accounts": [
-            serialize_instance(SyncChange.EntityType.ACCOUNT, item.id, user) for item in accounts
-        ],
-        "categories": [
-            serialize_instance(SyncChange.EntityType.CATEGORY, item.id, user) for item in categories
-        ],
-        "tags": [serialize_instance(SyncChange.EntityType.TAG, item.id, user) for item in tags],
-        "merchants": [
-            serialize_instance(SyncChange.EntityType.MERCHANT, item.id, user) for item in merchants
-        ],
-        "transactions": [
-            serialize_instance(SyncChange.EntityType.TRANSACTION, item.id, user)
-            for item in transactions
-        ],
-    }

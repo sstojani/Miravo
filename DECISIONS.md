@@ -95,3 +95,21 @@
 - **Decision:** Record a monotonic reference change row inside the same database transaction as every syncable root save. Pull renders the current authorized representation as an idempotent upsert/tombstone. Cursors are opaque signed payloads bound to the user UUID. Push replay receipts are unique per user and operation UUID, retain a SHA-256 request fingerprint plus the authorized response/conflict proposal, and expire after 120 days.
 - **Why:** Storing another full financial snapshot in each change row duplicates sensitive data and is unnecessary because domain revisions already preserve material history. User-scoped receipts survive a device re-login, while a changed fingerprint cannot overwrite the original operation. A signed cursor prevents cross-account reuse and tampering without making sequence values secret.
 - **Consequence:** A page may repeat the latest version for several historical events; clients treat changes as versioned upserts. Root-domain bulk updates must not bypass model saves/signals. Membership rows also target the affected user so removal reaches that device after ordinary tracker authorization has ended. A global 90-day retention floor may conservatively require bootstrap even when pruned rows were unrelated to one user. Receipt results are sensitive database records, never logs, and are pruned on schedule.
+
+## D-017 — Immutable attempted operations and sequential entity rebasing
+
+- **Decision:** Once an outbox operation is attempted, keep its UUID and encoded payload immutable. Send at most one queued operation per entity in a batch; after acceptance/duplicate, delete that operation and rebase the next same-entity command to the returned server version.
+- **Why:** If the server commits but the response is lost, changing or coalescing that operation before retry would reuse its UUID with another fingerprint and correctly trigger an idempotency conflict. Stable payloads make retries safe across crashes and token refresh.
+- **Consequence:** Several rapid edits to one entity may require several short pushes, while unrelated entities still batch together. Permanent validation/authorization failures and merge conflicts do not block siblings.
+
+## D-018 — Bounded snapshot cursor plus durable native staging
+
+- **Decision:** Bootstrap pages traverse entity types and UUIDs under a signed user-bound cursor carrying one fixed upper change sequence. The app stores pages under a generation ID, validates a constant target and core references, publishes in one SwiftData save, then immediately pulls from the fixed cursor.
+- **Why:** A one-response personal-history snapshot violates bounded-memory/network goals. Cross-request database snapshots are impractical over HTTP, but a fixed change-log cursor plus catch-up pull recovers concurrent inserts/edits/deletes without missing them.
+- **Consequence:** Failed pages or publication roll back without changing the visible store/cursor; saved staging pages resume. The current publication step still loads the staged snapshot for one atomic reconcile and must be performance-tested at 50,000 records on macOS before scale acceptance.
+
+## D-019 — Compound local identity and server-first initial provisioning
+
+- **Decision:** SwiftData identity for synchronized domain objects is the compound `(scopeKey, UUID)` using iOS 18 `#Unique`, not UUID alone. On a new scope, finish the server bootstrap before creating an Everyday/Cash/General default set; only provision defaults when that first authorized snapshot is empty.
+- **Why:** Two users on one phone can legitimately cache the same shared tracker UUID, and UUID-only uniqueness could merge their rows across security scopes. Provisioning defaults before bootstrap would create an unwanted duplicate tracker after reinstall.
+- **Consequence:** Sign-out continues to hide rather than erase scoped data. Compound-schema and first-provisioning behavior require the authored SwiftData tests to run on the macOS/iOS 18 toolchain before acceptance.

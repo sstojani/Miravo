@@ -12,7 +12,9 @@ enum LocalAccountType: String, Codable, CaseIterable, Sendable {
 
 @Model
 final class LocalAccount {
-    @Attribute(.unique) var id: UUID
+    #Unique<LocalAccount>([\.scopeKey, \.id])
+
+    var id: UUID
     var scopeKey: String
     var trackerID: UUID
     var name: String

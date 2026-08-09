@@ -2,7 +2,7 @@
 
 Last updated: 2026-08-09. A checked item is complete; its verification tier is recorded in `IMPLEMENT.md`. Items are not checked merely because scaffolding exists.
 
-Current focus: **Milestone 4 — Synchronization and collaboration transport (independent server work)**. Milestone 3 source/static checks are complete, while its macOS compile/test acceptance remains an explicit external check. PostgreSQL/Redis Docker and hosted CI verification are likewise not hidden claims.
+Current focus: **Milestone 4 — Synchronization and collaboration transport**. The server protocol and native foreground synchronization source are implemented at the locally verifiable tier. Attachment transfer and optional WebSocket invalidation remain open; all Swift/Xcode compile/runtime claims still require the macOS workflow. PostgreSQL/Redis Docker and hosted CI verification are likewise not hidden claims.
 
 ## Milestone 0 — Discovery and durable project plan
 
@@ -51,12 +51,13 @@ Acceptance: a clean clone starts the development stack, creates an owner, authen
 
 - [x] Server change log, signed user-bound cursors, push/pull/ack/bootstrap, 90-day retention, tombstones, and cleanup task.
 - [x] Prove ordered dependent pushes, per-operation transactions, replay safety, mismatched fingerprints, partial rejection, authorization revocation, paging, cursor expiry, and bootstrap in backend tests.
-- [ ] iOS bootstrap staging/reconciliation that preserves unsent mutations.
-- [ ] iOS atomic outbox, ordered batching, retry/backoff, pull paging, attachment queue scaffold, and diagnostics.
-- [ ] Structured conflicts and keep-server/keep-mine/review flows.
+- [x] iOS bounded bootstrap staging/reconciliation that preserves unsent mutations and pulls changes after the fixed bootstrap cursor.
+- [x] iOS atomic outbox, stable ordered batching, token refresh, retry/backoff, atomic pull paging, and diagnostics.
+- [x] Structured conflicts and keep-server/keep-mine/field-review flows.
+- [ ] Separate checksum/idempotency attachment upload queue scaffold.
 - [ ] Foreground WebSocket invalidation that is optional for correctness.
 
-Server-slice acceptance: an authenticated device can push an ordered offline tracker/account/category/transaction batch; retrying the same operation never creates another financial record; changing a reused operation fingerprint conflicts; one rejected operation does not roll back accepted siblings; pulls are bounded and authorization-filtered; membership removal reaches the removed user without leaking later tracker changes; tombstones and current server representations carry versions; an expired cursor requires bootstrap; and acknowledgements are bound to the authenticated device session.
+Current acceptance: an authenticated device can push an ordered offline tracker/account/category/transaction batch; retrying the same operation never creates another financial record; changing a reused operation fingerprint conflicts; one rejected operation does not roll back accepted siblings; pulls and bootstrap are bounded and authorization-filtered; membership removal reaches the removed user and hides cached tracker data; tombstones/current representations carry versions; an expired cursor resumes a staged bootstrap without replacing the prior store or pending outbox; and acknowledgements are bound to the authenticated device session. Backend behavior is passing locally. Native behavior has deterministic tests authored but remains uncompiled until macOS CI.
 
 ## Milestone 5 — Complete core app experience
 

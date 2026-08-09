@@ -57,7 +57,9 @@ enum LocalSyncState: String, Codable, Sendable {
 
 @Model
 final class LedgerTransaction {
-    @Attribute(.unique) var id: UUID
+    #Unique<LedgerTransaction>([\.scopeKey, \.id])
+
+    var id: UUID
     var scopeKey: String
     var trackerID: UUID
     var accountID: UUID
@@ -71,9 +73,17 @@ final class LedgerTransaction {
     var destinationAmountMinor: Int64?
     var currencyCode: String
     var currencyExponent: Int
+    var baseAmountMinor: Int64
+    var baseCurrencyCode: String
+    var rateSnapshot: String
+    var rateSource: String
+    var rateEffectiveAt: Date
     var merchant: String
     var note: String
     var occurredAt: Date
+    var capturedAt: Date
+    var externalEventID: UUID?
+    var refundOfID: UUID?
     var syncStateRaw: String
     var serverVersion: Int64?
     var createdAt: Date
@@ -113,9 +123,15 @@ final class LedgerTransaction {
         self.destinationAmountMinor = destinationAmountMinor
         currencyCode = money.currencyCode
         currencyExponent = money.exponent
+        baseAmountMinor = money.minorUnits
+        baseCurrencyCode = money.currencyCode
+        rateSnapshot = "1"
+        rateSource = "identity"
+        rateEffectiveAt = occurredAt
         self.merchant = merchant
         self.note = note
         self.occurredAt = occurredAt
+        capturedAt = createdAt
         syncStateRaw = syncState.rawValue
         self.createdAt = createdAt
         updatedAt = createdAt

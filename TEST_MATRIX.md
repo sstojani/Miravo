@@ -13,15 +13,15 @@ Status values: `planned`, `implemented`, `passing-local`, `passing-docker`, `pas
 | Permissions | Owner/admin/editor/viewer object boundaries | `test_tracker_api.py` role matrix/invites/ownership | Two-user device flow | passing-local |
 | Money | ISO code/exponent and integer minor-unit validation | `test_currency.py`, transaction serializer tests | Locale UI checks | passing-local |
 | iOS money input | Strict ASCII digits, locale decimal separator, precision/overflow/currency-lookalike rejection | `MoneyTests.swift` (authored) | Albanian/English keypad on device | implemented |
-| iOS local ledger | Scoped default data and create/edit/tombstone/restore commit with a payload and ordered outbox | `LocalLedgerRepositoryTests.swift` (authored) | Airplane-mode quick add/relaunch | implemented |
+| iOS local ledger | Compound server/user-scoped identity; create/edit/tombstone/restore commits entity, movements/allocations, strict snake-case payload, and ordered outbox | `LocalLedgerRepositoryTests.swift` (authored) | Airplane-mode quick add/relaunch | implemented |
 | iOS balances | Opening balance plus posted local movements; deleted/void/draft/pending exclusion | `LocalBalanceCalculatorTests.swift` (authored) | Compare Overview/account values | implemented |
 | iOS session security | HTTPS/release policy, loopback-only debug HTTP, JWT scope, Keychain round-trip, preference isolation | `ServerURLPolicyTests.swift`, `KeychainSessionTokenStoreTests.swift`, `AppPreferencesTests.swift` (authored) | Face ID/passcode and expired-token checks | implemented |
 | iOS store failure | Persistent store is never automatically replaced; blocking recovery state uses only temporary memory | source contract; macOS failure-injection test pending | Preserve a device container and recover | implemented |
 | Accounts | Derived balances, transfer links, cross-currency snapshots | `test_ledger_transactions.py` | Compare ledger totals | passing-local |
 | Transactions | Refund/void/allocation/audit/tombstone/revision semantics | `test_ledger_transactions.py`, `test_taxonomy_and_audit.py` | Offline quick-add scenario | passing-local |
-| Sync server | Ordered per-operation push, replay/fingerprint safety, signed user-bound cursor, paging/tombstone/bootstrap/ack, retention, revocation filtering | `test_sync.py` (8 tests) | Docker/PostgreSQL concurrency smoke test | passing-local |
-| Sync iOS | Atomic outbox, coalescing of never-synced edits, retry, paged atomic apply, bootstrap staging | Milestone 4 Swift tests | Airplane-mode/reinstall scenarios | planned |
-| Conflict | Server preserves current state and local proposal while siblings progress; client review decisions remain | `test_sync.py` stale edit/receipt test | Two-client review screen | implemented |
+| Sync server | Ordered per-operation push, replay/fingerprint safety, signed user-bound cursor, paging/tombstone/paginated-bootstrap/ack, retention, revocation filtering | `test_sync.py` (9 tests) | Docker/PostgreSQL concurrency smoke test | passing-local |
+| Sync iOS | Stable operation IDs, one same-entity operation per batch, sequential rebase, retry/backoff, atomic pull/cursor rollback, resumable staging, post-bootstrap pull, token rotation | `LedgerSyncActorTests.swift`, `SyncWireModelsTests.swift` (authored) | Airplane-mode/reinstall scenarios | implemented |
+| Conflict | Server preserves current state/local proposal while siblings progress; client stores field review and can keep server or resubmit mine with a new operation ID | `test_sync.py`, `LedgerSyncActorTests.swift` (authored) | Two-client review screen | implemented |
 | Shortcut | Scopes, hash, expiry, revoke, throttle, replay, fingerprint conflict | Milestone 6 API tests | Online/queue repeated flush | planned |
 | Budgets | Posted expense only, periods/rollover/history/offline | Milestone 7 backend+iOS tests | Month boundary UI | planned |
 | Recurrence | Month-end/leap/DST/pause/skip/edit/catch-up idempotency | Milestone 7 scheduler tests | Simulated downtime | planned |
@@ -31,7 +31,7 @@ Status values: `planned`, `implemented`, `passing-local`, `passing-docker`, `pas
 | Currency | Manual snapshots are required and immutable; provider abstraction/report caveats remain | `test_currency.py`, cross-currency API tests | Partially unconverted report | implemented |
 | Analytics | Offline/server totals consistent; transfers/voids excluded | Milestone 9 golden data tests | 50k record check | planned |
 | Exports | UTF-8 CSV, PDF/full portability, authorized expiry/audit | Milestone 9 report tests | UI total comparison | planned |
-| Localization | Every implemented user string exists in English and Albanian | `check-localizations.sh` and 168-key coverage/format check | Native-speaker review | passing-local |
+| Localization | Every implemented user string exists in English and Albanian | `check-localizations.sh` and 199-key coverage/format check | Native-speaker review | passing-local |
 | iOS privacy/transport | Release has HTTPS-only ATS, Debug loopback exception, CA92.1, accurate linked-data/no-tracking declaration | `check-project-contract.py` | Inspect generated Xcode privacy report | passing-local |
 | Accessibility | Dynamic Type, VoiceOver labels, contrast/reduced motion, touch targets | Milestone 5 tests/audit | Physical-device audit | planned |
 | Backup | DB/media/config manifest, checksum, encryption, retention, isolated restore | Milestone 10 restore CI/script | Disaster-recovery drill | planned |

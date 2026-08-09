@@ -29,6 +29,8 @@ class TrackerMutationPayloadSerializer(StrictSerializer):
     base_currency = serializers.CharField(min_length=3, max_length=3)
     base_currency_exponent = serializers.IntegerField(min_value=0, max_value=6)
     sort_order = serializers.IntegerField(min_value=0)
+    default_account_id = serializers.UUIDField(required=False, allow_null=True)
+    default_category_id = serializers.UUIDField(required=False, allow_null=True)
     archived_at = serializers.DateTimeField(required=False, allow_null=True)
     deleted_at = serializers.DateTimeField(required=False, allow_null=True)
 
@@ -200,6 +202,16 @@ class SyncPullQuerySerializer(StrictSerializer):
     )
 
 
+class SyncBootstrapQuerySerializer(StrictSerializer):
+    bootstrap_cursor = serializers.CharField(max_length=1024, required=False, allow_blank=True)
+    limit = serializers.IntegerField(
+        min_value=1,
+        max_value=settings.SYNC_MAX_PULL_LIMIT,
+        required=False,
+        default=settings.SYNC_DEFAULT_PULL_LIMIT,
+    )
+
+
 class SyncAckSerializer(StrictSerializer):
     cursor = serializers.CharField(max_length=1024)
 
@@ -244,6 +256,8 @@ class SyncBootstrapResponseSerializer(serializers.Serializer[dict[str, Any]]):
     protocol_version = serializers.IntegerField()
     generated_at = serializers.DateTimeField()
     cursor = serializers.CharField()
+    bootstrap_cursor = serializers.CharField(required=False, allow_null=True)
+    has_more = serializers.BooleanField()
     data = serializers.JSONField()  # type: ignore[assignment]
 
 

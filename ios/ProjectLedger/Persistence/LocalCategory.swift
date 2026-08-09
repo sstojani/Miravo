@@ -8,7 +8,9 @@ enum LocalCategoryKind: String, Codable, CaseIterable, Sendable {
 
 @Model
 final class LocalCategory {
-    @Attribute(.unique) var id: UUID
+    #Unique<LocalCategory>([\.scopeKey, \.id])
+
+    var id: UUID
     var scopeKey: String
     var trackerID: UUID
     var parentID: UUID?

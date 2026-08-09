@@ -2,7 +2,7 @@
 
 Project Ledger is an original, self-hosted, offline-first iPhone expense tracker. The native SwiftUI app writes to its local database immediately; a Django API on an Ubuntu server provides durable synchronization, collaboration, private receipt storage, scheduled work, and exports.
 
-> Status: Milestones 0–2 and the Milestone 4 server synchronization slice pass their local Linux gates. The Milestone 3 native source, tests, privacy/transport contract, and CI workflow are implemented and pass Linux static checks, but Swift compilation still requires the hosted macOS workflow. Docker/hosted-macOS workflows have not run, nothing has been deployed, and no IPA has been signed or tested on a physical iPhone.
+> Status: Milestones 0–2 and the Milestone 4 server synchronization protocol pass their local Linux gates. Native local-first and foreground sync source/tests—including outbox replay, bounded pull/bootstrap staging, conflicts, diagnostics, and access revocation—are implemented and pass Linux static checks, but Swift compilation still requires hosted macOS. Attachment transfer and optional WebSocket invalidation remain open. Docker/hosted-macOS workflows have not run, nothing has been deployed, and no IPA has been signed or tested on a physical iPhone.
 
 ## Repository map
 

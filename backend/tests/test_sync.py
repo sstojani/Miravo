@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from copy import deepcopy
-from datetime import timedelta
+from datetime import date, timedelta
 from uuid import UUID, uuid4
 
 import pytest
@@ -28,6 +28,8 @@ def _tracker_payload(entity_id: UUID, name: str = "Offline tracker") -> dict[str
         "base_currency": "ALL",
         "base_currency_exponent": 2,
         "sort_order": 0,
+        "default_account_id": None,
+        "default_category_id": None,
         "archived_at": None,
         "deleted_at": None,
     }
@@ -181,6 +183,18 @@ def test_ordered_offline_batch_is_replay_safe_and_preserves_client_ids(
         ),
         _operation(
             sequence=4,
+            entity_type="tracker",
+            entity_id=tracker_id,
+            payload={
+                **_tracker_payload(tracker_id),
+                "default_account_id": str(account_id),
+                "default_category_id": str(category_id),
+            },
+            command="update",
+            base_version=1,
+        ),
+        _operation(
+            sequence=5,
             entity_type="transaction",
             entity_id=transaction_id,
             payload=_transaction_payload(transaction_id, tracker_id, account_id, category_id),
@@ -189,8 +203,10 @@ def test_ordered_offline_batch_is_replay_safe_and_preserves_client_ids(
 
     first = _push(client, operations)
     assert first.status_code == 200, first.data
-    assert [item["status"] for item in first.data["results"]] == ["accepted"] * 4
-    assert Tracker.objects.filter(id=tracker_id).exists()
+    assert [item["status"] for item in first.data["results"]] == ["accepted"] * 5
+    tracker = Tracker.objects.get(id=tracker_id)
+    assert tracker.default_account_id == account_id
+    assert tracker.default_category_id == category_id
     assert Account.objects.filter(id=account_id).exists()
     assert Category.objects.filter(id=category_id).exists()
     record = Transaction.objects.get(id=transaction_id)
@@ -199,9 +215,9 @@ def test_ordered_offline_batch_is_replay_safe_and_preserves_client_ids(
 
     replay = _push(client, operations)
     assert replay.status_code == 200
-    assert [item["status"] for item in replay.data["results"]] == ["duplicate"] * 4
+    assert [item["status"] for item in replay.data["results"]] == ["duplicate"] * 5
     assert Transaction.objects.filter(id=transaction_id).count() == 1
-    assert SyncOperationReceipt.objects.filter(user=user).count() == 4
+    assert SyncOperationReceipt.objects.filter(user=user).count() == 5
 
     changed = deepcopy(operations[-1])
     changed["payload"]["merchant"] = "Changed replay"  # type: ignore[index]
@@ -348,6 +364,7 @@ def test_pull_pages_tombstones_ack_and_user_bound_cursor(
     bootstrap = client.get("/api/v1/sync/bootstrap")
     assert bootstrap.status_code == 200, bootstrap.data
     assert bootstrap.data["data"]["trackers"][0]["id"] == tracker["id"]
+    assert bootstrap.data["data"]["trackers"][0]["base_currency_exponent"] == 2
     cursor = bootstrap.data["cursor"]
 
     account = _create_rest_account(client, tracker["id"])
@@ -433,6 +450,75 @@ def test_expired_cursor_requires_bootstrap(
     assert expired.status_code == 410
     assert expired.data["error"]["code"] == "sync_cursor_expired"
     assert client.get("/api/v1/sync/bootstrap").status_code == 200
+
+
+def test_bootstrap_is_bounded_resumable_and_user_bound(
+    user: User,
+    client_for_user: Callable[[User, str], APIClient],
+) -> None:
+    client = client_for_user(user, "Valid-Test-Password-8274!")
+    tracker = _create_rest_tracker(client)
+    tracker_id = UUID(str(tracker["id"]))
+    expected_account_ids = {uuid4() for _ in range(60)}
+    Account.objects.bulk_create(
+        [
+            Account(
+                id=account_id,
+                tracker_id=tracker_id,
+                name=f"Bulk {index:03d}",
+                normalized_name=f"bulk {index:03d}",
+                type=Account.Type.CASH,
+                currency="ALL",
+                currency_exponent=2,
+                opening_balance_minor=0,
+                opening_date=date(2026, 8, 1),
+            )
+            for index, account_id in enumerate(expected_account_ids)
+        ]
+    )
+
+    bootstrap_cursor: str | None = None
+    final_cursor: str | None = None
+    observed_account_ids: set[UUID] = set()
+    first_bootstrap_cursor: str | None = None
+    page_count = 0
+    while True:
+        parameters: dict[str, object] = {"limit": 10}
+        if bootstrap_cursor:
+            parameters["bootstrap_cursor"] = bootstrap_cursor
+        response = client.get("/api/v1/sync/bootstrap", parameters)
+        assert response.status_code == 200, response.data
+        page_count += 1
+        page_size = sum(len(items) for items in response.data["data"].values())
+        assert page_size <= 10
+        observed_account_ids.update(
+            UUID(str(item["id"])) for item in response.data["data"]["accounts"]
+        )
+        if final_cursor is None:
+            final_cursor = response.data["cursor"]
+        else:
+            assert response.data["cursor"] == final_cursor
+        bootstrap_cursor = response.data["bootstrap_cursor"]
+        if first_bootstrap_cursor is None:
+            first_bootstrap_cursor = bootstrap_cursor
+        if not response.data["has_more"]:
+            assert bootstrap_cursor is None
+            break
+    assert page_count > 1
+    assert observed_account_ids == expected_account_ids
+
+    other = User.objects.create_user(
+        email="bootstrap-other@example.test",
+        password="Bootstrap-Other-Password-8274!",
+    )
+    other_client = client_for_user(other, "Bootstrap-Other-Password-8274!")
+    assert first_bootstrap_cursor is not None
+    invalid = other_client.get(
+        "/api/v1/sync/bootstrap",
+        {"bootstrap_cursor": first_bootstrap_cursor, "limit": 10},
+    )
+    assert invalid.status_code == 400
+    assert invalid.data["error"]["code"] == "invalid_bootstrap_cursor"
 
 
 def test_removed_member_receives_revocation_but_no_later_tracker_changes(

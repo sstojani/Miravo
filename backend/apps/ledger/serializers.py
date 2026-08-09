@@ -31,6 +31,7 @@ from apps.ledger.services.transactions import account_balance_minor
 class TrackerSerializer(StrictModelSerializer):
     owner_id = serializers.UUIDField(read_only=True)
     role = serializers.SerializerMethodField()
+    base_currency_exponent = serializers.SerializerMethodField()
     default_account_id = serializers.UUIDField(required=False, allow_null=True)
     default_category_id = serializers.UUIDField(required=False, allow_null=True)
 
@@ -45,6 +46,7 @@ class TrackerSerializer(StrictModelSerializer):
             "icon",
             "color",
             "base_currency",
+            "base_currency_exponent",
             "sort_order",
             "default_account_id",
             "default_category_id",
@@ -53,7 +55,15 @@ class TrackerSerializer(StrictModelSerializer):
             "created_at",
             "updated_at",
         )
-        read_only_fields = ("id", "owner_id", "archived_at", "version", "created_at", "updated_at")
+        read_only_fields = (
+            "id",
+            "owner_id",
+            "base_currency_exponent",
+            "archived_at",
+            "version",
+            "created_at",
+            "updated_at",
+        )
 
     def get_role(self, obj: Tracker) -> str | None:
         request = self.context.get("request")
@@ -66,6 +76,9 @@ class TrackerSerializer(StrictModelSerializer):
             deleted_at__isnull=True,
         ).first()
         return membership.role if membership else None
+
+    def get_base_currency_exponent(self, obj: Tracker) -> int:
+        return currency_exponent(obj.base_currency)
 
     def validate_base_currency(self, value: str) -> str:
         return normalize_currency(value)

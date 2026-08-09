@@ -12,7 +12,7 @@ Open Quick Add, choose expense or income, and enter the amount. Tracker, account
 
 ## Sync status
 
-Pending currently means stored locally and durably queued. Settings shows pending/failed counts. Active push/pull, manual retry, last-success timestamps, conflicts, and device-session management are Milestone 4 work and are labeled as such in the UI.
+Pending means stored locally and durably queued. Foreground synchronization pushes stable operations, pulls bounded pages, and resumes a staged full download when a cursor is too old. Settings shows pending/failed/conflict counts, last success, safe status codes, manual synchronization/retry, and a field-by-field conflict review with “keep server” or “keep mine” decisions. Device-session management and attachment transfer remain later screens.
 
 ## Shared trackers
 

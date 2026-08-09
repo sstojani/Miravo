@@ -10,22 +10,28 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.sync.cursors import (
+    BootstrapCursorState,
     ExpiredSyncCursor,
+    InvalidBootstrapCursor,
     InvalidSyncCursor,
+    decode_bootstrap_cursor,
     decode_cursor,
+    encode_bootstrap_cursor,
     encode_cursor,
 )
 from apps.sync.models import SyncDeviceState, SyncRetentionState
 from apps.sync.operations import process_operation
 from apps.sync.presenters import (
+    BOOTSTRAP_ENTITY_ORDER,
     authorized_changes,
-    bootstrap_data,
+    bootstrap_page,
     current_max_sequence,
     serialize_change,
 )
 from apps.sync.serializers import (
     SyncAckResponseSerializer,
     SyncAckSerializer,
+    SyncBootstrapQuerySerializer,
     SyncBootstrapResponseSerializer,
     SyncPullQuerySerializer,
     SyncPullResponseSerializer,
@@ -112,18 +118,51 @@ class SyncPullView(APIView):
 
 
 class SyncBootstrapView(APIView):
-    @extend_schema(responses=SyncBootstrapResponseSerializer)
+    @extend_schema(
+        parameters=[SyncBootstrapQuerySerializer], responses=SyncBootstrapResponseSerializer
+    )
     @transaction.atomic
     def get(self, request: Request) -> Response:
+        serializer = SyncBootstrapQuerySerializer(data=request.query_params)
+        serializer.is_valid(raise_exception=True)
         actor = _user(request)
-        upper_sequence = current_max_sequence()
-        data = bootstrap_data(actor)
+        supplied_cursor = serializer.validated_data.get("bootstrap_cursor")
+        if supplied_cursor:
+            state = decode_bootstrap_cursor(user=actor, cursor=supplied_cursor)
+            if state.entity_index > len(BOOTSTRAP_ENTITY_ORDER):
+                raise InvalidBootstrapCursor()
+            if state.upper_sequence > current_max_sequence():
+                raise InvalidBootstrapCursor("The bootstrap cursor is ahead of server history.")
+        else:
+            state = BootstrapCursorState(
+                upper_sequence=current_max_sequence(),
+                entity_index=0,
+                last_id=None,
+            )
+        page = bootstrap_page(
+            user=actor,
+            entity_index=state.entity_index,
+            last_id=state.last_id,
+            limit=serializer.validated_data["limit"],
+        )
+        next_bootstrap_cursor = None
+        if page.has_more:
+            next_bootstrap_cursor = encode_bootstrap_cursor(
+                user=actor,
+                state=BootstrapCursorState(
+                    upper_sequence=state.upper_sequence,
+                    entity_index=page.next_entity_index,
+                    last_id=page.next_last_id,
+                ),
+            )
         return Response(
             {
                 "protocol_version": 1,
                 "generated_at": timezone.now(),
-                "cursor": encode_cursor(user=actor, sequence=upper_sequence),
-                "data": data,
+                "cursor": encode_cursor(user=actor, sequence=state.upper_sequence),
+                "bootstrap_cursor": next_bootstrap_cursor,
+                "has_more": page.has_more,
+                "data": page.data,
             }
         )
 
