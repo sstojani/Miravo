@@ -47,8 +47,9 @@ The native transaction cache additionally retains source/destination account IDs
 | Budget | Tracker, tracker/category scope, monthly/weekly/custom civil-date rule, positive amount/currency/exponent, IANA time-zone snapshot, rollover, archive/tombstone/version, creator/editor |
 | BudgetCategory | Selected expense category plus immutable name/version snapshots; unique per budget |
 | BudgetThreshold | Unique integer alert/progress percentage from 1 through 1000 |
-| RecurringRule | Template, cadence/time zone, next due, pause/end and subscription fields |
-| RecurringOccurrence | Unique deterministic `(rule, due date)` key, state, transaction link |
+| RecurringRule | Tracker-owned expense/income template; amount/account/category and explicit conversion; civil dates/local time/IANA zone; original month/day anchors; daily/weekly/monthly/yearly/constrained custom cadence; next due; active/paused/ended; subscription provider/trial/HTTPS cancellation fields; archive/tombstone/version/creator/editor |
+| RecurringOccurrence | Tracker/rule, SHA-256 `(rule UUID, due civil date)` key, scheduled UTC instant, source rule version, posted/skipped/failed state, deterministic linked transaction, safe failure code |
+| RecurringRuleRevision | Explicit prior financial/schedule/subscription fields keyed by unique rule version and editor |
 | InstallmentPlan | Terms, currency, deterministic schedule config, revision/state |
 | InstallmentScheduleItem | Planned due date and principal/interest/fee components |
 | InstallmentPayment | Plan/item, linked posted transaction, amount, extra-payment flag |
@@ -64,6 +65,8 @@ The native transaction cache additionally retains source/destination account IDs
 | ExportJob | Requester/filter/format/state/private key/expiry/safe error |
 
 Budget child rows belong to the budget synchronization aggregate. Historical category labels come from the snapshots, not a mutable current category name. Progress maps the budget's civil-date boundaries through its stored time zone to a half-open UTC window, counts only posted expenses, and uses only identity conversion or a transaction's stored historical base snapshot. Missing rates produce explicit partial results. Rollover is the signed sum of prior `budget amount - converted spending`; any incomplete prior period makes the carry unknown rather than zero. Custom ranges never roll over, and traversal is configuration-bounded.
+
+Recurring month/year generation clamps with the original anchor rather than chaining a shortened date. Occurrence and transaction identities are deterministic per rule/due date. Worker retry, task overlap, and downtime catch-up therefore converge on one posted transaction. An edit snapshots the prior template and affects only future due dates. Server-produced occurrences are read-only to clients; rules accept versioned offline commands.
 
 ## Required constraints
 

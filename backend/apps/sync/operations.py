@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from typing import Any, cast
 from uuid import UUID
@@ -33,8 +33,13 @@ from apps.ledger.services.transactions import (
     restore_transaction,
     tombstone_transaction,
 )
-from apps.planning.models import Budget
-from apps.planning.serializers import BudgetSerializer
+from apps.planning.models import Budget, RecurringOccurrence, RecurringRule
+from apps.planning.serializers import BudgetSerializer, RecurringRuleSerializer
+from apps.planning.services.recurrence import (
+    advance_rule_after_due,
+    occurrence_key,
+    snapshot_recurring_rule,
+)
 from apps.sync.models import SyncChange, SyncOperationReceipt
 from apps.sync.presenters import json_safe, serialize_instance
 from apps.users.models import DeviceSession, User
@@ -50,7 +55,7 @@ class OperationVersionMismatchError(Exception):
 def _canonical(value: Any) -> Any:
     if isinstance(value, UUID):
         return str(value)
-    if isinstance(value, (datetime, date)):
+    if isinstance(value, (datetime, date, time)):
         return value.isoformat()
     if isinstance(value, Decimal):
         return str(value)
@@ -153,6 +158,42 @@ def _budget_values(payload: dict[str, Any]) -> dict[str, Any]:
             "rollover",
             "category_ids",
             "threshold_percentages",
+        )
+    }
+
+
+def _recurring_rule_values(payload: dict[str, Any]) -> dict[str, Any]:
+    return {
+        field: payload.get(field)
+        for field in (
+            "tracker_id",
+            "name",
+            "kind",
+            "is_subscription",
+            "amount_minor",
+            "currency",
+            "account_id",
+            "account_amount_minor",
+            "category_id",
+            "merchant",
+            "note",
+            "base_amount_minor",
+            "base_currency",
+            "rate_snapshot",
+            "rate_source",
+            "rate_effective_at",
+            "cadence",
+            "custom_interval_unit",
+            "custom_interval_count",
+            "time_zone",
+            "starts_on",
+            "ends_on",
+            "local_time",
+            "next_due_on",
+            "subscription_provider",
+            "trial_ends_on",
+            "cancellation_url",
+            "subscription_note",
         )
     }
 
@@ -578,6 +619,182 @@ def _apply_budget(operation: dict[str, Any], actor: User, request: Any) -> Budge
     return budget
 
 
+def _create_recurring_rule(
+    entity_id: UUID, payload: dict[str, Any], actor: User, request: Any
+) -> RecurringRule:
+    _ensure_available(RecurringRule, entity_id)
+    tracker = Tracker.objects.get(id=payload["tracker_id"], deleted_at__isnull=True)
+    require_tracker_role(actor, tracker, TrackerMembership.Role.EDITOR)
+    serializer = RecurringRuleSerializer(data=_recurring_rule_values(payload))
+    serializer.is_valid(raise_exception=True)
+    rule = cast(
+        RecurringRule,
+        serializer.save(id=entity_id, created_by=actor, last_editor=actor),
+    )
+    _audit(actor=actor, instance=rule, action="recurring.rule_created", request=request)
+    return rule
+
+
+def _update_recurring_rule(
+    rule: RecurringRule, payload: dict[str, Any], actor: User, request: Any
+) -> RecurringRule:
+    if rule.state == RecurringRule.State.ENDED:
+        raise serializers.ValidationError({"state": "An ended rule cannot be edited."})
+    serializer = RecurringRuleSerializer(rule, data=_recurring_rule_values(payload))
+    serializer.is_valid(raise_exception=True)
+    snapshot_recurring_rule(rule, editor=actor, reason="edit_future")
+    updated = cast(
+        RecurringRule,
+        serializer.save(version=rule.version + 1, last_editor=actor),
+    )
+    _audit(actor=actor, instance=updated, action="recurring.rule_updated", request=request)
+    return updated
+
+
+def _archive_recurring_rule(rule: RecurringRule, actor: User, request: Any) -> RecurringRule:
+    if rule.archived_at is None:
+        rule.archived_at = timezone.now()
+        rule.last_editor = actor
+        rule.version += 1
+        rule.save(update_fields=("archived_at", "last_editor", "version", "updated_at"))
+        _audit(actor=actor, instance=rule, action="recurring.rule_archived", request=request)
+    return rule
+
+
+def _restore_recurring_rule(rule: RecurringRule, actor: User, request: Any) -> RecurringRule:
+    update_fields: list[str] = []
+    if rule.archived_at is not None:
+        rule.archived_at = None
+        update_fields.append("archived_at")
+    if rule.deleted_at is not None:
+        rule.deleted_at = None
+        rule.state = RecurringRule.State.PAUSED
+        rule.paused_at = timezone.now()
+        rule.ended_at = None
+        update_fields.extend(("deleted_at", "state", "paused_at", "ended_at"))
+    if update_fields:
+        rule.version += 1
+        rule.last_editor = actor
+        rule.save(update_fields=(*update_fields, "version", "last_editor", "updated_at"))
+        _audit(actor=actor, instance=rule, action="recurring.rule_restored", request=request)
+    return rule
+
+
+def _delete_recurring_rule(rule: RecurringRule, actor: User, request: Any) -> RecurringRule:
+    if rule.deleted_at is not None:
+        return rule
+    now = timezone.now()
+    rule.deleted_at = now
+    rule.archived_at = now
+    rule.state = RecurringRule.State.ENDED
+    rule.paused_at = None
+    rule.ended_at = now
+    rule.last_editor = actor
+    rule.version += 1
+    rule.save()
+    _audit(actor=actor, instance=rule, action="recurring.rule_deleted", request=request)
+    return rule
+
+
+def _transition_recurring_rule(
+    rule: RecurringRule, command: str, actor: User, request: Any
+) -> RecurringRule:
+    if rule.deleted_at is not None or rule.archived_at is not None:
+        raise serializers.ValidationError({"state": "The recurring rule is unavailable."})
+    if rule.state == RecurringRule.State.ENDED:
+        raise serializers.ValidationError({"state": "An ended rule cannot change state."})
+    now = timezone.now()
+    if command == "pause":
+        rule.state = RecurringRule.State.PAUSED
+        rule.paused_at = now
+    elif command == "resume":
+        if rule.state != RecurringRule.State.PAUSED:
+            raise serializers.ValidationError({"state": "Only a paused rule can be resumed."})
+        rule.state = RecurringRule.State.ACTIVE
+        rule.paused_at = None
+    else:
+        rule.state = RecurringRule.State.ENDED
+        rule.paused_at = None
+        rule.ended_at = now
+    rule.version += 1
+    rule.last_editor = actor
+    rule.save()
+    action_name = {
+        "pause": "recurring.rule_paused",
+        "resume": "recurring.rule_resumed",
+        "end": "recurring.rule_ended",
+    }[command]
+    _audit(actor=actor, instance=rule, action=action_name, request=request)
+    return rule
+
+
+def _skip_recurring_occurrence(rule: RecurringRule, actor: User, request: Any) -> RecurringRule:
+    if rule.state == RecurringRule.State.ENDED:
+        raise serializers.ValidationError({"state": "An ended rule has no next occurrence."})
+    now = timezone.now()
+    occurrence, created = RecurringOccurrence.objects.select_for_update().get_or_create(
+        rule=rule,
+        due_on=rule.next_due_on,
+        defaults={
+            "tracker": rule.tracker,
+            "occurrence_key": occurrence_key(rule.id, rule.next_due_on),
+            "scheduled_for": rule.next_due_at,
+            "rule_version": rule.version,
+            "state": RecurringOccurrence.State.SKIPPED,
+            "skipped_at": now,
+        },
+    )
+    if not created:
+        if occurrence.state == RecurringOccurrence.State.POSTED:
+            raise serializers.ValidationError({"state": "The occurrence is already posted."})
+        occurrence.state = RecurringOccurrence.State.SKIPPED
+        occurrence.skipped_at = now
+        occurrence.materialized_at = None
+        occurrence.transaction = None
+        occurrence.error_code = ""
+        occurrence.version += 1
+        occurrence.save()
+    advance_rule_after_due(rule, rule.next_due_on, now, editor=actor)
+    _audit(actor=actor, instance=rule, action="recurring.occurrence_skipped", request=request)
+    return rule
+
+
+def _apply_recurring_rule(operation: dict[str, Any], actor: User, request: Any) -> RecurringRule:
+    entity_id = operation["entity_id"]
+    payload = operation["payload"]
+    command = operation["command"]
+    if command == "create":
+        return _create_recurring_rule(entity_id, payload, actor, request)
+    rule = (
+        RecurringRule.objects.select_related("tracker", "account", "category")
+        .select_for_update()
+        .get(id=entity_id)
+    )
+    require_tracker_role(actor, rule.tracker, TrackerMembership.Role.EDITOR)
+    _require_version(
+        instance=rule,
+        expected=operation["base_server_version"],
+        entity_type=SyncChange.EntityType.RECURRING_RULE,
+        actor=actor,
+        proposed=payload,
+    )
+    if payload["tracker_id"] != rule.tracker_id:
+        raise serializers.ValidationError({"tracker_id": "A recurring rule cannot change tracker."})
+    if command == "update":
+        result = _update_recurring_rule(rule, payload, actor, request)
+    elif command == "archive":
+        result = _archive_recurring_rule(rule, actor, request)
+    elif command == "restore":
+        result = _restore_recurring_rule(rule, actor, request)
+    elif command == "delete":
+        result = _delete_recurring_rule(rule, actor, request)
+    elif command in ("pause", "resume", "end"):
+        result = _transition_recurring_rule(rule, command, actor, request)
+    else:
+        result = _skip_recurring_occurrence(rule, actor, request)
+    return result
+
+
 def apply_operation(operation: dict[str, Any], actor: User, request: Any) -> Any:
     handler = {
         SyncChange.EntityType.TRACKER: _apply_tracker,
@@ -585,6 +802,7 @@ def apply_operation(operation: dict[str, Any], actor: User, request: Any) -> Any
         SyncChange.EntityType.CATEGORY: _apply_category,
         SyncChange.EntityType.TAG: _apply_tag,
         SyncChange.EntityType.BUDGET: _apply_budget,
+        SyncChange.EntityType.RECURRING_RULE: _apply_recurring_rule,
         SyncChange.EntityType.TRANSACTION: _apply_transaction,
     }[operation["entity_type"]]
     return handler(operation, actor, request)

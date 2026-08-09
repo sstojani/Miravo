@@ -485,3 +485,42 @@ Commit the native Milestone 6 checkpoint. Then begin Milestone 7 with the budget
 ### Next exact action
 
 Commit the budget vertical slice. Then implement `RecurringRule` and deterministic `RecurringOccurrence` server semantics first: cadence/date generation, stable occurrence keys, pause/resume/skip/end, edit-future revisions, downtime catch-up, and Celery materialization tests. Extend the native offline rule cache/Plans UI only after the authoritative recurrence invariants pass locally.
+
+## 2026-08-09 — Milestone 7 authoritative recurrence/subscription server checkpoint
+
+### Acceptance checks established
+
+- Expense/income rules use civil start/next dates, a local wall time, an IANA time-zone snapshot, and original month/day anchors. Daily/weekly/monthly/yearly and constrained custom intervals remain deterministic across short months, leap years, DST gaps, and DST folds.
+- Every due civil date derives one stable SHA-256 occurrence key and UUIDv5 transaction identity from the rule UUID. Worker retries, overlapping attempts, and downtime catch-up converge on one posted ledger transaction.
+- Pause/resume/end/skip-next and edit-future actions require an editor role plus the current version through REST and sync. Editing snapshots the prior material template and never rewrites posted occurrences. Occurrences are server-produced and read-only.
+- Celery processes due rules oldest-first with configurable per-rule/per-run bounds. A successful post or explicit skip advances the pointer atomically; a validation failure preserves one visible/retryable failed occurrence and leaves the pointer in place.
+- Subscriptions reuse the recurrence engine while requiring provider metadata and HTTPS cancellation URLs. Cross-currency templates require exact stored conversion/account snapshots rather than a guessed rate.
+
+### Material work
+
+- Added `RecurringRule`, `RecurringOccurrence`, and explicit `RecurringRuleRevision` models with tracker/account/category relations, conversion snapshots, schedule anchors, lifecycle timestamps, subscription fields, deterministic identity, constraints, indexes, migrations, and private admin views.
+- Implemented explicit DST behavior: nonexistent wall times advance minute-by-minute to the first valid instant; ambiguous times choose fold zero. Monthly/yearly generation clamps against the original anchor so Jan 31 returns to Mar 31 and Feb 29 returns in leap years.
+- Added versioned REST resources for recurring rules, a subscription-only alias, read-only occurrence history, revisions, pause/resume/end/skip-next, strict fields, role checks, audit events, tombstones, and safe restore-to-paused behavior.
+- Added bounded Celery Beat materialization every five minutes. It locks the rule, posts through the authoritative transaction service with `source=recurring`, links the occurrence, advances in the same transaction, safely catches up after downtime, and reuses a failed occurrence after dependencies are repaired.
+- Added recurring rules to offline push/pull/bootstrap with explicit state commands, replay fingerprints that canonicalize wall-clock `time` values, structured conflicts, and server-produced occurrence changes ordered after linked transactions.
+- Added seven focused tests spanning calendar/DST primitives, CRUD/roles/revisions/strict validation, subscription metadata, bounded and repeated catch-up, posted-history preservation, pause/skip/resume/end, failure recovery, cross-currency snapshots, Celery delegation, and sync replay/conflict/bootstrap/tombstones.
+
+### Commands and outcomes
+
+- `.venv/bin/pytest backend/tests/test_recurring.py -q`: **7 passed locally**.
+- `UV_CACHE_DIR=/tmp/project-ledger-uv-cache make schema && make check`: **passed locally** — 74 tests, 82.66% branch-aware coverage, Ruff format/lint, Django checks, strict mypy over 92 source files, OpenAPI validation, and schema freshness.
+- `manage.py makemigrations --check --dry-run`: **no changes detected** after planning and sync migrations were generated; a fresh test database applied the migration graph during the complete suite.
+- Production `manage.py check --deploy --fail-level WARNING` with distinct synthetic secrets, HTTPS/host/origin policy, and a PostgreSQL-shaped URL: **passed locally without contacting production**.
+- `.venv/bin/bandit -q -r backend/apps backend/config`: **passed locally**.
+- The prior dependency-audit tool invocation remained unavailable after the environment usage limit was reached; no bypass was attempted and no fresh `pip-audit` result is claimed.
+
+### Verification boundary
+
+- Django/SQLite model constraints, calendar/DST generation, conversion validation, REST roles/versioning/audit, revision/history preservation, deterministic materialization/recovery, Celery task wiring, sync replay/conflict/bootstrap/tombstones, OpenAPI, production guards, and static security scan: **verified locally on Linux**.
+- PostgreSQL row-lock concurrency, Redis/Celery multi-process overlap, Docker, and hosted CI remain **unverified**. The service is written transactionally and idempotently, but distributed behavior is not promoted beyond the tested tier.
+- The iOS client does not yet cache or decode the new recurring rule/occurrence sync types. Until the native slice lands, this server checkpoint is not a compatible release candidate for the existing native bootstrap contract.
+- No production host, Funnel configuration, remote repository, signing service, or physical iPhone was contacted.
+
+### Next exact action
+
+Checkpoint the authoritative server scheduler, then add scoped SwiftData recurring-rule/occurrence models, explicit local mutation commands, wire/bootstrap reconciliation, a matching calendar calculator, subscription cost normalization, and Plans create/edit/pause/resume/skip/end views. Run Linux localization/project/resource gates and leave Xcode/runtime/reminder delivery as explicit macOS/device checks.

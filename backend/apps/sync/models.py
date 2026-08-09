@@ -15,6 +15,8 @@ class SyncChange(models.Model):
         TAG = "tag", "Tag"
         MERCHANT = "merchant", "Merchant"
         BUDGET = "budget", "Budget"
+        RECURRING_RULE = "recurring_rule", "Recurring rule"
+        RECURRING_OCCURRENCE = "recurring_occurrence", "Recurring occurrence"
         TRANSACTION = "transaction", "Transaction"
 
     class Operation(models.TextChoices):

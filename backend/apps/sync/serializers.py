@@ -9,7 +9,7 @@ from rest_framework import serializers
 from apps.common.serializers import StrictSerializer
 from apps.ledger.currency import currency_exponent, normalize_currency
 from apps.ledger.models import Account, Category, Transaction
-from apps.planning.models import Budget
+from apps.planning.models import Budget, RecurringRule
 from apps.planning.serializers import normalize_time_zone
 from apps.sync.models import SyncChange
 
@@ -20,6 +20,7 @@ SYNC_OPERATION_RESULT_STATUSES = (
     "unauthorized",
     "conflict",
 )
+MINIMUM_RECURRING_CUSTOM_INTERVAL = 2
 
 
 class TrackerMutationPayloadSerializer(StrictSerializer):
@@ -156,6 +157,82 @@ class BudgetMutationPayloadSerializer(StrictSerializer):
         return attrs
 
 
+class RecurringRuleMutationPayloadSerializer(StrictSerializer):
+    client_payload_version = serializers.IntegerField(min_value=1, max_value=1)
+    id = serializers.UUIDField()
+    tracker_id = serializers.UUIDField()
+    name = serializers.CharField(max_length=120)
+    kind = serializers.ChoiceField(choices=RecurringRule.Kind.choices)
+    is_subscription = serializers.BooleanField()
+    amount_minor = serializers.IntegerField(min_value=1)
+    currency = serializers.CharField(min_length=3, max_length=3)
+    currency_exponent = serializers.IntegerField(min_value=0, max_value=6)
+    account_id = serializers.UUIDField()
+    account_amount_minor = serializers.IntegerField(min_value=1)
+    category_id = serializers.UUIDField(required=False, allow_null=True)
+    merchant = serializers.CharField(max_length=160, allow_blank=True, default="")
+    note = serializers.CharField(max_length=5000, allow_blank=True, default="")
+    base_amount_minor = serializers.IntegerField(min_value=1)
+    base_currency = serializers.CharField(min_length=3, max_length=3)
+    rate_snapshot = serializers.DecimalField(
+        max_digits=28,
+        decimal_places=12,
+        min_value=Decimal("0.000000000001"),
+    )
+    rate_source = serializers.CharField(max_length=80)
+    rate_effective_at = serializers.DateTimeField()
+    cadence = serializers.ChoiceField(choices=RecurringRule.Cadence.choices)
+    custom_interval_unit = serializers.ChoiceField(
+        choices=RecurringRule.IntervalUnit.choices, allow_blank=True
+    )
+    custom_interval_count = serializers.IntegerField(min_value=1, max_value=365)
+    time_zone = serializers.CharField(max_length=64)
+    starts_on = serializers.DateField()
+    ends_on = serializers.DateField(required=False, allow_null=True)
+    local_time = serializers.TimeField()
+    next_due_on = serializers.DateField()
+    subscription_provider = serializers.CharField(max_length=160, allow_blank=True, default="")
+    trial_ends_on = serializers.DateField(required=False, allow_null=True)
+    cancellation_url = serializers.URLField(max_length=500, allow_blank=True, default="")
+    subscription_note = serializers.CharField(max_length=2000, allow_blank=True, default="")
+    archived_at = serializers.DateTimeField(required=False, allow_null=True)
+    deleted_at = serializers.DateTimeField(required=False, allow_null=True)
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        attrs = super().validate(attrs)
+        code = normalize_currency(attrs["currency"])
+        attrs["currency"] = code
+        attrs["base_currency"] = normalize_currency(attrs["base_currency"])
+        if attrs["currency_exponent"] != currency_exponent(code):
+            raise serializers.ValidationError(
+                {"currency_exponent": "Does not match the currency's minor-unit exponent."}
+            )
+        attrs["time_zone"] = normalize_time_zone(attrs["time_zone"])
+        if attrs["cadence"] == RecurringRule.Cadence.CUSTOM:
+            if (
+                not attrs["custom_interval_unit"]
+                or attrs["custom_interval_count"] < MINIMUM_RECURRING_CUSTOM_INTERVAL
+            ):
+                raise serializers.ValidationError(
+                    {"custom_interval_count": "A custom cadence requires 2 through 365 units."}
+                )
+        elif attrs["custom_interval_unit"] or attrs["custom_interval_count"] != 1:
+            raise serializers.ValidationError(
+                {"custom_interval_unit": "Only custom cadence uses interval fields."}
+            )
+        if attrs.get("ends_on") and attrs["ends_on"] < attrs["starts_on"]:
+            raise serializers.ValidationError(
+                {"ends_on": "The end date cannot precede the start date."}
+            )
+        if attrs["next_due_on"] < attrs["starts_on"] or (
+            attrs.get("ends_on") and attrs["next_due_on"] > attrs["ends_on"]
+        ):
+            raise serializers.ValidationError(
+                {"next_due_on": "The next due date must fall within the rule dates."}
+            )
+        return attrs
+
+
 class TransactionMutationPayloadSerializer(StrictSerializer):
     client_payload_version = serializers.IntegerField(min_value=1, max_value=1)
     id = serializers.UUIDField()
@@ -231,6 +308,7 @@ PAYLOAD_SERIALIZERS: dict[str, type[StrictSerializer]] = {
     SyncChange.EntityType.CATEGORY: CategoryMutationPayloadSerializer,
     SyncChange.EntityType.TAG: TagMutationPayloadSerializer,
     SyncChange.EntityType.BUDGET: BudgetMutationPayloadSerializer,
+    SyncChange.EntityType.RECURRING_RULE: RecurringRuleMutationPayloadSerializer,
     SyncChange.EntityType.TRANSACTION: TransactionMutationPayloadSerializer,
 }
 
@@ -240,7 +318,19 @@ class SyncOperationSerializer(StrictSerializer):
     local_sequence = serializers.IntegerField(min_value=1)
     entity_type = serializers.ChoiceField(choices=tuple(PAYLOAD_SERIALIZERS))
     entity_id = serializers.UUIDField()
-    command = serializers.ChoiceField(choices=("create", "update", "archive", "restore", "delete"))
+    command = serializers.ChoiceField(
+        choices=(
+            "create",
+            "update",
+            "archive",
+            "restore",
+            "delete",
+            "pause",
+            "resume",
+            "end",
+            "skip_next",
+        )
+    )
     base_server_version = serializers.IntegerField(min_value=1, required=False, allow_null=True)
     payload = serializers.DictField()
 
@@ -272,6 +362,14 @@ class SyncOperationSerializer(StrictSerializer):
         ):
             raise serializers.ValidationError(
                 {"command": "Transactions use delete tombstones rather than archive."}
+            )
+        recurring_commands = {"pause", "resume", "end", "skip_next"}
+        if (
+            attrs["command"] in recurring_commands
+            and attrs["entity_type"] != SyncChange.EntityType.RECURRING_RULE
+        ):
+            raise serializers.ValidationError(
+                {"command": "This command is available only for recurring rules."}
             )
         attrs["payload"] = payload
         return attrs

@@ -34,6 +34,7 @@ Useful endpoints:
 - `GET /api/v1/shortcut/context`, `/categories`, and `/accounts` with a scoped Shortcut bearer token
 - `POST /api/v1/shortcut/transactions` and `/transactions/batch` for duplicate-safe capture
 - `/api/v1/budgets/` plus archive, restore, tombstone, and deterministic `/progress/?as_of=YYYY-MM-DD`
+- `/api/v1/recurring-rules/`, `/subscriptions/`, and read-only `/recurring-occurrences/` with versioned pause/resume/skip/end and revision actions
 
 The OpenAPI source is generated at `backend/openapi-schema.yml`. The schema endpoint and Django Admin are intentionally denied by the public reverse proxy.
 
@@ -56,3 +57,5 @@ Shortcut credentials use another independent pepper and store only a public pref
 Clients submit transaction commands with a tracker/account, positive integer minor-unit amount, ISO currency, and optional exact category allocations. The server creates signed account movements; clients cannot submit an arbitrary balance. Cross-currency records require an explicit base amount, decimal rate, source, and effective timestamp. Full transaction replacements require `base_version`; stale updates return HTTP 409.
 
 Budget progress is derived rather than client-authored. It uses the budget's stored IANA time zone and civil dates, posted expenses only, exact category allocations, and existing historical conversion snapshots. Missing rates produce explicit partial results; signed rollover is bounded by `PROJECT_LEDGER_BUDGET_MAX_ROLLOVER_PERIODS`.
+
+Celery Beat invokes recurring materialization every five minutes. Each rule uses civil calendar anchors and a stored IANA zone, locks before catch-up, derives stable occurrence/transaction identities, and advances only after a successful post or explicit skip. Per-rule/per-run limits are configured by `PROJECT_LEDGER_RECURRING_MAX_OCCURRENCES_PER_RULE_RUN` and `PROJECT_LEDGER_RECURRING_MAX_RULES_PER_RUN`. A failed dependency remains visible and retryable; it does not silently skip money.

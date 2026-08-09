@@ -1,16 +1,28 @@
 from __future__ import annotations
 
+from decimal import ROUND_HALF_UP, Decimal, localcontext
 from typing import Any
+from urllib.parse import urlparse
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from rest_framework import serializers
 
 from apps.common.serializers import StrictModelSerializer, StrictSerializer
 from apps.ledger.currency import currency_exponent, normalize_currency
-from apps.ledger.models import Category, Tracker
-from apps.planning.models import Budget, BudgetCategory, BudgetThreshold
+from apps.ledger.models import Account, Category, Tracker
+from apps.planning.models import (
+    Budget,
+    BudgetCategory,
+    BudgetThreshold,
+    RecurringOccurrence,
+    RecurringRule,
+    RecurringRuleRevision,
+)
+from apps.planning.services.recurrence import scheduled_utc
 
 DEFAULT_BUDGET_THRESHOLDS = (50, 80, 100)
+MINIMUM_CUSTOM_INTERVAL = 2
+MAXIMUM_CUSTOM_INTERVAL = 365
 
 
 def normalize_time_zone(value: str) -> str:
@@ -214,3 +226,398 @@ class BudgetProgressSerializer(StrictSerializer):
     is_partial = serializers.BooleanField()
     rollover_complete = serializers.BooleanField()
     unconverted = UnconvertedBudgetAmountSerializer(many=True)
+
+
+class RecurringRuleSerializer(StrictModelSerializer):
+    tracker_id = serializers.PrimaryKeyRelatedField(
+        source="tracker", queryset=Tracker.objects.all()
+    )
+    account_id = serializers.PrimaryKeyRelatedField(
+        source="account", queryset=Account.objects.all()
+    )
+    category_id = serializers.PrimaryKeyRelatedField(
+        source="category",
+        queryset=Category.objects.all(),
+        required=False,
+        allow_null=True,
+    )
+    currency_exponent = serializers.IntegerField(read_only=True)
+    base_version = serializers.IntegerField(min_value=1, write_only=True, required=False)
+    next_due_on = serializers.DateField(required=False)
+    next_due_at = serializers.DateTimeField(read_only=True)
+    base_amount_minor = serializers.IntegerField(min_value=1, required=False)
+    base_currency = serializers.CharField(min_length=3, max_length=3, required=False)
+    rate_snapshot = serializers.DecimalField(
+        max_digits=28,
+        decimal_places=12,
+        min_value=Decimal("0.000000000001"),
+        required=False,
+    )
+    rate_source = serializers.CharField(max_length=80, required=False)
+    rate_effective_at = serializers.DateTimeField(required=False)
+    account_amount_minor = serializers.IntegerField(min_value=1, required=False)
+    renewal_date = serializers.SerializerMethodField()
+
+    class Meta:
+        model = RecurringRule
+        fields = (
+            "id",
+            "tracker_id",
+            "name",
+            "kind",
+            "is_subscription",
+            "amount_minor",
+            "currency",
+            "currency_exponent",
+            "account_id",
+            "account_amount_minor",
+            "category_id",
+            "merchant",
+            "note",
+            "base_amount_minor",
+            "base_currency",
+            "rate_snapshot",
+            "rate_source",
+            "rate_effective_at",
+            "cadence",
+            "custom_interval_unit",
+            "custom_interval_count",
+            "time_zone",
+            "starts_on",
+            "ends_on",
+            "local_time",
+            "next_due_on",
+            "next_due_at",
+            "renewal_date",
+            "state",
+            "paused_at",
+            "ended_at",
+            "subscription_provider",
+            "trial_ends_on",
+            "cancellation_url",
+            "subscription_note",
+            "archived_at",
+            "version",
+            "base_version",
+            "created_at",
+            "updated_at",
+            "deleted_at",
+        )
+        read_only_fields = (
+            "id",
+            "currency_exponent",
+            "next_due_at",
+            "renewal_date",
+            "state",
+            "paused_at",
+            "ended_at",
+            "archived_at",
+            "version",
+            "created_at",
+            "updated_at",
+            "deleted_at",
+        )
+
+    def get_renewal_date(self, obj: RecurringRule) -> str | None:
+        if not obj.is_subscription or obj.state == RecurringRule.State.ENDED:
+            return None
+        return obj.next_due_on.isoformat()
+
+    def validate_currency(self, value: str) -> str:
+        return normalize_currency(value)
+
+    def validate_base_currency(self, value: str) -> str:
+        return normalize_currency(value)
+
+    def validate_time_zone(self, value: str) -> str:
+        return normalize_time_zone(value)
+
+    def validate_cancellation_url(self, value: str) -> str:
+        if value and urlparse(value).scheme.lower() != "https":
+            raise serializers.ValidationError("Use an HTTPS cancellation URL.")
+        return value
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        attrs = super().validate(attrs)
+        instance = self.instance if isinstance(self.instance, RecurringRule) else None
+        tracker = attrs.get("tracker", getattr(instance, "tracker", None))
+        account = attrs.get("account", getattr(instance, "account", None))
+        starts_on = attrs.get("starts_on", getattr(instance, "starts_on", None))
+        local_time = attrs.get("local_time", getattr(instance, "local_time", None))
+        if tracker is None or account is None or starts_on is None or local_time is None:
+            return attrs
+        self._validate_relationships(attrs, instance, tracker, account)
+        self._apply_schedule(attrs, instance, starts_on, local_time)
+        self._validate_subscription(attrs, instance)
+        self._apply_money(attrs, instance, tracker, account)
+        return attrs
+
+    @staticmethod
+    def _validate_relationships(
+        attrs: dict[str, Any],
+        instance: RecurringRule | None,
+        tracker: Tracker,
+        account: Account,
+    ) -> None:
+        if account.tracker_id != tracker.id or account.deleted_at or account.archived_at:
+            raise serializers.ValidationError(
+                {"account_id": "Choose an active account in the recurring rule's tracker."}
+            )
+        category = attrs.get("category", getattr(instance, "category", None))
+        kind = attrs.get("kind", getattr(instance, "kind", None))
+        expected_category_kind = (
+            Category.Kind.INCOME if kind == RecurringRule.Kind.INCOME else Category.Kind.EXPENSE
+        )
+        if category is not None and (
+            category.tracker_id != tracker.id
+            or category.kind != expected_category_kind
+            or category.deleted_at is not None
+            or category.archived_at is not None
+        ):
+            raise serializers.ValidationError(
+                {"category_id": "Choose an active matching category in this tracker."}
+            )
+
+    @staticmethod
+    def _apply_schedule(
+        attrs: dict[str, Any],
+        instance: RecurringRule | None,
+        starts_on: Any,
+        local_time: Any,
+    ) -> None:
+        ends_on = attrs.get("ends_on", getattr(instance, "ends_on", None))
+        zone_name = attrs.get("time_zone", getattr(instance, "time_zone", None))
+        cadence = attrs.get("cadence", getattr(instance, "cadence", None))
+        custom_unit = attrs.get(
+            "custom_interval_unit", getattr(instance, "custom_interval_unit", "")
+        )
+        custom_count = int(
+            attrs.get("custom_interval_count", getattr(instance, "custom_interval_count", 1))
+        )
+        next_due_on = attrs.get("next_due_on", getattr(instance, "next_due_on", starts_on))
+        if ends_on is not None and ends_on < starts_on:
+            raise serializers.ValidationError(
+                {"ends_on": "The end date cannot precede the start date."}
+            )
+        if next_due_on is None:
+            next_due_on = starts_on
+        if next_due_on < starts_on or (ends_on is not None and next_due_on > ends_on):
+            raise serializers.ValidationError(
+                {"next_due_on": "The next due date must fall within the rule dates."}
+            )
+        if instance is not None:
+            latest_due = (
+                instance.occurrences.order_by("-due_on").values_list("due_on", flat=True).first()
+            )
+            if latest_due is not None and next_due_on <= latest_due:
+                raise serializers.ValidationError(
+                    {"next_due_on": "The next due date must follow occurrence history."}
+                )
+        if cadence == RecurringRule.Cadence.CUSTOM:
+            valid_count = MINIMUM_CUSTOM_INTERVAL <= custom_count <= MAXIMUM_CUSTOM_INTERVAL
+            if custom_unit not in RecurringRule.IntervalUnit.values or not valid_count:
+                raise serializers.ValidationError(
+                    {"custom_interval_count": "Use 2 through 365 with a supported unit."}
+                )
+        elif custom_unit or custom_count != 1:
+            raise serializers.ValidationError(
+                {"custom_interval_unit": "Only a custom cadence uses interval fields."}
+            )
+        if zone_name is None:
+            raise serializers.ValidationError("A time zone is required.")
+        attrs["next_due_on"] = next_due_on
+        attrs["next_due_at"] = scheduled_utc(next_due_on, local_time, zone_name)
+        attrs["anchor_day"] = starts_on.day
+        attrs["anchor_month"] = starts_on.month
+
+    @staticmethod
+    def _validate_subscription(attrs: dict[str, Any], instance: RecurringRule | None) -> None:
+        is_subscription = bool(
+            attrs.get("is_subscription", getattr(instance, "is_subscription", False))
+        )
+        provider = str(
+            attrs.get("subscription_provider", getattr(instance, "subscription_provider", ""))
+        ).strip()
+        subscription_values = (
+            provider,
+            attrs.get("trial_ends_on", getattr(instance, "trial_ends_on", None)),
+            str(attrs.get("cancellation_url", getattr(instance, "cancellation_url", ""))),
+            str(attrs.get("subscription_note", getattr(instance, "subscription_note", ""))),
+        )
+        if is_subscription and not provider:
+            raise serializers.ValidationError(
+                {"subscription_provider": "A subscription requires a provider."}
+            )
+        if not is_subscription and any(subscription_values):
+            raise serializers.ValidationError(
+                {"is_subscription": "Subscription-only fields require subscription mode."}
+            )
+        attrs["subscription_provider"] = provider
+
+    @staticmethod
+    def _apply_money(
+        attrs: dict[str, Any],
+        instance: RecurringRule | None,
+        tracker: Tracker,
+        account: Account,
+    ) -> None:
+        amount = int(attrs.get("amount_minor", getattr(instance, "amount_minor", 0)))
+        currency = attrs.get("currency", getattr(instance, "currency", None))
+        if currency is None:
+            raise serializers.ValidationError("A currency is required.")
+        exponent = currency_exponent(currency)
+        attrs["currency_exponent"] = exponent
+        if account.currency == currency:
+            supplied_account_amount = attrs.get("account_amount_minor")
+            if supplied_account_amount is not None and int(supplied_account_amount) != amount:
+                raise serializers.ValidationError(
+                    {"account_amount_minor": "Must equal amount when account currency matches."}
+                )
+            attrs["account_amount_minor"] = amount
+        else:
+            account_amount = attrs.get("account_amount_minor")
+            if account_amount is None or int(account_amount) <= 0:
+                raise serializers.ValidationError(
+                    {"account_amount_minor": "A positive account-currency amount is required."}
+                )
+
+        base_amount = attrs.get("base_amount_minor", getattr(instance, "base_amount_minor", None))
+        supplied_base_currency = attrs.get(
+            "base_currency", getattr(instance, "base_currency", None)
+        )
+        supplied_rate = attrs.get("rate_snapshot", getattr(instance, "rate_snapshot", None))
+        rate_source = str(attrs.get("rate_source", getattr(instance, "rate_source", "")))
+        effective_at = attrs.get("rate_effective_at", getattr(instance, "rate_effective_at", None))
+        if currency == tracker.base_currency:
+            attrs.update(
+                base_amount_minor=amount,
+                base_currency=tracker.base_currency,
+                rate_snapshot=Decimal("1"),
+                rate_source="identity",
+                rate_effective_at=effective_at or attrs["next_due_at"],
+            )
+            return
+        missing: dict[str, str] = {}
+        for field_name, value in (
+            ("base_amount_minor", base_amount),
+            ("rate_snapshot", supplied_rate),
+            ("rate_source", rate_source),
+            ("rate_effective_at", effective_at),
+        ):
+            if value in (None, ""):
+                missing[field_name] = "Required when rule and tracker currencies differ."
+        if missing:
+            raise serializers.ValidationError(missing)
+        if supplied_base_currency not in (None, tracker.base_currency):
+            raise serializers.ValidationError(
+                {"base_currency": "Must match the tracker's base currency."}
+            )
+        if base_amount is None or supplied_rate is None:
+            raise serializers.ValidationError("Conversion values are required.")
+        with localcontext() as decimal_context:
+            decimal_context.prec = 50
+            original_major = Decimal(amount).scaleb(-exponent)
+            base_major = Decimal(int(base_amount)).scaleb(-currency_exponent(tracker.base_currency))
+            expected = (base_major / original_major).quantize(
+                Decimal("0.000000000001"), rounding=ROUND_HALF_UP
+            )
+        if Decimal(supplied_rate) != expected:
+            raise serializers.ValidationError(
+                {"rate_snapshot": "Must equal base amount divided by original amount."}
+            )
+        attrs["base_currency"] = tracker.base_currency
+
+    def create(self, validated_data: dict[str, Any]) -> RecurringRule:
+        validated_data.pop("base_version", None)
+        return RecurringRule.objects.create(**validated_data)
+
+    def update(self, instance: RecurringRule, validated_data: dict[str, Any]) -> RecurringRule:
+        validated_data.pop("base_version", None)
+        for field, value in validated_data.items():
+            setattr(instance, field, value)
+        instance.save()
+        return instance
+
+
+class RecurringOccurrenceSerializer(StrictModelSerializer):
+    tracker_id = serializers.UUIDField(read_only=True)
+    rule_id = serializers.UUIDField(read_only=True)
+    transaction_id = serializers.UUIDField(read_only=True, allow_null=True)
+
+    class Meta:
+        model = RecurringOccurrence
+        fields = (
+            "id",
+            "tracker_id",
+            "rule_id",
+            "occurrence_key",
+            "due_on",
+            "scheduled_for",
+            "rule_version",
+            "state",
+            "transaction_id",
+            "materialized_at",
+            "skipped_at",
+            "error_code",
+            "version",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = fields
+
+
+class RecurringRuleRevisionSerializer(StrictModelSerializer):
+    account_id = serializers.UUIDField(read_only=True)
+    category_id = serializers.UUIDField(read_only=True, allow_null=True)
+    editor_id = serializers.UUIDField(read_only=True)
+
+    class Meta:
+        model = RecurringRuleRevision
+        fields = (
+            "id",
+            "recorded_version",
+            "reason",
+            "name",
+            "kind",
+            "is_subscription",
+            "amount_minor",
+            "currency",
+            "currency_exponent",
+            "account_id",
+            "account_amount_minor",
+            "category_id",
+            "merchant",
+            "note",
+            "base_amount_minor",
+            "base_currency",
+            "rate_snapshot",
+            "rate_source",
+            "rate_effective_at",
+            "cadence",
+            "custom_interval_unit",
+            "custom_interval_count",
+            "time_zone",
+            "starts_on",
+            "ends_on",
+            "local_time",
+            "next_due_on",
+            "next_due_at",
+            "subscription_provider",
+            "trial_ends_on",
+            "cancellation_url",
+            "subscription_note",
+            "editor_id",
+            "created_at",
+        )
+        read_only_fields = fields
+
+
+class RecurringMaterializeSerializer(StrictSerializer):
+    through = serializers.DateTimeField(required=False)
+
+
+class RecurringMaterializeResultSerializer(StrictSerializer):
+    posted = serializers.IntegerField()
+    skipped = serializers.IntegerField()
+    failed = serializers.IntegerField()
+    remaining_due = serializers.BooleanField()

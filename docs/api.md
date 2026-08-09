@@ -95,12 +95,27 @@ Budgets support monthly, Monday-based weekly, and fixed custom civil-date ranges
 
 Budgets are normal sync aggregate roots. Their selected-category snapshots and thresholds travel inside the versioned representation; create/update/archive/restore/delete use the same replay, conflict, tombstone, pull, and bootstrap rules as other roots.
 
+### Recurring rules and subscriptions
+
+| Method/path | Minimum tracker role | Purpose |
+|---|---|---|
+| CRUD `/recurring-rules/` | viewer read, editor write | Create/list/read, edit future occurrences with `base_version`, or tombstone a rule |
+| CRUD `/subscriptions/` | viewer read, editor write | Subscription-only alias with provider/trial/HTTPS cancellation metadata |
+| `POST /recurring-rules/{id}/pause/`, `/resume/`, `/end/` | editor | Version-checked lifecycle transitions |
+| `POST /recurring-rules/{id}/skip-next/` | editor | Persist one deterministic skipped occurrence and advance the schedule |
+| `GET /recurring-rules/{id}/revisions/` | admin | Prior financially material templates |
+| `GET /recurring-occurrences/` | viewer | Read-only posted/skipped/failed occurrence history |
+
+Rules support daily, weekly, monthly, yearly, and constrained custom day/week/month/year intervals. Civil dates, wall time, original anchors, and an IANA zone determine the UTC instant. Missing DST times move to the first valid minute; ambiguous times use the first fold. Each due date has a stable SHA-256 occurrence key and UUIDv5 transaction identity. Materialization posts ordinary authoritative ledger transactions with `source=recurring`, catches up oldest-first in configurable bounded batches, and leaves validation failures recoverable without advancing the rule. Editing creates a relational revision and never changes an already posted occurrence.
+
+Recurring rules are client-mutable sync roots; pause/resume/end/skip-next are explicit idempotent sync commands. Occurrences are server-produced, read-only sync entities and bootstrap after their linked transactions.
+
 ## Planned resource surface
 
 - Profile and configured recovery.
 - Attachments and receipt upload/download.
 - Participants, splits, simplified balances, settlements.
-- Recurring rules/occurrences/subscriptions and installments/schedule/payments.
+- Installments/schedule/payments.
 - Currency rates, analytics, audit history, export jobs/expiring downloads.
 
 Collection endpoints use bounded cursor pagination, explicit filters/order, and stable error codes. Authorization returns 404 where revealing object existence would be inappropriate.

@@ -22,6 +22,7 @@ If step 2 fails, neither entity nor outbox persists. Undo is another auditable l
 - Conflicts and permanent failures do not block unrelated operations.
 - Binary attachments use a separate checksum/idempotency queue and never ride in the mutation batch.
 - Budgets are aggregate roots. Their selected category snapshots and threshold percentages are replaced atomically with the root, so child rows cannot be independently reordered ahead of the owning version.
+- Recurring rules accept create/update/archive/restore/delete plus explicit pause/resume/end/skip-next commands. Recurring occurrences are server-produced read-only changes; bootstrap orders rules, then transactions, then occurrences so links resolve atomically on the client.
 
 The current native attachment boundary persists a compound scoped attachment UUID, owning transaction UUID, relative local path, allow-listed MIME type, positive bounded byte count, lowercase SHA-256 digest, state, attempt count, next retry, safe error code, and timestamps. Enqueue is idempotent only for an identical metadata fingerprint; conflicting reuse fails. Interrupted `uploading` rows return to `pending` after restart. This is queue scaffolding, not a claim that binary upload exists—the private upload protocol and server attachment resource arrive with receipts in Milestone 9.
 

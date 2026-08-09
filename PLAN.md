@@ -2,7 +2,7 @@
 
 Last updated: 2026-08-09. A checked item is complete; its verification tier is recorded in `IMPLEMENT.md`. Items are not checked merely because scaffolding exists.
 
-Current focus: **Milestone 7 — recurring rules and subscriptions**, after completing the budget vertical slice at the locally verifiable tier. Budget REST/sync/domain behavior passes locally; the native cache, atomic outbox, matching offline calculator, and Plans UI are source-complete with localization/project contracts passing. Swift compilation, simulator behavior, actual Wallet-trigger mapping, queue-file behavior, Docker, and hosted CI remain explicit external checks.
+Current focus: **Milestone 7 — native recurring rules and subscriptions**, after completing the authoritative server scheduler. Calendar/DST scheduling, revisions, REST/sync lifecycle, stable occurrence identities, bounded Celery catch-up, recovery, and subscription metadata now pass locally. The native recurrence cache, outbox, reminders, and Plans UI remain next. Swift compilation, simulator behavior, actual Wallet-trigger mapping, queue-file behavior, Docker, and hosted CI remain explicit external checks.
 
 ## Milestone 0 — Discovery and durable project plan
 
@@ -75,7 +75,7 @@ Current acceptance: an authenticated device can push an ordered offline tracker/
 ## Milestone 7 — Budgets, recurring/subscriptions, and installments
 
 - [x] Budget periods, rollover, thresholds, historical reproducibility, explicit partial conversion, synchronized offline progress, and Plans UI (backend passing locally; native source/tests authored, macOS execution pending).
-- [ ] Idempotent recurrence/subscription materialization, pause/skip/edit/end, catch-up, cost normalization, and reminders.
+- [ ] Idempotent recurrence/subscription materialization, pause/skip/edit/end, catch-up, cost normalization, and reminders (server REST/sync/Celery slice passing locally; native offline cache/UI/reminders still open).
 - [ ] Installment schedules/revisions, regular/extra payments, skip/reschedule, early payoff, and overpayment confirmation.
 
 ## Milestone 8 — Splits and realtime collaboration

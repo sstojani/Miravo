@@ -26,8 +26,12 @@ from apps.ledger.serializers import (
     TrackerSerializer,
     TransactionReadSerializer,
 )
-from apps.planning.models import Budget
-from apps.planning.serializers import BudgetSerializer
+from apps.planning.models import Budget, RecurringOccurrence, RecurringRule
+from apps.planning.serializers import (
+    BudgetSerializer,
+    RecurringOccurrenceSerializer,
+    RecurringRuleSerializer,
+)
 from apps.sync.models import SyncChange
 from apps.users.models import User
 
@@ -39,7 +43,9 @@ BOOTSTRAP_ENTITY_ORDER = (
     ("tags", SyncChange.EntityType.TAG),
     ("merchants", SyncChange.EntityType.MERCHANT),
     ("budgets", SyncChange.EntityType.BUDGET),
+    ("recurring_rules", SyncChange.EntityType.RECURRING_RULE),
     ("transactions", SyncChange.EntityType.TRANSACTION),
+    ("recurring_occurrences", SyncChange.EntityType.RECURRING_OCCURRENCE),
 )
 
 
@@ -106,12 +112,26 @@ def _load_instance(entity_type: str, entity_id: UUID | str) -> Any | None:  # no
             .filter(id=entity_id)
             .first()
         )
+    if entity_type == SyncChange.EntityType.RECURRING_RULE:
+        return (
+            RecurringRule.objects.select_related(
+                "tracker", "account", "category", "created_by", "last_editor"
+            )
+            .filter(id=entity_id)
+            .first()
+        )
     if entity_type == SyncChange.EntityType.TRANSACTION:
         return (
             Transaction.objects.select_related(
                 "tracker", "merchant", "creator", "last_editor", "refund_of"
             )
             .prefetch_related("movements", "allocations", "transaction_tags")
+            .filter(id=entity_id)
+            .first()
+        )
+    if entity_type == SyncChange.EntityType.RECURRING_OCCURRENCE:
+        return (
+            RecurringOccurrence.objects.select_related("tracker", "rule", "transaction")
             .filter(id=entity_id)
             .first()
         )
@@ -153,8 +173,12 @@ def _serialize_loaded_instance(
         data["deleted_at"] = instance.deleted_at
     elif entity_type == SyncChange.EntityType.BUDGET:
         data = dict(BudgetSerializer(instance).data)
+    elif entity_type == SyncChange.EntityType.RECURRING_RULE:
+        data = dict(RecurringRuleSerializer(instance).data)
     elif entity_type == SyncChange.EntityType.TRANSACTION:
         data = dict(TransactionReadSerializer(instance).data)
+    elif entity_type == SyncChange.EntityType.RECURRING_OCCURRENCE:
+        data = dict(RecurringOccurrenceSerializer(instance).data)
     else:
         return None
     return cast(dict[str, Any], json_safe(data))
@@ -250,11 +274,23 @@ def _bootstrap_queryset(entity_type: str, *, user: User, tracker_ids: list[UUID]
             .prefetch_related("category_links", "thresholds")
             .order_by("id")
         )
+    if entity_type == SyncChange.EntityType.RECURRING_RULE:
+        return (
+            RecurringRule.objects.filter(tracker_id__in=tracker_ids, deleted_at__isnull=True)
+            .select_related("tracker", "account", "category", "created_by", "last_editor")
+            .order_by("id")
+        )
     if entity_type == SyncChange.EntityType.TRANSACTION:
         return (
             Transaction.objects.filter(tracker_id__in=tracker_ids, deleted_at__isnull=True)
             .select_related("tracker", "merchant", "creator", "last_editor", "refund_of")
             .prefetch_related("movements", "allocations", "transaction_tags")
+            .order_by("id")
+        )
+    if entity_type == SyncChange.EntityType.RECURRING_OCCURRENCE:
+        return (
+            RecurringOccurrence.objects.filter(tracker_id__in=tracker_ids, deleted_at__isnull=True)
+            .select_related("tracker", "rule", "transaction")
             .order_by("id")
         )
     return Tracker.objects.none()

@@ -959,6 +959,331 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/recurring-occurrences/:
+    get:
+      operationId: recurring_occurrences_list
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      tags:
+      - recurring-occurrences
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedRecurringOccurrenceList'
+          description: ''
+  /api/v1/recurring-occurrences/{id}/:
+    get:
+      operationId: recurring_occurrences_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this recurring occurrence.
+        required: true
+      tags:
+      - recurring-occurrences
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecurringOccurrence'
+          description: ''
+  /api/v1/recurring-rules/:
+    get:
+      operationId: recurring_rules_list
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      tags:
+      - recurring-rules
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedRecurringRuleList'
+          description: ''
+    post:
+      operationId: recurring_rules_create
+      tags:
+      - recurring-rules
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecurringRuleRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RecurringRuleRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RecurringRuleRequest'
+        required: true
+      security:
+      - accessToken: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecurringRule'
+          description: ''
+  /api/v1/recurring-rules/{id}/:
+    get:
+      operationId: recurring_rules_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this recurring rule.
+        required: true
+      tags:
+      - recurring-rules
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecurringRule'
+          description: ''
+    put:
+      operationId: recurring_rules_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this recurring rule.
+        required: true
+      tags:
+      - recurring-rules
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecurringRuleRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RecurringRuleRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RecurringRuleRequest'
+        required: true
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecurringRule'
+          description: ''
+    delete:
+      operationId: recurring_rules_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this recurring rule.
+        required: true
+      tags:
+      - recurring-rules
+      security:
+      - accessToken: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/recurring-rules/{id}/end/:
+    post:
+      operationId: recurring_rules_end_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this recurring rule.
+        required: true
+      tags:
+      - recurring-rules
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BaseVersionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/BaseVersionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/BaseVersionRequest'
+        required: true
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecurringRule'
+          description: ''
+  /api/v1/recurring-rules/{id}/pause/:
+    post:
+      operationId: recurring_rules_pause_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this recurring rule.
+        required: true
+      tags:
+      - recurring-rules
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BaseVersionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/BaseVersionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/BaseVersionRequest'
+        required: true
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecurringRule'
+          description: ''
+  /api/v1/recurring-rules/{id}/resume/:
+    post:
+      operationId: recurring_rules_resume_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this recurring rule.
+        required: true
+      tags:
+      - recurring-rules
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BaseVersionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/BaseVersionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/BaseVersionRequest'
+        required: true
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecurringRule'
+          description: ''
+  /api/v1/recurring-rules/{id}/revisions/:
+    get:
+      operationId: recurring_rules_revisions_list
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this recurring rule.
+        required: true
+      tags:
+      - recurring-rules
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedRecurringRuleRevisionList'
+          description: ''
+  /api/v1/recurring-rules/{id}/skip-next/:
+    post:
+      operationId: recurring_rules_skip_next_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this recurring rule.
+        required: true
+      tags:
+      - recurring-rules
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BaseVersionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/BaseVersionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/BaseVersionRequest'
+        required: true
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecurringOccurrence'
+          description: ''
   /api/v1/shortcut/accounts:
     get:
       operationId: shortcut_accounts_retrieve
@@ -1135,6 +1460,288 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ShortcutBatchResult'
+          description: ''
+  /api/v1/subscriptions/:
+    get:
+      operationId: subscriptions_list
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      tags:
+      - subscriptions
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedRecurringRuleList'
+          description: ''
+    post:
+      operationId: subscriptions_create
+      tags:
+      - subscriptions
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecurringRuleRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RecurringRuleRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RecurringRuleRequest'
+        required: true
+      security:
+      - accessToken: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecurringRule'
+          description: ''
+  /api/v1/subscriptions/{id}/:
+    get:
+      operationId: subscriptions_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this recurring rule.
+        required: true
+      tags:
+      - subscriptions
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecurringRule'
+          description: ''
+    put:
+      operationId: subscriptions_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this recurring rule.
+        required: true
+      tags:
+      - subscriptions
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecurringRuleRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RecurringRuleRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RecurringRuleRequest'
+        required: true
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecurringRule'
+          description: ''
+    delete:
+      operationId: subscriptions_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this recurring rule.
+        required: true
+      tags:
+      - subscriptions
+      security:
+      - accessToken: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/subscriptions/{id}/end/:
+    post:
+      operationId: subscriptions_end_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this recurring rule.
+        required: true
+      tags:
+      - subscriptions
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BaseVersionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/BaseVersionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/BaseVersionRequest'
+        required: true
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecurringRule'
+          description: ''
+  /api/v1/subscriptions/{id}/pause/:
+    post:
+      operationId: subscriptions_pause_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this recurring rule.
+        required: true
+      tags:
+      - subscriptions
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BaseVersionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/BaseVersionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/BaseVersionRequest'
+        required: true
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecurringRule'
+          description: ''
+  /api/v1/subscriptions/{id}/resume/:
+    post:
+      operationId: subscriptions_resume_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this recurring rule.
+        required: true
+      tags:
+      - subscriptions
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BaseVersionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/BaseVersionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/BaseVersionRequest'
+        required: true
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecurringRule'
+          description: ''
+  /api/v1/subscriptions/{id}/revisions/:
+    get:
+      operationId: subscriptions_revisions_list
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this recurring rule.
+        required: true
+      tags:
+      - subscriptions
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedRecurringRuleRevisionList'
+          description: ''
+  /api/v1/subscriptions/{id}/skip-next/:
+    post:
+      operationId: subscriptions_skip_next_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this recurring rule.
+        required: true
+      tags:
+      - subscriptions
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BaseVersionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/BaseVersionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/BaseVersionRequest'
+        required: true
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecurringOccurrence'
           description: ''
   /api/v1/sync/ack:
     post:
@@ -2313,6 +2920,9 @@ components:
           minimum: 1
       required:
       - base_version
+    BlankEnum:
+      enum:
+      - ''
     Budget:
       type: object
       description: Model serializer with strict input-field handling.
@@ -2527,6 +3137,20 @@ components:
       - starts_on
       - time_zone
       - tracker_id
+    CadenceEnum:
+      enum:
+      - daily
+      - weekly
+      - monthly
+      - yearly
+      - custom
+      type: string
+      description: |-
+        * `daily` - Daily
+        * `weekly` - Weekly
+        * `monthly` - Monthly
+        * `yearly` - Yearly
+        * `custom` - Custom interval
     Category:
       type: object
       description: Model serializer with strict input-field handling.
@@ -2698,6 +3322,10 @@ components:
       - archive
       - restore
       - delete
+      - pause
+      - resume
+      - end
+      - skip_next
       type: string
       description: |-
         * `create` - create
@@ -2705,6 +3333,22 @@ components:
         * `archive` - archive
         * `restore` - restore
         * `delete` - delete
+        * `pause` - pause
+        * `resume` - resume
+        * `end` - end
+        * `skip_next` - skip_next
+    CustomIntervalUnitEnum:
+      enum:
+      - day
+      - week
+      - month
+      - year
+      type: string
+      description: |-
+        * `day` - Days
+        * `week` - Weeks
+        * `month` - Months
+        * `year` - Years
     EntityTypeEnum:
       enum:
       - tracker
@@ -2712,6 +3356,7 @@ components:
       - category
       - tag
       - budget
+      - recurring_rule
       - transaction
       type: string
       description: |-
@@ -2720,6 +3365,7 @@ components:
         * `category` - category
         * `tag` - tag
         * `budget` - budget
+        * `recurring_rule` - recurring_rule
         * `transaction` - transaction
     Invite:
       type: object
@@ -2900,7 +3546,7 @@ components:
           readOnly: true
         state:
           allOf:
-          - $ref: '#/components/schemas/StateEnum'
+          - $ref: '#/components/schemas/MembershipStateEnum'
           readOnly: true
         joined_at:
           type: string
@@ -2939,6 +3585,14 @@ components:
         * `admin` - Admin
         * `editor` - Editor
         * `viewer` - Viewer
+    MembershipStateEnum:
+      enum:
+      - active
+      - removed
+      type: string
+      description: |-
+        * `active` - Active
+        * `removed` - Removed
     MembershipUpdateRoleEnum:
       enum:
       - admin
@@ -3226,6 +3880,63 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Merchant'
+    PaginatedRecurringOccurrenceList:
+      type: object
+      required:
+      - results
+      properties:
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cD00ODY%3D"
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/RecurringOccurrence'
+    PaginatedRecurringRuleList:
+      type: object
+      required:
+      - results
+      properties:
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cD00ODY%3D"
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/RecurringRule'
+    PaginatedRecurringRuleRevisionList:
+      type: object
+      required:
+      - results
+      properties:
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cD00ODY%3D"
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/RecurringRuleRevision'
     PaginatedTagList:
       type: object
       required:
@@ -3456,6 +4167,546 @@ components:
         * `monthly` - Monthly
         * `weekly` - Weekly
         * `custom` - Custom range
+    RecurringOccurrence:
+      type: object
+      description: Model serializer with strict input-field handling.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        tracker_id:
+          type: string
+          format: uuid
+          readOnly: true
+        rule_id:
+          type: string
+          format: uuid
+          readOnly: true
+        occurrence_key:
+          type: string
+          readOnly: true
+        due_on:
+          type: string
+          format: date
+          readOnly: true
+        scheduled_for:
+          type: string
+          format: date-time
+          readOnly: true
+        rule_version:
+          type: integer
+          readOnly: true
+        state:
+          allOf:
+          - $ref: '#/components/schemas/RecurringOccurrenceStateEnum'
+          readOnly: true
+        transaction_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        materialized_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        skipped_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        error_code:
+          type: string
+          readOnly: true
+        version:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - due_on
+      - error_code
+      - id
+      - materialized_at
+      - occurrence_key
+      - rule_id
+      - rule_version
+      - scheduled_for
+      - skipped_at
+      - state
+      - tracker_id
+      - transaction_id
+      - updated_at
+      - version
+    RecurringOccurrenceStateEnum:
+      enum:
+      - posted
+      - skipped
+      - failed
+      type: string
+      description: |-
+        * `posted` - Posted
+        * `skipped` - Skipped
+        * `failed` - Failed
+    RecurringRule:
+      type: object
+      description: Model serializer with strict input-field handling.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        tracker_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          maxLength: 120
+        kind:
+          $ref: '#/components/schemas/CategoryKind'
+        is_subscription:
+          type: boolean
+        amount_minor:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        currency:
+          type: string
+          maxLength: 3
+        currency_exponent:
+          type: integer
+          readOnly: true
+        account_id:
+          type: string
+          format: uuid
+        account_amount_minor:
+          type: integer
+          minimum: 1
+        category_id:
+          type: string
+          format: uuid
+          nullable: true
+        merchant:
+          type: string
+          maxLength: 160
+        note:
+          type: string
+          maxLength: 5000
+        base_amount_minor:
+          type: integer
+          minimum: 1
+        base_currency:
+          type: string
+          maxLength: 3
+          minLength: 3
+        rate_snapshot:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,16}(?:\.\d{0,12})?$
+        rate_source:
+          type: string
+          maxLength: 80
+        rate_effective_at:
+          type: string
+          format: date-time
+        cadence:
+          $ref: '#/components/schemas/CadenceEnum'
+        custom_interval_unit:
+          oneOf:
+          - $ref: '#/components/schemas/CustomIntervalUnitEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        custom_interval_count:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        time_zone:
+          type: string
+          maxLength: 64
+        starts_on:
+          type: string
+          format: date
+        ends_on:
+          type: string
+          format: date
+          nullable: true
+        local_time:
+          type: string
+          format: time
+        next_due_on:
+          type: string
+          format: date
+        next_due_at:
+          type: string
+          format: date-time
+          readOnly: true
+        renewal_date:
+          type: string
+          nullable: true
+          readOnly: true
+        state:
+          allOf:
+          - $ref: '#/components/schemas/RecurringRuleStateEnum'
+          readOnly: true
+        paused_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        ended_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        subscription_provider:
+          type: string
+          maxLength: 160
+        trial_ends_on:
+          type: string
+          format: date
+          nullable: true
+        cancellation_url:
+          type: string
+          format: uri
+          maxLength: 500
+        subscription_note:
+          type: string
+          maxLength: 2000
+        archived_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        version:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        deleted_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+      required:
+      - account_id
+      - amount_minor
+      - archived_at
+      - cadence
+      - created_at
+      - currency
+      - currency_exponent
+      - deleted_at
+      - ended_at
+      - id
+      - local_time
+      - name
+      - next_due_at
+      - paused_at
+      - renewal_date
+      - starts_on
+      - state
+      - time_zone
+      - tracker_id
+      - updated_at
+      - version
+    RecurringRuleRequest:
+      type: object
+      description: Model serializer with strict input-field handling.
+      properties:
+        tracker_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        kind:
+          $ref: '#/components/schemas/CategoryKind'
+        is_subscription:
+          type: boolean
+        amount_minor:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        currency:
+          type: string
+          minLength: 1
+          maxLength: 3
+        account_id:
+          type: string
+          format: uuid
+        account_amount_minor:
+          type: integer
+          minimum: 1
+        category_id:
+          type: string
+          format: uuid
+          nullable: true
+        merchant:
+          type: string
+          maxLength: 160
+        note:
+          type: string
+          maxLength: 5000
+        base_amount_minor:
+          type: integer
+          minimum: 1
+        base_currency:
+          type: string
+          minLength: 3
+          maxLength: 3
+        rate_snapshot:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,16}(?:\.\d{0,12})?$
+        rate_source:
+          type: string
+          minLength: 1
+          maxLength: 80
+        rate_effective_at:
+          type: string
+          format: date-time
+        cadence:
+          $ref: '#/components/schemas/CadenceEnum'
+        custom_interval_unit:
+          oneOf:
+          - $ref: '#/components/schemas/CustomIntervalUnitEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        custom_interval_count:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        time_zone:
+          type: string
+          minLength: 1
+          maxLength: 64
+        starts_on:
+          type: string
+          format: date
+        ends_on:
+          type: string
+          format: date
+          nullable: true
+        local_time:
+          type: string
+          format: time
+        next_due_on:
+          type: string
+          format: date
+        subscription_provider:
+          type: string
+          maxLength: 160
+        trial_ends_on:
+          type: string
+          format: date
+          nullable: true
+        cancellation_url:
+          type: string
+          format: uri
+          maxLength: 500
+        subscription_note:
+          type: string
+          maxLength: 2000
+        base_version:
+          type: integer
+          minimum: 1
+          writeOnly: true
+      required:
+      - account_id
+      - amount_minor
+      - cadence
+      - currency
+      - local_time
+      - name
+      - starts_on
+      - time_zone
+      - tracker_id
+    RecurringRuleRevision:
+      type: object
+      description: Model serializer with strict input-field handling.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        recorded_version:
+          type: integer
+          readOnly: true
+        reason:
+          type: string
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+        kind:
+          type: string
+          readOnly: true
+        is_subscription:
+          type: boolean
+          readOnly: true
+        amount_minor:
+          type: integer
+          readOnly: true
+        currency:
+          type: string
+          readOnly: true
+        currency_exponent:
+          type: integer
+          readOnly: true
+        account_id:
+          type: string
+          format: uuid
+          readOnly: true
+        account_amount_minor:
+          type: integer
+          readOnly: true
+        category_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        merchant:
+          type: string
+          readOnly: true
+        note:
+          type: string
+          readOnly: true
+        base_amount_minor:
+          type: integer
+          readOnly: true
+        base_currency:
+          type: string
+          readOnly: true
+        rate_snapshot:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,16}(?:\.\d{0,12})?$
+          readOnly: true
+        rate_source:
+          type: string
+          readOnly: true
+        rate_effective_at:
+          type: string
+          format: date-time
+          readOnly: true
+        cadence:
+          type: string
+          readOnly: true
+        custom_interval_unit:
+          type: string
+          readOnly: true
+        custom_interval_count:
+          type: integer
+          readOnly: true
+        time_zone:
+          type: string
+          readOnly: true
+        starts_on:
+          type: string
+          format: date
+          readOnly: true
+        ends_on:
+          type: string
+          format: date
+          readOnly: true
+          nullable: true
+        local_time:
+          type: string
+          format: time
+          readOnly: true
+        next_due_on:
+          type: string
+          format: date
+          readOnly: true
+        next_due_at:
+          type: string
+          format: date-time
+          readOnly: true
+        subscription_provider:
+          type: string
+          readOnly: true
+        trial_ends_on:
+          type: string
+          format: date
+          readOnly: true
+          nullable: true
+        cancellation_url:
+          type: string
+          format: uri
+          readOnly: true
+        subscription_note:
+          type: string
+          readOnly: true
+        editor_id:
+          type: string
+          format: uuid
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - account_amount_minor
+      - account_id
+      - amount_minor
+      - base_amount_minor
+      - base_currency
+      - cadence
+      - cancellation_url
+      - category_id
+      - created_at
+      - currency
+      - currency_exponent
+      - custom_interval_count
+      - custom_interval_unit
+      - editor_id
+      - ends_on
+      - id
+      - is_subscription
+      - kind
+      - local_time
+      - merchant
+      - name
+      - next_due_at
+      - next_due_on
+      - note
+      - rate_effective_at
+      - rate_snapshot
+      - rate_source
+      - reason
+      - recorded_version
+      - starts_on
+      - subscription_note
+      - subscription_provider
+      - time_zone
+      - trial_ends_on
+    RecurringRuleStateEnum:
+      enum:
+      - active
+      - paused
+      - ended
+      type: string
+      description: |-
+        * `active` - Active
+        * `paused` - Paused
+        * `ended` - Ended
     RefreshRequest:
       type: object
       properties:
@@ -3967,14 +5218,6 @@ components:
       - apple_wallet_shortcut
       type: string
       description: '* `apple_wallet_shortcut` - apple_wallet_shortcut'
-    StateEnum:
-      enum:
-      - active
-      - removed
-      type: string
-      description: |-
-        * `active` - Active
-        * `removed` - Removed
     SyncAckRequest:
       type: object
       description: Serializer that rejects misspelled or unsupported request fields.

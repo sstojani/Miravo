@@ -15,7 +15,7 @@ from apps.ledger.models import (
     TrackerMembership,
     Transaction,
 )
-from apps.planning.models import Budget
+from apps.planning.models import Budget, RecurringOccurrence, RecurringRule
 from apps.sync.models import SyncChange
 from apps.sync.realtime import schedule_sync_invalidation
 
@@ -51,6 +51,8 @@ def _record_change(sender: type[Any], instance: Any, raw: bool, **kwargs: Any) -
         Tag: SyncChange.EntityType.TAG,
         Merchant: SyncChange.EntityType.MERCHANT,
         Budget: SyncChange.EntityType.BUDGET,
+        RecurringRule: SyncChange.EntityType.RECURRING_RULE,
+        RecurringOccurrence: SyncChange.EntityType.RECURRING_OCCURRENCE,
         Transaction: SyncChange.EntityType.TRANSACTION,
     }[sender]
     tracker_id, audience_user_id = _scope(instance)
@@ -77,6 +79,8 @@ for _sender in (
     Tag,
     Merchant,
     Budget,
+    RecurringRule,
+    RecurringOccurrence,
     Transaction,
 ):
     receiver(
