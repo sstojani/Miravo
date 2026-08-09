@@ -131,3 +131,15 @@
 - **Decision:** Persist tracker-scoped tags, transaction/tag join rows, and membership roster rows in the scoped SwiftData cache. Encode tag mutations as their own sync root and include exact tag UUIDs in transaction commands. Cache server roles for offline presentation, but enforce viewer/admin/editor boundaries again inside the local repository rather than relying on hidden controls.
 - **Why:** Tags must participate in offline search/editing without embedding financial semantics in JSON, and an offline viewer must not create queued writes merely because a stale screen exposes an action. Membership remains a security field whose value comes only from tracker/membership snapshots.
 - **Consequence:** Archived tags cannot be assigned to new transactions, while a transaction update may retain a tag that was linked before archival so history is not silently rewritten. The synchronized roster remains readable offline. Invitations and server role mutation still require connectivity and remain in the collaboration milestone; native compile/runtime validation remains pending on macOS.
+
+## D-023 — Tracker order is shared authorized state
+
+- **Decision:** Store tracker presentation, defaults, and ordering on the synchronized tracker object. A reorder is one local transaction that emits an update for every changed tracker and is allowed only when the current user is owner/admin for every affected tracker.
+- **Why:** The backend already models `sort_order` as collaborative tracker state. Treating the same field as a private device preference would make clients fight over ordering, while partially reordering a mixed-role list could mutate trackers the user cannot administer or create ambiguous duplicate positions.
+- **Consequence:** A mixed list containing a viewer/editor-only tracker cannot be reordered as a whole; the UI hides the reorder control but still allows creation of a separate owned tracker. Presentation changes preserve an already-selected archived default unless the user explicitly replaces or clears it. Per-user ordering would require a distinct preference model later.
+
+## D-024 — Deterministic, non-color-only synchronization presentation
+
+- **Decision:** Resolve the compact Overview sync badge with a fixed priority: active sync, conflict, permanent failure, offline transport failure, pending work, prior success, then never synchronized. Pair every color with text and an SF Symbol, and show an explicit no-authorized-tracker state rather than substituting a demo name.
+- **Why:** A green/pending binary badge hid actionable failures and could imply that cached data was current. Conflict and failed operations need precedence over ordinary pending work, while a transport failure must not imply local data is unavailable.
+- **Consequence:** The badge is deterministic and unit-testable. Detailed recovery remains in Sync Diagnostics; the Overview state is concise and never blocks local use.

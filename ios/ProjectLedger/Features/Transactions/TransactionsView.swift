@@ -136,7 +136,16 @@ struct TransactionsView: View {
     var body: some View {
         let visibleSections = sections
         Group {
-            if visibleSections.isEmpty {
+            if trackers.isEmpty {
+                ContentUnavailableView {
+                    Label(
+                        "No available trackers",
+                        systemImage: "person.crop.circle.badge.exclamationmark"
+                    )
+                } description: {
+                    Text("Create a tracker in Settings or connect to receive an invitation.")
+                }
+            } else if visibleSections.isEmpty {
                 ContentUnavailableView {
                     if criteria.isActive {
                         Label("No matching transactions", systemImage: "line.3.horizontal.decrease.circle")

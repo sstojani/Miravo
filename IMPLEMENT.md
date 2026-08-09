@@ -335,3 +335,37 @@ Continue Milestone 5 with synchronized tags and role-aware tracker/member contro
 ### Next exact action
 
 Run the macOS iOS workflow when a repository is available and fix every compile/runtime/accessibility finding. Independently, continue Milestone 5 source work with tracker presentation/reordering and the remaining core empty/offline/permission states before starting the scoped Shortcut credential API.
+
+## 2026-08-09 — Milestone 5 presentation and state-completion checkpoint
+
+### Acceptance checks established
+
+- Tracker creation receives the next stable local sort position. Owner/admin presentation, defaults, and ordering changes validate fully before one SwiftData save and append exact ordered outbox payloads; editor/viewer attempts leave both records and outbox unchanged.
+- Editing a tracker never silently replaces a synchronized custom icon/color or clears an already-selected archived default. New defaults must be active and same-tracker; names, descriptions, icons, and colors respect the backend wire limits before enqueue.
+- The Overview sync badge deterministically distinguishes active sync, conflicts, permanent failures, offline transport, pending work, prior success, and never-synchronized state using text plus symbols. Overview and Transactions show an explicit no-authorized-tracker state rather than demo or stale financial content.
+- Native compile/runtime, reorder interaction, accessibility announcements, and 50,000-record timing remain open until the macOS workflow executes.
+
+### Material work
+
+- Added owner/admin tracker editing for name, description, icon, color, default account/category, and shared ordering. Preset pickers retain safe custom synchronized values, and the repository normalizes colors and enforces same-scope/default/role invariants.
+- Added atomic multi-tracker ordering with stable next-order assignment for new trackers. A mixed-role list cannot issue unauthorized partial ordering changes.
+- Added a pure `SyncPresentationState` resolver and expanded Overview from a pending-only badge to explicit syncing/conflict/failed/offline/pending/synced/never-synced states.
+- Added no-authorized-tracker states to Overview and Transactions, expanded the accessibility audit, authored sync-state and tracker repository tests, and completed English/Albanian resources for the implemented UI.
+
+### Commands and outcomes
+
+- `UV_CACHE_DIR=/tmp/project-ledger-uv-cache make check`: **passed locally** — 52 tests, 83.02% branch-aware coverage, Ruff format/lint, Django system checks, strict mypy over 69 source files, OpenAPI validation, and schema freshness.
+- `cd backend && ../.venv/bin/python manage.py makemigrations --check --dry-run`: **no changes detected**. An initial invocation used the repository root and therefore could not find `manage.py`; the corrected command above passed.
+- `ios/check-localizations.sh`: **passed locally** — 294 literal UI keys with identical English/Albanian key sets and compatible placeholders.
+- `python3 ios/check-project-contract.py`, plist/YAML parsing, the targeted iOS secret scan, and `git diff --check`: **passed locally**.
+- Parsed all 65 Swift source/test files with `tree-sitter-swift` 0.7.1 after excluding conditional directives and that parser version’s unsupported iOS 18 `#Unique` grammar: **no syntax-tree errors or missing nodes**.
+
+### Verification boundary
+
+- Backend/Linux gates and native localization/privacy/static source structure: **verified locally**.
+- Swift 6 type/concurrency checking, XcodeGen regeneration, SwiftFormat, SwiftData runtime tests, simulator UI/accessibility, and the 50,000-record timing: **authored but unverified** because Xcode/macOS are unavailable.
+- Docker/PostgreSQL/Redis, GitHub Actions, real server/Funnel, third-party signing, and physical iPhone behavior were not contacted.
+
+### Next exact action
+
+Commit this Milestone 5 source checkpoint, then begin Milestone 6 with the scoped, hashed, revocable Shortcut credential model and the narrow context/category/account/transaction API. Keep direct Shortcut capture independent from the native app and test duplicate/mismatched idempotency behavior before adding setup UI or documentation.

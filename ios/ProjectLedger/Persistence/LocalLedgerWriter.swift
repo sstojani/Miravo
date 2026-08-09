@@ -76,11 +76,13 @@ struct LocalLedgerRepository {
     ) throws -> LocalTracker {
         let cleanName = try validatedName(name)
         _ = try Money(minorUnits: 0, currencyCode: currencyCode, exponent: currencyExponent)
+        let sortOrder = try nextTrackerSortOrder(scopeKey: scopeKey)
         let tracker = LocalTracker(
             scopeKey: scopeKey,
             name: cleanName,
             baseCurrencyCode: currencyCode.uppercased(),
-            baseCurrencyExponent: currencyExponent
+            baseCurrencyExponent: currencyExponent,
+            sortOrder: sortOrder
         )
         try commit {
             context.insert(tracker)
@@ -96,6 +98,90 @@ struct LocalLedgerRepository {
             tracker.name = cleanName
             touch(tracker)
             try enqueue(tracker, command: .update)
+        }
+    }
+
+    func updateTracker(
+        _ tracker: LocalTracker,
+        name: String,
+        description: String,
+        icon: String,
+        colorHex: String,
+        defaultAccount: LocalAccount?,
+        defaultCategory: LocalCategory?
+    ) throws {
+        try validateManagementAccess(to: tracker, scopeKey: tracker.scopeKey)
+        let cleanName = try validatedName(name)
+        let cleanIcon = try validatedName(icon, maximumLength: 80)
+        let cleanColor = try validatedColorHex(colorHex)
+        let cleanDescription = description.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard cleanDescription.count <= 2_000 else {
+            throw LocalLedgerError.invalidReference
+        }
+        if let defaultAccount {
+            guard defaultAccount.scopeKey == tracker.scopeKey,
+                  defaultAccount.trackerID == tracker.id,
+                  defaultAccount.deletedAt == nil
+            else {
+                throw LocalLedgerError.invalidReference
+            }
+            if defaultAccount.archivedAt != nil,
+               defaultAccount.id != tracker.defaultAccountID {
+                throw LocalLedgerError.archivedReference
+            }
+        }
+        if let defaultCategory {
+            guard defaultCategory.scopeKey == tracker.scopeKey,
+                  defaultCategory.trackerID == tracker.id,
+                  defaultCategory.deletedAt == nil
+            else {
+                throw LocalLedgerError.invalidReference
+            }
+            if defaultCategory.archivedAt != nil,
+               defaultCategory.id != tracker.defaultCategoryID {
+                throw LocalLedgerError.archivedReference
+            }
+        }
+        try commit {
+            tracker.name = cleanName
+            tracker.trackerDescription = cleanDescription
+            tracker.icon = cleanIcon
+            tracker.colorHex = cleanColor
+            tracker.defaultAccountID = defaultAccount?.id
+            tracker.defaultCategoryID = defaultCategory?.id
+            touch(tracker)
+            try enqueue(tracker, command: .update)
+        }
+    }
+
+    func reorderTrackers(_ ordered: [LocalTracker], scopeKey: String) throws {
+        let ids = ordered.map(\.id)
+        guard !ordered.isEmpty,
+              Set(ids).count == ordered.count
+        else {
+            throw LocalLedgerError.invalidReference
+        }
+        let persisted = try context.fetch(
+            FetchDescriptor<LocalTracker>(
+                predicate: #Predicate {
+                    $0.scopeKey == scopeKey &&
+                        $0.deletedAt == nil &&
+                        $0.accessRevokedAt == nil
+                }
+            )
+        )
+        guard Set(persisted.map(\.id)) == Set(ids) else {
+            throw LocalLedgerError.invalidReference
+        }
+        for tracker in ordered {
+            try validateManagementAccess(to: tracker, scopeKey: scopeKey)
+        }
+        try commit {
+            for (index, tracker) in ordered.enumerated() where tracker.sortOrder != index {
+                tracker.sortOrder = index
+                touch(tracker)
+                try enqueue(tracker, command: .update)
+            }
         }
     }
 
@@ -521,10 +607,35 @@ struct LocalLedgerRepository {
         return copy
     }
 
-    private func validatedName(_ value: String) throws -> String {
+    private func validatedName(_ value: String, maximumLength: Int = 120) throws -> String {
         let clean = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !clean.isEmpty else { throw LocalLedgerError.blankName }
+        guard !clean.isEmpty, clean.count <= maximumLength else {
+            throw LocalLedgerError.blankName
+        }
         return clean
+    }
+
+    private func validatedColorHex(_ value: String) throws -> String {
+        let clean = value.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        guard clean.count == 7,
+              clean.first == "#",
+              clean.dropFirst().allSatisfy({ $0.isHexDigit })
+        else {
+            throw LocalLedgerError.invalidReference
+        }
+        return clean
+    }
+
+    private func nextTrackerSortOrder(scopeKey: String) throws -> Int {
+        let values = try context.fetch(
+            FetchDescriptor<LocalTracker>(
+                predicate: #Predicate { $0.scopeKey == scopeKey && $0.deletedAt == nil }
+            )
+        )
+        guard let maximum = values.map(\.sortOrder).max() else { return 0 }
+        let (next, overflow) = maximum.addingReportingOverflow(1)
+        guard !overflow else { throw MoneyError.outOfRange }
+        return next
     }
 
     private func validate(tracker: LocalTracker, scopeKey: String) throws {

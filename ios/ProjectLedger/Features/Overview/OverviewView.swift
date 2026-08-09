@@ -97,14 +97,23 @@ struct OverviewView: View {
                         Text("This month")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
-                        Text(trackers.first?.name ?? String(localized: "Everyday"))
+                        Text(trackers.first?.name ?? String(localized: "No available tracker"))
                             .font(.title.bold())
                     }
                     Spacer()
-                    SyncBadge(pendingCount: outbox.count)
+                    SyncBadge(state: syncPresentationState)
                 }
 
-                if currencySummaries.isEmpty {
+                if trackers.isEmpty {
+                    ContentUnavailableView(
+                        "No available tracker",
+                        systemImage: "person.crop.circle.badge.exclamationmark",
+                        description: Text(
+                            "Create a tracker in Settings or connect to receive an invitation."
+                        )
+                    )
+                    .ledgerCard()
+                } else if currencySummaries.isEmpty {
                     ContentUnavailableView(
                         "No transactions yet",
                         systemImage: "tray",
@@ -152,12 +161,14 @@ struct OverviewView: View {
                     .ledgerCard()
                 }
 
-                Text("Recent transactions")
-                    .font(.title2.bold())
+                if !trackers.isEmpty {
+                    Text("Recent transactions")
+                        .font(.title2.bold())
 
-                ForEach(trackerTransactions.prefix(5)) { transaction in
-                    TransactionRow(transaction: transaction)
-                        .ledgerCard()
+                    ForEach(trackerTransactions.prefix(5)) { transaction in
+                        TransactionRow(transaction: transaction)
+                            .ledgerCard()
+                    }
                 }
             }
             .padding()
@@ -166,6 +177,18 @@ struct OverviewView: View {
             await sync.synchronize(session: session)
         }
         .navigationTitle("Overview")
+    }
+
+    private var syncPresentationState: SyncPresentationState {
+        let diagnostics = sync.diagnostics
+        return SyncPresentationState.resolve(
+            isRunning: sync.isRunning || diagnostics.isSyncing,
+            pendingCount: max(outbox.count, diagnostics.pendingCount),
+            failedCount: diagnostics.failedCount,
+            conflictCount: diagnostics.conflictCount,
+            lastSuccessfulSyncAt: diagnostics.lastSuccessfulSyncAt,
+            lastSafeErrorCode: diagnostics.lastSafeErrorCode
+        )
     }
 }
 
@@ -208,20 +231,56 @@ private struct AmountSummary: View {
 }
 
 struct SyncBadge: View {
-    let pendingCount: Int
+    let state: SyncPresentationState
 
     var body: some View {
-        Label(
-            pendingCount == 0 ? String(localized: "Local data ready") : String.localizedStringWithFormat(
-                String(localized: "Pending count format"),
-                String(pendingCount)
-            ),
-            systemImage: pendingCount == 0 ? "checkmark.circle" : "arrow.triangle.2.circlepath"
-        )
+        Label(title, systemImage: symbol)
         .font(.caption)
-        .foregroundStyle(pendingCount == 0 ? LedgerTheme.positive : LedgerTheme.warning)
+        .foregroundStyle(color)
         .padding(.horizontal, 10)
         .padding(.vertical, 7)
         .background(.secondary.opacity(0.10), in: Capsule())
+    }
+
+    private var title: String {
+        switch state {
+        case .syncing:
+            String(localized: "Syncing")
+        case let .conflict(count):
+            String.localizedStringWithFormat(String(localized: "Conflict count format"), count)
+        case let .failed(count):
+            String.localizedStringWithFormat(String(localized: "Failed count format"), count)
+        case .offline:
+            String(localized: "Offline — local data available")
+        case let .pending(count):
+            String.localizedStringWithFormat(
+                String(localized: "Pending count format"),
+                String(count)
+            )
+        case .synced:
+            String(localized: "Synced")
+        case .notSynchronized:
+            String(localized: "Not synchronized")
+        }
+    }
+
+    private var symbol: String {
+        switch state {
+        case .syncing: "arrow.triangle.2.circlepath"
+        case .conflict: "arrow.triangle.branch"
+        case .failed: "exclamationmark.triangle"
+        case .offline: "wifi.slash"
+        case .pending: "clock.arrow.circlepath"
+        case .synced: "checkmark.circle"
+        case .notSynchronized: "icloud.slash"
+        }
+    }
+
+    private var color: Color {
+        switch state {
+        case .synced: LedgerTheme.positive
+        case .failed, .conflict: LedgerTheme.negative
+        case .syncing, .offline, .pending, .notSynchronized: LedgerTheme.warning
+        }
     }
 }

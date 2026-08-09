@@ -422,6 +422,109 @@ struct LocalLedgerRepositoryTests {
         #expect(try context.fetch(FetchDescriptor<OutboxMutation>()).count == before)
     }
 
+    @Test func trackerPresentationDefaultsAndOrderingAreAtomicAndSyncable() throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let repository = LocalLedgerRepository(context: context)
+        let everyday = try repository.bootstrapDefaults(scopeKey: scope)
+        let account = try #require(context.fetch(FetchDescriptor<LocalAccount>()).first)
+        let category = try #require(context.fetch(FetchDescriptor<LocalCategory>()).first)
+        let trip = try repository.createTracker(
+            scopeKey: scope,
+            name: "Trip",
+            currencyCode: "EUR",
+            currencyExponent: 2
+        )
+
+        #expect(everyday.sortOrder == 0)
+        #expect(trip.sortOrder == 1)
+
+        let beforeInvalidUpdate = try context.fetch(FetchDescriptor<OutboxMutation>()).count
+        #expect(throws: LocalLedgerError.invalidReference) {
+            try repository.updateTracker(
+                everyday,
+                name: "Must not persist",
+                description: "",
+                icon: "house",
+                colorHex: "not-a-color",
+                defaultAccount: account,
+                defaultCategory: category
+            )
+        }
+        #expect(everyday.name == "Everyday")
+        #expect(
+            try context.fetch(FetchDescriptor<OutboxMutation>()).count == beforeInvalidUpdate
+        )
+
+        try repository.updateTracker(
+            everyday,
+            name: "Daily life",
+            description: "Shared household spending",
+            icon: "house",
+            colorHex: "#138a72",
+            defaultAccount: account,
+            defaultCategory: category
+        )
+        try repository.reorderTrackers([trip, everyday], scopeKey: scope)
+
+        #expect(everyday.name == "Daily life")
+        #expect(everyday.trackerDescription == "Shared household spending")
+        #expect(everyday.icon == "house")
+        #expect(everyday.colorHex == "#138A72")
+        #expect(everyday.defaultAccountID == account.id)
+        #expect(everyday.defaultCategoryID == category.id)
+        #expect(trip.sortOrder == 0)
+        #expect(everyday.sortOrder == 1)
+
+        let trackerMutations = try context.fetch(FetchDescriptor<OutboxMutation>())
+            .filter { $0.entityType == LocalMutationEntity.tracker.rawValue }
+        #expect(trackerMutations.filter { $0.entityID == trip.id }.count == 2)
+        #expect(trackerMutations.filter { $0.entityID == everyday.id }.count == 4)
+
+        let latestEveryday = try #require(
+            trackerMutations
+                .filter { $0.entityID == everyday.id }
+                .max { $0.localSequence < $1.localSequence }
+        )
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        let payload = try decoder.decode(
+            TrackerMutationPayload.self,
+            from: latestEveryday.payloadJSON
+        )
+        #expect(payload.sortOrder == 1)
+        #expect(payload.defaultAccountID == account.id)
+        #expect(payload.defaultCategoryID == category.id)
+    }
+
+    @Test func editorCannotChangeTrackerSettingsOrOrdering() throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let repository = LocalLedgerRepository(context: context)
+        let tracker = try repository.bootstrapDefaults(scopeKey: scope)
+        tracker.roleRaw = TrackerRole.editor.rawValue
+        try context.save()
+        let before = try context.fetch(FetchDescriptor<OutboxMutation>()).count
+
+        #expect(throws: LocalLedgerError.permissionDenied) {
+            try repository.updateTracker(
+                tracker,
+                name: "Blocked",
+                description: "",
+                icon: "house",
+                colorHex: "#138A72",
+                defaultAccount: nil,
+                defaultCategory: nil
+            )
+        }
+        #expect(throws: LocalLedgerError.permissionDenied) {
+            try repository.reorderTrackers([tracker], scopeKey: scope)
+        }
+        #expect(tracker.name == "Everyday")
+        #expect(try context.fetch(FetchDescriptor<OutboxMutation>()).count == before)
+    }
+
     private func makeContainer() throws -> ModelContainer {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
         return try ModelContainer(

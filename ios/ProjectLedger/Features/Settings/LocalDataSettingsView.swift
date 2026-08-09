@@ -6,7 +6,7 @@ private enum LocalDataSheet: Identifiable {
     case addAccount
     case addCategory
     case addTag
-    case renameTracker(LocalTracker)
+    case editTracker(LocalTracker)
     case renameAccount(LocalAccount)
     case renameCategory(LocalCategory)
     case renameTag(LocalTag)
@@ -17,7 +17,7 @@ private enum LocalDataSheet: Identifiable {
         case .addAccount: "add-account"
         case .addCategory: "add-category"
         case .addTag: "add-tag"
-        case let .renameTracker(item): "tracker-\(item.id)"
+        case let .editTracker(item): "tracker-\(item.id)"
         case let .renameAccount(item): "account-\(item.id)"
         case let .renameCategory(item): "category-\(item.id)"
         case let .renameTag(item): "tag-\(item.id)"
@@ -77,6 +77,10 @@ struct LocalDataSettingsView: View {
         activeTrackers.filter { $0.role.canEditFinancialData }
     }
 
+    private var canReorderTrackers: Bool {
+        trackers.count > 1 && trackers.allSatisfy { $0.role.canManageTracker }
+    }
+
     private var visibleAccounts: [LocalAccount] {
         let trackerIDs = Set(trackers.map(\.id))
         return accounts.filter { trackerIDs.contains($0.trackerID) }
@@ -105,7 +109,7 @@ struct LocalDataSettingsView: View {
                     )
                     .contentShape(Rectangle())
                     .onTapGesture {
-                        if tracker.role.canManageTracker { sheet = .renameTracker(tracker) }
+                        if tracker.role.canManageTracker { sheet = .editTracker(tracker) }
                     }
                     .swipeActions {
                         if tracker.role.canManageTracker {
@@ -118,6 +122,7 @@ struct LocalDataSettingsView: View {
                         }
                     }
                 }
+                .onMove(perform: reorderTrackers)
             }
 
             Section("Collaborators") {
@@ -217,6 +222,9 @@ struct LocalDataSettingsView: View {
         }
         .navigationTitle("Local data")
         .toolbar {
+            if canReorderTrackers {
+                EditButton()
+            }
             Menu {
                 Button("New tracker", systemImage: "square.stack.3d.up.badge.plus") {
                     sheet = .addTracker
@@ -247,11 +255,12 @@ struct LocalDataSettingsView: View {
                 AddCategorySheet(scopeKey: scopeKey, trackers: editableTrackers)
             case .addTag:
                 AddTagSheet(scopeKey: scopeKey, trackers: editableTrackers)
-            case let .renameTracker(item):
-                RenameSheet(title: "Rename tracker", currentName: item.name) { name in
-                    try repository.renameTracker(item, name: name)
-                    requestSync()
-                }
+            case let .editTracker(item):
+                TrackerEditorSheet(
+                    tracker: item,
+                    accounts: visibleAccounts,
+                    categories: visibleCategories
+                )
             case let .renameAccount(item):
                 RenameSheet(title: "Rename account", currentName: item.name) { name in
                     try repository.renameAccount(item, name: name)
@@ -293,6 +302,17 @@ struct LocalDataSettingsView: View {
 
     private func requestSync() {
         Task { await sync.synchronize(session: session) }
+    }
+
+    private func reorderTrackers(from source: IndexSet, to destination: Int) {
+        var reordered = trackers
+        reordered.move(fromOffsets: source, toOffset: destination)
+        do {
+            try repository.reorderTrackers(reordered, scopeKey: scopeKey)
+            requestSync()
+        } catch {
+            safeError = String(localized: "The tracker order could not be saved.")
+        }
     }
 
     private func archiveButton(
@@ -338,6 +358,190 @@ private struct EntityRow: View {
         }
         .opacity(archived ? 0.55 : 1)
         .accessibilityElement(children: .combine)
+    }
+}
+
+private struct TrackerIconOption: Identifiable {
+    let id: String
+    let title: String
+
+    static let all = [
+        TrackerIconOption(id: "wallet.pass", title: String(localized: "Wallet")),
+        TrackerIconOption(id: "house", title: String(localized: "Home")),
+        TrackerIconOption(id: "airplane", title: String(localized: "Travel")),
+        TrackerIconOption(id: "hammer", title: String(localized: "Project")),
+        TrackerIconOption(id: "person.2", title: String(localized: "Household")),
+    ]
+}
+
+private struct TrackerColorOption: Identifiable {
+    let id: String
+    let title: String
+
+    static let all = [
+        TrackerColorOption(id: "#3663F5", title: String(localized: "Blue")),
+        TrackerColorOption(id: "#6E56CF", title: String(localized: "Purple")),
+        TrackerColorOption(id: "#138A72", title: String(localized: "Green")),
+        TrackerColorOption(id: "#D97706", title: String(localized: "Orange")),
+        TrackerColorOption(id: "#C2415D", title: String(localized: "Rose")),
+    ]
+}
+
+private struct TrackerEditorSheet: View {
+    let tracker: LocalTracker
+    let accounts: [LocalAccount]
+    let categories: [LocalCategory]
+
+    @Environment(\.modelContext) private var modelContext
+    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var session: SessionController
+    @EnvironmentObject private var sync: SyncController
+    @State private var name: String
+    @State private var description: String
+    @State private var icon: String
+    @State private var colorHex: String
+    @State private var defaultAccountID: UUID?
+    @State private var defaultCategoryID: UUID?
+    @State private var safeError: String?
+
+    init(
+        tracker: LocalTracker,
+        accounts: [LocalAccount],
+        categories: [LocalCategory]
+    ) {
+        self.tracker = tracker
+        self.accounts = accounts
+        self.categories = categories
+        let selectableAccounts = accounts.filter {
+            $0.trackerID == tracker.id &&
+                $0.deletedAt == nil &&
+                ($0.archivedAt == nil || $0.id == tracker.defaultAccountID)
+        }
+        let selectableCategories = categories.filter {
+            $0.trackerID == tracker.id &&
+                $0.deletedAt == nil &&
+                ($0.archivedAt == nil || $0.id == tracker.defaultCategoryID)
+        }
+        _name = State(initialValue: tracker.name)
+        _description = State(initialValue: tracker.trackerDescription)
+        _icon = State(initialValue: tracker.icon)
+        _colorHex = State(initialValue: tracker.colorHex.uppercased())
+        _defaultAccountID = State(
+            initialValue: selectableAccounts.contains { $0.id == tracker.defaultAccountID }
+                ? tracker.defaultAccountID : nil
+        )
+        _defaultCategoryID = State(
+            initialValue: selectableCategories.contains { $0.id == tracker.defaultCategoryID }
+                ? tracker.defaultCategoryID : nil
+        )
+    }
+
+    private var availableAccounts: [LocalAccount] {
+        accounts.filter {
+            $0.trackerID == tracker.id &&
+                $0.deletedAt == nil &&
+                ($0.archivedAt == nil || $0.id == tracker.defaultAccountID)
+        }
+    }
+
+    private var availableCategories: [LocalCategory] {
+        categories.filter {
+            $0.trackerID == tracker.id &&
+                $0.deletedAt == nil &&
+                ($0.archivedAt == nil || $0.id == tracker.defaultCategoryID)
+        }
+    }
+
+    private var iconOptions: [TrackerIconOption] {
+        guard !TrackerIconOption.all.contains(where: { $0.id == icon }) else {
+            return TrackerIconOption.all
+        }
+        return [TrackerIconOption(id: icon, title: String(localized: "Current icon"))] +
+            TrackerIconOption.all
+    }
+
+    private var colorOptions: [TrackerColorOption] {
+        guard !TrackerColorOption.all.contains(where: { $0.id == colorHex }) else {
+            return TrackerColorOption.all
+        }
+        return [TrackerColorOption(
+            id: colorHex,
+            title: String(localized: "Current color")
+        )] + TrackerColorOption.all
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Presentation") {
+                    TextField("Name", text: $name)
+                    TextField("Description", text: $description, axis: .vertical)
+                        .lineLimit(2 ... 4)
+                    Picker("Icon", selection: $icon) {
+                        ForEach(iconOptions) { option in
+                            Label(option.title, systemImage: option.id).tag(option.id)
+                        }
+                    }
+                    Picker("Color", selection: $colorHex) {
+                        ForEach(colorOptions) { option in
+                            Label {
+                                Text(option.title)
+                            } icon: {
+                                Image(systemName: "circle.fill")
+                                    .foregroundStyle(
+                                        Color(ledgerHex: option.id) ?? LedgerTheme.accent
+                                    )
+                            }
+                            .tag(option.id)
+                        }
+                    }
+                }
+
+                Section("Defaults") {
+                    Picker("Default account", selection: $defaultAccountID) {
+                        Text("No default account").tag(UUID?.none)
+                        ForEach(availableAccounts) { account in
+                            Text(account.name).tag(Optional(account.id))
+                        }
+                    }
+                    Picker("Default category", selection: $defaultCategoryID) {
+                        Text("No default category").tag(UUID?.none)
+                        ForEach(availableCategories) { category in
+                            Text("\(category.name) · \(category.kind.displayName)")
+                                .tag(Optional(category.id))
+                        }
+                    }
+                    LabeledContent("Base currency", value: tracker.baseCurrencyCode)
+                } footer: {
+                    Text("Historical reporting currency cannot be changed here.")
+                }
+
+                if let safeError {
+                    Text(safeError).foregroundStyle(LedgerTheme.negative)
+                }
+            }
+            .navigationTitle("Edit tracker")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { editorToolbar(save: save, dismiss: dismiss) }
+        }
+    }
+
+    private func save() {
+        do {
+            try LocalLedgerRepository(context: modelContext).updateTracker(
+                tracker,
+                name: name,
+                description: description,
+                icon: icon,
+                colorHex: colorHex,
+                defaultAccount: availableAccounts.first { $0.id == defaultAccountID },
+                defaultCategory: availableCategories.first { $0.id == defaultCategoryID }
+            )
+            Task { await sync.synchronize(session: session) }
+            dismiss()
+        } catch {
+            safeError = String(localized: "Enter valid tracker details.")
+        }
     }
 }
 
