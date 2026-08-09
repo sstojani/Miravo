@@ -2,7 +2,7 @@
 
 ## Current state
 
-Milestones 0–2 and the Milestone 4 server protocol are complete at the locally verifiable tier. Native local-first and foreground synchronization source/tests are implemented; Linux static privacy, localization, YAML/plist, whitespace, and syntax-tree checks pass, while Swift/Xcode compilation remains unverified. Attachment transfer and optional WebSocket invalidation are the remaining Milestone 4 source work. Docker/PostgreSQL integration and hosted CI remain environmental checks. No production system has been contacted.
+Milestones 0–2 and Milestone 4 source work are complete at the locally verifiable tier. Native local-first and foreground synchronization source/tests are implemented, including the durable attachment-transfer queue boundary, optional WebSocket/polling invalidation, active connectivity hints, and best-effort background scheduling. Linux static privacy, localization, YAML/plist, whitespace, and syntax-tree checks pass, while Swift/Xcode compilation remains unverified. Binary receipt transport remains Milestone 9. Docker/PostgreSQL/Redis integration and hosted CI remain environmental checks. No production system has been contacted.
 
 ## Verified
 
@@ -11,12 +11,12 @@ Milestones 0–2 and the Milestone 4 server protocol are complete at the locally
 - Architecture, trust boundaries, sync semantics, test categories, deployment separation, and stop conditions are documented.
 - Current official documentation still supports the core Wallet-Shortcut/API bridge and warns that Tailscale CLI syntax is version-dependent.
 - `uv.lock`, initial migrations, and the committed OpenAPI schema are reproducible and current.
-- `make check` passes: 47 tests, 83.55% branch-aware coverage, Ruff, strict mypy, Django checks, and OpenAPI validation/freshness.
+- `make check` passes: 50 tests, 82.07% branch-aware coverage, Ruff, strict mypy, Django checks, and OpenAPI validation/freshness.
 - Fresh-database migration checks, Django deployment checks with synthetic secrets, Bandit, `pip-audit`, YAML parsing, localization parity, whitespace checks, and a targeted secret scan pass locally.
 - Owner/admin/editor/viewer APIs, invitation lifecycle, derived balances, exact allocations, transfers/refunds/voids, cross-currency snapshots, revision conflicts, tombstones, category history/merge, and archive/restore flows are locally acceptance-tested.
 - The iOS source now has strict locale-aware minor-unit input, compound server/user-scoped SwiftData models, atomic CRUD/outbox/movement/allocation writes, Keychain login/rotation, optional app lock, non-destructive store-failure handling, local management screens, and authored unit/UI tests.
-- The native sync source implements stable ordered pushes, transient backoff, atomic pull/cursor pages, paginated bootstrap staging/reconciliation plus catch-up pull, access revocation, diagnostics, and structured conflict decisions. Deterministic transport tests are authored for the principal recovery paths.
-- English/Albanian implemented-screen coverage (199 literal keys), release/debug ATS separation, privacy-manifest disclosure, YAML/plist structure, and independent Swift syntax-tree parsing pass locally.
+- The native sync source implements stable ordered pushes, transient backoff, atomic pull/cursor pages, paginated bootstrap staging/reconciliation plus catch-up pull, access revocation, diagnostics, structured conflict decisions, a restart-safe attachment-transfer queue, optional foreground invalidation, connectivity-return sync, and best-effort background refresh. Deterministic tests are authored for these boundaries.
+- English/Albanian implemented-screen coverage (208 literal keys), release/debug ATS separation, privacy-manifest disclosure, YAML/plist structure, and independent Swift syntax-tree parsing pass locally.
 
 ## Not yet verified
 
@@ -44,3 +44,5 @@ Milestones 0–2 and the Milestone 4 server protocol are complete at the locally
 - GitHub macOS 15 runner image/tool inventory: https://github.com/actions/runner-images/blob/main/images/macos/macos-15-Readme.md
 - Apple privacy manifest data-use guidance: https://developer.apple.com/documentation/bundleresources/describing-data-use-in-privacy-manifests
 - Apple app privacy details: https://developer.apple.com/app-store/app-privacy-details/
+- Apple BackgroundTasks scheduler: https://developer.apple.com/documentation/backgroundtasks/bgtaskscheduler
+- Apple Network path monitor: https://developer.apple.com/documentation/network/nwpathmonitor

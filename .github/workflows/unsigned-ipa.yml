@@ -91,6 +91,8 @@ jobs:
           test -n "$(plutil -extract NSCameraUsageDescription raw "$info")"
           test -n "$(plutil -extract NSFaceIDUsageDescription raw "$info")"
           test -n "$(plutil -extract NSPhotoLibraryUsageDescription raw "$info")"
+          test "$(plutil -extract BGTaskSchedulerPermittedIdentifiers.0 raw "$info")" = "$EXPECTED_BUNDLE_ID.sync.refresh"
+          test "$(plutil -extract UIBackgroundModes.0 raw "$info")" = "fetch"
           test "$(plutil -extract NSAppTransportSecurity.NSAllowsArbitraryLoads raw "$info")" = "false"
           if plutil -extract NSAppTransportSecurity.NSAllowsLocalNetworking raw "$info" >/dev/null 2>&1; then
             echo "Release app contains a development-only local-network ATS exception." >&2
@@ -130,7 +132,7 @@ jobs:
             --arg build_number "$build_number" \
             --arg minimum_ios "$EXPECTED_MINIMUM_IOS" \
             --arg architectures "$architectures" \
-            '{label:$label,commit:$commit,build_date:$build_date,macos:$macos,xcode:$xcode,swift:$swift,bundle_id:$bundle_id,version:$version,build_number:$build_number,minimum_ios:$minimum_ios,architectures:$architectures,code_signing:false,special_entitlements_required:false}' \
+            '{label:$label,commit:$commit,build_date:$build_date,macos:$macos,xcode:$xcode,swift:$swift,bundle_id:$bundle_id,version:$version,build_number:$build_number,minimum_ios:$minimum_ios,architectures:$architectures,code_signing:false,special_entitlements_required:false,feature_flags:{background_refresh:"optional",websocket_invalidation:"optional",manual_foreground_sync:"required"}}' \
             >"$artifacts/build-manifest.json"
 
           (cd "$artifacts" && shasum -a 256 ProjectLedger-UNSIGNED.ipa >ProjectLedger-UNSIGNED.ipa.sha256)

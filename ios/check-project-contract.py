@@ -41,6 +41,12 @@ def main() -> int:
     if debug_ats.get("NSAllowsArbitraryLoads") is not False:
         fail("Debug ATS must still deny arbitrary loads.")
 
+    expected_background_identifier = ["$(PRODUCT_BUNDLE_IDENTIFIER).sync.refresh"]
+    if release_info.get("BGTaskSchedulerPermittedIdentifiers") != expected_background_identifier:
+        fail("Background refresh must use the bundle-derived permitted identifier.")
+    if release_info.get("UIBackgroundModes") != ["fetch"]:
+        fail("Only optional background fetch may be declared for the sync refresh task.")
+
     if privacy.get("NSPrivacyTracking") is not False:
         fail("Tracking must remain disabled.")
     if privacy.get("NSPrivacyTrackingDomains") != []:
@@ -95,7 +101,7 @@ def main() -> int:
     if "NSPrivacyCollectedDataTypePaymentInfo" in declared_types:
         fail("The app must not collect payment credentials or payment information.")
 
-    print("iOS transport and privacy contract verified.")
+    print("iOS transport, background-task, and privacy contract verified.")
     return 0
 
 

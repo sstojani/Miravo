@@ -22,6 +22,8 @@ If step 2 fails, neither entity nor outbox persists. Undo is another auditable l
 - Conflicts and permanent failures do not block unrelated operations.
 - Binary attachments use a separate checksum/idempotency queue and never ride in the mutation batch.
 
+The current native attachment boundary persists a compound scoped attachment UUID, owning transaction UUID, relative local path, allow-listed MIME type, positive bounded byte count, lowercase SHA-256 digest, state, attempt count, next retry, safe error code, and timestamps. Enqueue is idempotent only for an identical metadata fingerprint; conflicting reuse fails. Interrupted `uploading` rows return to `pending` after restart. This is queue scaffolding, not a claim that binary upload exists—the private upload protocol and server attachment resource arrive with receipts in Milestone 9.
+
 ## Pull
 
 - Each device stores a durable opaque cursor signed by the server and bound to that user UUID.
@@ -54,5 +56,9 @@ A page or publish failure rolls back its entire local transaction. Completed sta
 ## Triggers and diagnostics
 
 Attempt on login/bootstrap, launch/foreground, local change, pull-to-refresh, active connectivity return, periodic active timer, best-effort BackgroundTasks, and WebSocket invalidation. Correctness never assumes a precise background or Wi-Fi event.
+
+The iOS foreground socket uses `wss` on the configured HTTPS origin, sends the current access JWT only in the authorization header, refuses redirects, bounds frames to 64 KiB, and reconnects with exponential backoff. The ASGI consumer validates the active device session, joins user-specific/global fan-out groups, sends only a sequence hint, and closes at token expiry. A hint is coalesced into a normal pull; it never mutates local domain state directly. When the token rotates after an HTTP refresh, the client replaces the socket. Redis, WebSocket, background scheduling, and reachability-monitor failure all degrade to the active timer/manual/foreground paths.
+
+`NWPathMonitor` is treated only as a transition hint: the initial path does not duplicate launch sync, and only an observed unsatisfied-to-satisfied transition requests another run. `BGAppRefreshTask` has a bundle-derived permitted identifier, is resubmitted best-effort, honors expiration cancellation, and reports whether iOS accepted the request. iOS decides when or whether to execute it.
 
 The UI always exposes last success, current state, pending/failed/conflict counts, and manual retry. States are pending, syncing, synced, failed, and conflicted.

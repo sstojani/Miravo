@@ -215,3 +215,45 @@ Checkpoint the verified server slice, then implement the iOS synchronization act
 ### Next exact action
 
 Commit this recovery-focused checkpoint, then finish Milestone 4 with the separate attachment transfer queue scaffold and optional foreground WebSocket invalidation. After that, run the macOS workflow as soon as a remote repository is available and fix every compiler/runtime failure before marking native acceptance.
+
+## 2026-08-09 — Milestone 4 transport completion checkpoint
+
+### Acceptance checks established
+
+- Attachment transfer metadata is isolated from domain mutation batches, scoped to one server/user and transaction, and validates a relative path, allow-listed media type, positive configurable size, and lowercase SHA-256 digest before persistence.
+- Re-enqueueing the same attachment UUID/metadata is harmless; changed metadata conflicts. Pending/uploading/failed/uploaded/cancelled transitions are explicit, interrupted uploads recover after restart, and ready batches are capped.
+- WebSockets authenticate the same active access JWT/device session as HTTP without query-string credentials. They emit no financial payload, expire with the JWT, and cannot be required for synchronization correctness.
+- Foreground invalidations, connectivity-return hints, periodic active sync, and background refresh all converge on the same push/pull engine. Concurrent hints coalesce and unrelated records remain usable.
+- Background execution remains explicitly opportunistic and physical execution is not claimed before Xcode/device validation.
+
+### Material work
+
+- Added a compound-scoped SwiftData `AttachmentTransfer` model and `@ModelActor` queue with safe metadata validation, idempotent enqueue, bounded selection, durable attempts/retry state, cancellation, completion, and interrupted-transfer recovery. Settings shows pending/failed counts; binary upload remains deferred.
+- Refactored access-token validation into one HTTP/ASGI service. Added Channels middleware that rejects missing/invalid/revoked credentials, a user/global-group consumer, access-expiry closure, post-commit fan-out, and a `/api/v1/sync/events` route. Events contain only `type`, `protocol_version`, and `sequence`.
+- Added ASGI tests using the protocol-level communicator without adding a production/test Daphne dependency. The tests prove unauthenticated rejection and exact sequence-only delivery after a committed tracker mutation.
+- Added a redirect-refusing iOS WebSocket actor with same-origin URL derivation, 64 KiB frame bound, strict versioned decoding, token-rotation restart, foreground-only lifetime, and exponential reconnect backoff. Invalidation invokes ordinary sync; Settings distinguishes connected from polling fallback.
+- Added an active-only `NWPathMonitor` transition helper that ignores the initial state and triggers only after unsatisfied-to-satisfied recovery.
+- Registered a bundle-derived `BGAppRefreshTask`, added the permitted plist identifier/background-fetch declaration, resubmits it best-effort, cancels work at expiration, and exposes whether scheduling was accepted. The scene stops socket/reachability work when inactive or locked.
+- Added authored Swift tests for attachment validation/recovery, WebSocket URL/protocol bounds, and connectivity transition semantics. Updated English and Albanian resources and the protocol/architecture/API documentation.
+- Re-checked Apple’s current `BGTaskScheduler` registration/submission, permitted-identifier, and `NWPathMonitor` start/path-handler contracts against official developer documentation before implementing the hooks.
+
+### Commands and outcomes
+
+- `UV_CACHE_DIR=/tmp/project-ledger-uv-cache make check`: **passed locally** — 50 tests, 82.07% branch-aware coverage, Ruff format/lint, Django system checks, strict mypy over 69 backend/config source files, OpenAPI validation, and schema freshness.
+- `manage.py makemigrations --check --dry-run`: **no changes detected**.
+- `backend/tests/test_realtime.py`: **3 passed locally**, covering missing/revoked authorization rejection and sequence-only post-commit delivery through the full ASGI router.
+- `ios/check-localizations.sh`: **passed locally** — 208 literal UI keys are present with matching English/Albanian key sets and format placeholders.
+- `python3 ios/check-project-contract.py`, plist/YAML parsing, targeted secret scan, and `git diff --check`: **passed locally**.
+- Parsed all 56 Swift source/test files with `tree-sitter-swift` after excluding conditional directives and the parser version’s unsupported iOS 18 `#Unique` declaration grammar: **no remaining syntax-tree errors**. This remains a parser check, not Swift compilation.
+
+### Verification boundary
+
+- Django/Channels behavior with the in-memory channel layer and SQLite: **verified locally on Linux**.
+- Redis-backed fan-out, PostgreSQL concurrency, Compose proxy WebSocket upgrade, and Docker lifecycle: **not yet verified** because Docker is unavailable.
+- Native source/resources/static protocol shape: **verified locally on Linux**.
+- Swift 6 concurrency checks, BackgroundTasks registration/runtime, NWPath behavior, URLSession WebSocket behavior, SwiftData queue semantics, simulator tests, signer-preserved background mode, and physical-device execution: **authored but unverified** until hosted macOS/device testing.
+- No real server, Funnel policy, signing service, or remote repository was contacted.
+
+### Next exact action
+
+Begin Milestone 5 with a coherent offline vertical slice: transfer entry and linked local movements, then refund/duplicate/undo polish and transaction filter expansion. Keep the existing server command boundary authoritative and run the macOS workflow immediately when a remote repository becomes available.

@@ -12,6 +12,7 @@
 "Archive" = "Arkivo";
 "Archived detail format" = "%@ · E arkivuar";
 "Base currency" = "Monedha bazë";
+"Background refresh" = "Rifreskimi në sfond";
 "Budgets, subscriptions, recurring entries, and installment plans arrive in the dedicated planning milestone. Ordinary transactions remain fully available offline." = "Buxhetet, abonimet, regjistrimet periodike dhe planet me këste vijnë në etapën e posaçme të planifikimit. Transaksionet e zakonshme mbeten plotësisht të përdorshme pa internet.";
 "Cancel" = "Anulo";
 "Cash" = "Para në dorë";
@@ -23,6 +24,7 @@
 "Configure server" = "Konfiguro serverin";
 "Conflict" = "Konflikt";
 "Connect to your server" = "Lidhu me serverin tënd";
+"Connected" = "I lidhur";
 "Continue" = "Vazhdo";
 "Could not save" = "Nuk u ruajt";
 "Could not update transaction" = "Transaksioni nuk u përditësua";
@@ -52,7 +54,9 @@
 "Face ID or passcode app lock" = "Bllokim me Face ID ose kod";
 "Failed" = "Dështoi";
 "Failed operations" = "Veprimet e dështuara";
+"Failed attachments" = "Bashkëngjitjet e dështuara";
 "Filters" = "Filtrat";
+"Foreground updates" = "Përditësimet në plan të parë";
 "Financial records stay on this iPhone and synchronize only with the self-hosted server you choose." = "Regjistrimet financiare qëndrojnë në këtë iPhone dhe sinkronizohen vetëm me serverin vetëhostuar që zgjedh ti.";
 "Frequent merchants" = "Tregtarët e shpeshtë";
 "General" = "Të përgjithshme";
@@ -80,6 +84,7 @@
 "No transactions" = "Nuk ka transaksione";
 "No transactions yet" = "Ende nuk ka transaksione";
 "Not synchronized yet" = "Ende i pasinkronizuar";
+"Not requested" = "I pakërkuar";
 "Note" = "Shënimi";
 "OK" = "Në rregull";
 "Open previously synchronized data offline" = "Hap pa internet të dhënat e sinkronizuara më parë";
@@ -88,6 +93,8 @@
 "Overview" = "Përmbledhje";
 "Password" = "Fjalëkalimi";
 "Pending" = "Në pritje";
+"Pending attachments" = "Bashkëngjitjet në pritje";
+"Polling fallback" = "Kontroll periodik rezervë";
 "Pending changes, failures, and conflicts remain visible and recoverable." = "Ndryshimet në pritje, dështimet dhe konfliktet mbeten të dukshme dhe të rikuperueshme.";
 "Pending count format" = "Në pritje: %@";
 "Pending operations" = "Veprimet në pritje";
@@ -188,6 +195,7 @@
 "Record type" = "Lloji i regjistrimit";
 "Resolving conflict…" = "Po zgjidhet konflikti…";
 "Retry failed operations" = "Riprovo veprimet e dështuara";
+"Requested" = "I kërkuar";
 "Review conflict" = "Shqyrto konfliktin";
 "Server sign-in is required again. Local data remains available offline." = "Kërkohet sërish hyrja në server. Të dhënat lokale mbeten të disponueshme pa internet.";
 "Server version" = "Versioni i serverit";
@@ -198,4 +206,5 @@
 "The conflict could not be resolved safely." = "Konflikti nuk mund të zgjidhej në mënyrë të sigurt.";
 "The server is unreachable. Local changes will retry later." = "Serveri nuk arrihet. Ndryshimet lokale do të riprovohen më vonë.";
 "Unreadable value" = "Vlerë e palexueshme";
+"Unavailable" = "I padisponueshëm";
 "Yes" = "Po";

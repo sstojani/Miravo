@@ -424,6 +424,7 @@ struct LedgerSyncActorTests {
             LocalAccountMovement.self,
             LocalCategoryAllocation.self,
             OutboxMutation.self,
+            AttachmentTransfer.self,
             SyncCursor.self,
             SyncConflict.self,
             BootstrapStagedEntity.self,

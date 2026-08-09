@@ -35,7 +35,7 @@ The app’s SwiftData store is the immediate UI source. Django is the durable mu
 - `apps.users`: identity, profiles, device sessions, access JWT validation, rotating refresh credentials.
 - `apps.audit`: append-only safe security/administrative audit events.
 - Milestone 2 domain apps: trackers, ledger, taxonomy, currency.
-- `sync`: transactional reference change log, strict offline command transport, signed cursors, per-user operation receipts, bootstrap, acknowledgement, and retention cleanup.
+- `sync`: transactional reference change log, strict offline command transport, signed cursors, per-user operation receipts, bootstrap, acknowledgement, retention cleanup, and sequence-only Channels fan-out.
 - Later apps: shortcuts, planning, sharing, attachments, analytics/exports.
 
 Core financial changes are performed by domain services inside database transactions. REST serializers validate transport shapes; models/constraints protect persistence invariants; views coordinate permissions and service calls.
@@ -44,12 +44,14 @@ Core financial changes are performed by domain services inside database transact
 
 - **App/UI:** SwiftUI feature views, navigation, accessibility, localized presentation.
 - **Domain:** money/currency types, commands, calculations, validation, conflict decisions.
-- **Persistence:** SwiftData models, atomic local writes/outbox, cursor and attachment queues.
+- **Persistence:** SwiftData models, atomic local writes/outbox, cursor/bootstrap staging, conflicts, and a durable attachment-transfer queue boundary.
 - **Networking:** URLSession DTOs, Keychain-backed session refresh, reachability hint, retry policy.
 - **Synchronization actor:** one serialized coordinator per local store; push then pull; independent conflicts.
 - **Platform services:** Vision OCR, camera/files, LocalAuthentication, best-effort BackgroundTasks.
 
 No view binds directly to a remote response. WebSockets carry invalidation hints only; they never contain authoritative financial payloads.
+
+Foreground sockets authenticate the same short-lived device-bound access JWT as HTTP and close at token expiry. The client then pulls authorized changes over HTTPS. Active timers, foreground entry, manual retry, and local-change triggers preserve correctness without Redis/Channels. Connectivity monitoring and BackgroundTasks add opportunities to sync but are not schedulers of record.
 
 ### Implemented local foundation
 

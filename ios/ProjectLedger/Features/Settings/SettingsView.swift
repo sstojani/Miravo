@@ -9,6 +9,7 @@ struct SettingsView: View {
     @Query private var outbox: [OutboxMutation]
     @Query private var cursors: [SyncCursor]
     @Query private var conflicts: [SyncConflict]
+    @Query private var attachmentTransfers: [AttachmentTransfer]
     @State private var signingOut = false
 
     init(scopeKey: String) {
@@ -22,6 +23,10 @@ struct SettingsView: View {
             filter: #Predicate { $0.scopeKey == scopeKey && $0.resolvedAt == nil },
             sort: \SyncConflict.createdAt,
             order: .reverse
+        )
+        _attachmentTransfers = Query(
+            filter: #Predicate { $0.scopeKey == scopeKey },
+            sort: \AttachmentTransfer.createdAt
         )
     }
 
@@ -61,8 +66,30 @@ struct SettingsView: View {
                         Text("Synchronizing…")
                     }
                 }
+                LabeledContent(
+                    "Foreground updates",
+                    value: sync.realtimeConnected
+                        ? String(localized: "Connected")
+                        : String(localized: "Polling fallback")
+                )
+                LabeledContent(
+                    "Background refresh",
+                    value: backgroundRefreshStatus
+                )
                 LabeledContent("Pending operations", value: pendingCount, format: .number)
                 LabeledContent("Failed operations", value: outbox.filter { $0.state == .failed }.count, format: .number)
+                LabeledContent(
+                    "Pending attachments",
+                    value: attachmentTransfers.filter {
+                        $0.state == .pending || $0.state == .uploading
+                    }.count,
+                    format: .number
+                )
+                LabeledContent(
+                    "Failed attachments",
+                    value: attachmentTransfers.filter { $0.state == .failed }.count,
+                    format: .number
+                )
                 NavigationLink {
                     SyncConflictsView(scopeKey: scopeKey)
                 } label: {
@@ -162,6 +189,17 @@ struct SettingsView: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text(sync.message ?? "")
+        }
+    }
+
+    private var backgroundRefreshStatus: String {
+        switch sync.backgroundRefreshScheduled {
+        case true:
+            String(localized: "Requested")
+        case false:
+            String(localized: "Unavailable")
+        case nil:
+            String(localized: "Not requested")
         }
     }
 }

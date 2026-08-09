@@ -19,6 +19,11 @@ struct RootView: View {
         }
         .tint(LedgerTheme.accent)
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: session.phase)
+        .onChange(of: session.phase) { _, phase in
+            if phase != .authenticated {
+                Task { await sync.stopForegroundTriggers() }
+            }
+        }
     }
 
     @ViewBuilder
@@ -42,6 +47,7 @@ struct RootView: View {
                                 ) {
                                     try? LocalLedgerRepository(context: modelContext)
                                         .bootstrapDefaults(scopeKey: scopeKey)
+                                    await sync.startForegroundTriggers(session: session)
                                     return
                                 }
                             #endif
@@ -53,6 +59,7 @@ struct RootView: View {
                                     .bootstrapDefaults(scopeKey: scopeKey)
                                 await sync.synchronize(session: session)
                             }
+                            await sync.startForegroundTriggers(session: session)
                         }
                 } else {
                     ProgressView("Opening local data…")

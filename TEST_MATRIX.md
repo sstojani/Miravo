@@ -22,6 +22,9 @@ Status values: `planned`, `implemented`, `passing-local`, `passing-docker`, `pas
 | Sync server | Ordered per-operation push, replay/fingerprint safety, signed user-bound cursor, paging/tombstone/paginated-bootstrap/ack, retention, revocation filtering | `test_sync.py` (9 tests) | Docker/PostgreSQL concurrency smoke test | passing-local |
 | Sync iOS | Stable operation IDs, one same-entity operation per batch, sequential rebase, retry/backoff, atomic pull/cursor rollback, resumable staging, post-bootstrap pull, token rotation | `LedgerSyncActorTests.swift`, `SyncWireModelsTests.swift` (authored) | Airplane-mode/reinstall scenarios | implemented |
 | Conflict | Server preserves current state/local proposal while siblings progress; client stores field review and can keep server or resubmit mine with a new operation ID | `test_sync.py`, `LedgerSyncActorTests.swift` (authored) | Two-client review screen | implemented |
+| Realtime invalidation | Same active device-session authentication; sequence-only frames; token-expiry close; redirect refusal; bounded decode; polling remains correct | `test_realtime.py` (3 passing), `SyncInvalidationClientTests.swift` (authored) | Redis outage and foreground reconnect | implemented |
+| Sync triggers | Initial path is ignored; connectivity return coalesces a pull; background request is best effort and expiration-cancellable | `SyncTriggerTests.swift` (authored), source/plist contract | Background-refresh disabled and signer-altered capability checks | implemented |
+| Attachment queue boundary | Identical enqueue is idempotent; unsafe path/MIME/size/digest/cross-scope reference fails; interrupted transfer survives restart; batches are bounded | `AttachmentTransferQueueTests.swift` (authored) | Relaunch with pending local receipt; binary transfer deferred to Milestone 9 | implemented |
 | Shortcut | Scopes, hash, expiry, revoke, throttle, replay, fingerprint conflict | Milestone 6 API tests | Online/queue repeated flush | planned |
 | Budgets | Posted expense only, periods/rollover/history/offline | Milestone 7 backend+iOS tests | Month boundary UI | planned |
 | Recurrence | Month-end/leap/DST/pause/skip/edit/catch-up idempotency | Milestone 7 scheduler tests | Simulated downtime | planned |
@@ -31,7 +34,7 @@ Status values: `planned`, `implemented`, `passing-local`, `passing-docker`, `pas
 | Currency | Manual snapshots are required and immutable; provider abstraction/report caveats remain | `test_currency.py`, cross-currency API tests | Partially unconverted report | implemented |
 | Analytics | Offline/server totals consistent; transfers/voids excluded | Milestone 9 golden data tests | 50k record check | planned |
 | Exports | UTF-8 CSV, PDF/full portability, authorized expiry/audit | Milestone 9 report tests | UI total comparison | planned |
-| Localization | Every implemented user string exists in English and Albanian | `check-localizations.sh` and 199-key coverage/format check | Native-speaker review | passing-local |
+| Localization | Every implemented user string exists in English and Albanian | `check-localizations.sh` and 208-key coverage/format check | Native-speaker review | passing-local |
 | iOS privacy/transport | Release has HTTPS-only ATS, Debug loopback exception, CA92.1, accurate linked-data/no-tracking declaration | `check-project-contract.py` | Inspect generated Xcode privacy report | passing-local |
 | Accessibility | Dynamic Type, VoiceOver labels, contrast/reduced motion, touch targets | Milestone 5 tests/audit | Physical-device audit | planned |
 | Backup | DB/media/config manifest, checksum, encryption, retention, isolated restore | Milestone 10 restore CI/script | Disaster-recovery drill | planned |

@@ -29,10 +29,13 @@ Useful endpoints:
 - `/api/v1/transactions/` plus void and immutable revision actions
 - `GET /api/v1/audit-events/?tracker_id=<UUID>` for owner/admin audit review
 - `POST /api/v1/sync/push`, `GET /api/v1/sync/pull`, `POST /api/v1/sync/ack`, and `GET /api/v1/sync/bootstrap`
+- `WSS /api/v1/sync/events` with an access-token `Authorization` header for sequence-only foreground invalidation
 
 The OpenAPI source is generated at `backend/openapi-schema.yml`. The schema endpoint and Django Admin are intentionally denied by the public reverse proxy.
 
 Synchronization push batches are structurally strict, ordered, replay-safe per user/operation UUID, and transactional per operation. Pull cursors are opaque, signed, user-bound, authorization-filtered, and retained for at least 90 days. See `docs/sync-protocol.md` for the protocol contract.
+
+The WebSocket authenticates through the same active JWT/device session as HTTP. It joins only the authenticated user and global invalidation groups, expires with the access token, and carries no domain representation. Redis/Channels failure affects freshness only; clients continue polling and pulling through the authoritative HTTP protocol.
 
 ## Authentication behavior
 

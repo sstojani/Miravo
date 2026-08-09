@@ -12,6 +12,7 @@
 "Archive" = "Archive";
 "Archived detail format" = "%@ · Archived";
 "Base currency" = "Base currency";
+"Background refresh" = "Background refresh";
 "Budgets, subscriptions, recurring entries, and installment plans arrive in the dedicated planning milestone. Ordinary transactions remain fully available offline." = "Budgets, subscriptions, recurring entries, and installment plans arrive in the dedicated planning milestone. Ordinary transactions remain fully available offline.";
 "Cancel" = "Cancel";
 "Cash" = "Cash";
@@ -23,6 +24,7 @@
 "Configure server" = "Configure server";
 "Conflict" = "Conflict";
 "Connect to your server" = "Connect to your server";
+"Connected" = "Connected";
 "Continue" = "Continue";
 "Could not save" = "Could not save";
 "Could not update transaction" = "Could not update transaction";
@@ -52,7 +54,9 @@
 "Face ID or passcode app lock" = "Face ID or passcode app lock";
 "Failed" = "Failed";
 "Failed operations" = "Failed operations";
+"Failed attachments" = "Failed attachments";
 "Filters" = "Filters";
+"Foreground updates" = "Foreground updates";
 "Financial records stay on this iPhone and synchronize only with the self-hosted server you choose." = "Financial records stay on this iPhone and synchronize only with the self-hosted server you choose.";
 "Frequent merchants" = "Frequent merchants";
 "General" = "General";
@@ -80,6 +84,7 @@
 "No transactions" = "No transactions";
 "No transactions yet" = "No transactions yet";
 "Not synchronized yet" = "Not synchronized yet";
+"Not requested" = "Not requested";
 "Note" = "Note";
 "OK" = "OK";
 "Open previously synchronized data offline" = "Open previously synchronized data offline";
@@ -88,6 +93,8 @@
 "Overview" = "Overview";
 "Password" = "Password";
 "Pending" = "Pending";
+"Pending attachments" = "Pending attachments";
+"Polling fallback" = "Polling fallback";
 "Pending changes, failures, and conflicts remain visible and recoverable." = "Pending changes, failures, and conflicts remain visible and recoverable.";
 "Pending count format" = "Pending: %@";
 "Pending operations" = "Pending operations";
@@ -188,6 +195,7 @@
 "Record type" = "Record type";
 "Resolving conflict…" = "Resolving conflict…";
 "Retry failed operations" = "Retry failed operations";
+"Requested" = "Requested";
 "Review conflict" = "Review conflict";
 "Server sign-in is required again. Local data remains available offline." = "Server sign-in is required again. Local data remains available offline.";
 "Server version" = "Server version";
@@ -198,4 +206,5 @@
 "The conflict could not be resolved safely." = "The conflict could not be resolved safely.";
 "The server is unreachable. Local changes will retry later." = "The server is unreachable. Local changes will retry later.";
 "Unreadable value" = "Unreadable value";
+"Unavailable" = "Unavailable";
 "Yes" = "Yes";

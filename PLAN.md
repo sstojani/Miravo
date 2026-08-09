@@ -2,7 +2,7 @@
 
 Last updated: 2026-08-09. A checked item is complete; its verification tier is recorded in `IMPLEMENT.md`. Items are not checked merely because scaffolding exists.
 
-Current focus: **Milestone 4 — Synchronization and collaboration transport**. The server protocol and native foreground synchronization source are implemented at the locally verifiable tier. Attachment transfer and optional WebSocket invalidation remain open; all Swift/Xcode compile/runtime claims still require the macOS workflow. PostgreSQL/Redis Docker and hosted CI verification are likewise not hidden claims.
+Current focus: **Milestone 5 — Complete core app experience**, after completing Milestone 4 source work at the locally verifiable tier. The server protocol, authenticated sequence-only WebSocket invalidation, native sync engine, durable attachment-transfer queue scaffold, connectivity-return hint, and best-effort background scheduling are implemented. All Swift/Xcode compile/runtime claims still require the macOS workflow; PostgreSQL/Redis Docker and hosted CI verification remain explicit external checks.
 
 ## Milestone 0 — Discovery and durable project plan
 
@@ -54,10 +54,11 @@ Acceptance: a clean clone starts the development stack, creates an owner, authen
 - [x] iOS bounded bootstrap staging/reconciliation that preserves unsent mutations and pulls changes after the fixed bootstrap cursor.
 - [x] iOS atomic outbox, stable ordered batching, token refresh, retry/backoff, atomic pull paging, and diagnostics.
 - [x] Structured conflicts and keep-server/keep-mine/field-review flows.
-- [ ] Separate checksum/idempotency attachment upload queue scaffold.
-- [ ] Foreground WebSocket invalidation that is optional for correctness.
+- [x] Separate bounded checksum/idempotency attachment upload queue scaffold with restart recovery and safe diagnostics; binary transport remains Milestone 9.
+- [x] Authenticated foreground WebSocket sequence invalidation with access-token expiry, reconnect/backoff, and polling fallback.
+- [x] Active connectivity-return hint and best-effort `BGAppRefreshTask` scheduling without correctness dependence.
 
-Current acceptance: an authenticated device can push an ordered offline tracker/account/category/transaction batch; retrying the same operation never creates another financial record; changing a reused operation fingerprint conflicts; one rejected operation does not roll back accepted siblings; pulls and bootstrap are bounded and authorization-filtered; membership removal reaches the removed user and hides cached tracker data; tombstones/current representations carry versions; an expired cursor resumes a staged bootstrap without replacing the prior store or pending outbox; and acknowledgements are bound to the authenticated device session. Backend behavior is passing locally. Native behavior has deterministic tests authored but remains uncompiled until macOS CI.
+Current acceptance: an authenticated device can push an ordered offline tracker/account/category/transaction batch; retrying the same operation never creates another financial record; changing a reused operation fingerprint conflicts; one rejected operation does not roll back accepted siblings; pulls and bootstrap are bounded and authorization-filtered; membership removal reaches the removed user and hides cached tracker data; tombstones/current representations carry versions; an expired cursor resumes a staged bootstrap without replacing the prior store or pending outbox; and acknowledgements are bound to the authenticated device session. The ASGI socket authenticates the same active device session and emits sequence hints only. Backend behavior is passing locally. Native behavior and attachment-queue state-machine tests are authored but remain uncompiled until macOS CI; no binary attachment endpoint is claimed.
 
 ## Milestone 5 — Complete core app experience
 

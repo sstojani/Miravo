@@ -2,6 +2,7 @@ import SwiftData
 import SwiftUI
 
 @main
+@MainActor
 struct ProjectLedgerApp: App {
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var sessionController: SessionController
@@ -10,10 +11,14 @@ struct ProjectLedgerApp: App {
 
     init() {
         let store = LocalStoreBootstrap.make()
+        let sessionController = SessionController()
+        let syncController = SyncController(modelContainer: store.container)
         self.store = store
-        _sessionController = StateObject(wrappedValue: SessionController())
-        _syncController = StateObject(
-            wrappedValue: SyncController(modelContainer: store.container)
+        _sessionController = StateObject(wrappedValue: sessionController)
+        _syncController = StateObject(wrappedValue: syncController)
+        _ = BackgroundSyncScheduler.register(
+            syncController: syncController,
+            sessionController: sessionController
         )
     }
 
@@ -24,8 +29,15 @@ struct ProjectLedgerApp: App {
                 .environmentObject(syncController)
                 .onChange(of: scenePhase) { _, newPhase in
                     if newPhase == .active {
-                        Task { await syncController.synchronize(session: sessionController) }
+                        Task {
+                            await syncController.synchronize(session: sessionController)
+                            await syncController.startForegroundTriggers(
+                                session: sessionController
+                            )
+                        }
                     } else {
+                        syncController.scheduleBackgroundRefresh()
+                        Task { await syncController.stopForegroundTriggers() }
                         sessionController.lockIfNeeded()
                     }
                 }
@@ -69,6 +81,7 @@ private struct LocalStoreBootstrap {
                 LocalAccountMovement.self,
                 LocalCategoryAllocation.self,
                 OutboxMutation.self,
+                AttachmentTransfer.self,
                 SyncCursor.self,
                 SyncConflict.self,
                 BootstrapStagedEntity.self,
@@ -83,6 +96,7 @@ private struct LocalStoreBootstrap {
             LocalAccountMovement.self,
             LocalCategoryAllocation.self,
             OutboxMutation.self,
+            AttachmentTransfer.self,
             SyncCursor.self,
             SyncConflict.self,
             BootstrapStagedEntity.self

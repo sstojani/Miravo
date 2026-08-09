@@ -16,6 +16,7 @@ from apps.ledger.models import (
     Transaction,
 )
 from apps.sync.models import SyncChange
+from apps.sync.realtime import schedule_sync_invalidation
 
 
 def _scope(instance: Any) -> tuple[UUID | None, UUID | None]:
@@ -51,13 +52,18 @@ def _record_change(sender: type[Any], instance: Any, raw: bool, **kwargs: Any) -
         Transaction: SyncChange.EntityType.TRANSACTION,
     }[sender]
     tracker_id, audience_user_id = _scope(instance)
-    SyncChange.objects.create(
+    change = SyncChange.objects.create(
         tracker_id=tracker_id,
         audience_user_id=audience_user_id,
         entity_type=entity_type,
         entity_id=instance.id,
         operation=_operation(instance),
         version=instance.version,
+    )
+    schedule_sync_invalidation(
+        sequence=change.sequence,
+        tracker_id=tracker_id,
+        audience_user_id=audience_user_id,
     )
 
 

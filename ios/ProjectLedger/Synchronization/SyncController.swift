@@ -15,39 +15,118 @@ final class SyncController: ObservableObject {
         isSyncing: false
     )
     @Published private(set) var isRunning = false
+    @Published private(set) var realtimeConnected = false
+    @Published private(set) var backgroundRefreshScheduled: Bool?
     @Published var message: String?
 
     private let engine: LedgerSyncActor
+    private let realtimeClient = SyncInvalidationClient()
+    private let connectivityMonitor = ConnectivitySyncMonitor()
+    private var rerunRequested = false
+    private var foregroundRealtimeEnabled = false
 
     init(modelContainer: ModelContainer) {
         engine = LedgerSyncActor(modelContainer: modelContainer)
     }
 
-    func synchronize(session: SessionController) async {
-        guard !isRunning else { return }
+    @discardableResult
+    func synchronize(session: SessionController) async -> Bool {
+        guard !isRunning else {
+            rerunRequested = true
+            return false
+        }
         isRunning = true
         message = nil
-        defer { isRunning = false }
+        defer {
+            isRunning = false
+            rerunRequested = false
+        }
+        var pass = 0
+        var succeeded = false
+        repeat {
+            rerunRequested = false
+            pass += 1
+            succeeded = await synchronizeOnce(session: session)
+        } while rerunRequested && pass < 2
+
+        if foregroundRealtimeEnabled {
+            await configureRealtime(session: session)
+        }
+        return succeeded
+    }
+
+    func startForegroundTriggers(session: SessionController) async {
+        foregroundRealtimeEnabled = true
+        connectivityMonitor.start { [weak self, weak session] in
+            guard let self, let session else { return }
+            Task { await self.synchronize(session: session) }
+        }
+        await configureRealtime(session: session)
+    }
+
+    func stopForegroundTriggers() async {
+        foregroundRealtimeEnabled = false
+        realtimeConnected = false
+        connectivityMonitor.stop()
+        await realtimeClient.stop()
+    }
+
+    func scheduleBackgroundRefresh() {
+        backgroundRefreshScheduled = BackgroundSyncScheduler.schedule()
+    }
+
+    private func synchronizeOnce(session: SessionController) async -> Bool {
         do {
             guard let authentication = try await session.synchronizationContext() else {
-                return
+                return false
             }
             _ = try await engine.synchronize(authentication: authentication)
             diagnostics = try await engine.diagnostics(scopeKey: authentication.scopeKey)
+            return true
         } catch let error as APIClientError {
             message = message(for: error)
             if let scopeKey = session.scopeKey {
                 diagnostics = (try? await engine.diagnostics(scopeKey: scopeKey)) ?? diagnostics
             }
+            return false
         } catch is URLError {
             message = String(localized: "The server is unreachable. Local changes will retry later.")
             if let scopeKey = session.scopeKey {
                 diagnostics = (try? await engine.diagnostics(scopeKey: scopeKey)) ?? diagnostics
             }
+            return false
         } catch {
             message = String(localized: "Synchronization could not be completed. Local changes are safe and will be retried.")
             if let scopeKey = session.scopeKey {
                 diagnostics = (try? await engine.diagnostics(scopeKey: scopeKey)) ?? diagnostics
+            }
+            return false
+        }
+    }
+
+    private func configureRealtime(session: SessionController) async {
+        guard foregroundRealtimeEnabled,
+              let authentication = try? await session.synchronizationContext()
+        else {
+            realtimeConnected = false
+            await realtimeClient.stop()
+            return
+        }
+        await realtimeClient.start(
+            baseURL: authentication.baseURL,
+            tokens: authentication.tokens
+        ) { [weak self, weak session] event in
+            Task { @MainActor in
+                guard let self else { return }
+                switch event {
+                case .connected:
+                    self.realtimeConnected = true
+                case .disconnected:
+                    self.realtimeConnected = false
+                case .invalidation:
+                    guard let session else { return }
+                    await self.synchronize(session: session)
+                }
             }
         }
     }
