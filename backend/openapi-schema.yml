@@ -4,6 +4,233 @@ info:
   version: 1.0.0
   description: Versioned API for the Project Ledger offline-first finance application.
 paths:
+  /api/v1/accounts/:
+    get:
+      operationId: accounts_list
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      tags:
+      - accounts
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedAccountList'
+          description: ''
+    post:
+      operationId: accounts_create
+      tags:
+      - accounts
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccountRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AccountRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AccountRequest'
+        required: true
+      security:
+      - accessToken: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+          description: ''
+  /api/v1/accounts/{id}/:
+    get:
+      operationId: accounts_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this account.
+        required: true
+      tags:
+      - accounts
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+          description: ''
+    put:
+      operationId: accounts_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this account.
+        required: true
+      tags:
+      - accounts
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccountRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AccountRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AccountRequest'
+        required: true
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+          description: ''
+    patch:
+      operationId: accounts_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this account.
+        required: true
+      tags:
+      - accounts
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedAccountRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedAccountRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedAccountRequest'
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+          description: ''
+    delete:
+      operationId: accounts_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this account.
+        required: true
+      tags:
+      - accounts
+      security:
+      - accessToken: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/accounts/{id}/restore/:
+    post:
+      operationId: accounts_restore_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this account.
+        required: true
+      tags:
+      - accounts
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccountRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AccountRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AccountRequest'
+        required: true
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+          description: ''
+  /api/v1/audit-events/:
+    get:
+      operationId: audit_events_list
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      tags:
+      - audit-events
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedAuditEventList'
+          description: ''
+  /api/v1/audit-events/{id}/:
+    get:
+      operationId: audit_events_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this audit event.
+        required: true
+      tags:
+      - audit-events
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditEvent'
+          description: ''
   /api/v1/auth/login:
     post:
       operationId: auth_login_create
@@ -95,6 +322,252 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/categories/:
+    get:
+      operationId: categories_list
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      tags:
+      - categories
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedCategoryList'
+          description: ''
+    post:
+      operationId: categories_create
+      tags:
+      - categories
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CategoryRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CategoryRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CategoryRequest'
+        required: true
+      security:
+      - accessToken: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Category'
+          description: ''
+  /api/v1/categories/{id}/:
+    get:
+      operationId: categories_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this category.
+        required: true
+      tags:
+      - categories
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Category'
+          description: ''
+    put:
+      operationId: categories_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this category.
+        required: true
+      tags:
+      - categories
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CategoryRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CategoryRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CategoryRequest'
+        required: true
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Category'
+          description: ''
+    patch:
+      operationId: categories_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this category.
+        required: true
+      tags:
+      - categories
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedCategoryRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedCategoryRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedCategoryRequest'
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Category'
+          description: ''
+    delete:
+      operationId: categories_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this category.
+        required: true
+      tags:
+      - categories
+      security:
+      - accessToken: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/categories/{id}/merge/:
+    post:
+      operationId: categories_merge_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this category.
+        required: true
+      tags:
+      - categories
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CategoryMergeRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CategoryMergeRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CategoryMergeRequest'
+        required: true
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Category'
+          description: ''
+  /api/v1/categories/{id}/restore/:
+    post:
+      operationId: categories_restore_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this category.
+        required: true
+      tags:
+      - categories
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CategoryRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CategoryRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CategoryRequest'
+        required: true
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Category'
+          description: ''
+  /api/v1/categories/{id}/revisions/:
+    get:
+      operationId: categories_revisions_list
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this category.
+        required: true
+      tags:
+      - categories
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedCategoryRevisionList'
+          description: ''
   /api/v1/config/public:
     get:
       operationId: public_config
@@ -147,8 +620,1518 @@ paths:
                 type: object
                 additionalProperties: {}
           description: ''
+  /api/v1/merchants/:
+    get:
+      operationId: merchants_list
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      tags:
+      - merchants
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedMerchantList'
+          description: ''
+    post:
+      operationId: merchants_create
+      tags:
+      - merchants
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MerchantRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/MerchantRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MerchantRequest'
+        required: true
+      security:
+      - accessToken: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Merchant'
+          description: ''
+  /api/v1/merchants/{id}/:
+    get:
+      operationId: merchants_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this merchant.
+        required: true
+      tags:
+      - merchants
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Merchant'
+          description: ''
+    put:
+      operationId: merchants_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this merchant.
+        required: true
+      tags:
+      - merchants
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MerchantRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/MerchantRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MerchantRequest'
+        required: true
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Merchant'
+          description: ''
+    patch:
+      operationId: merchants_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this merchant.
+        required: true
+      tags:
+      - merchants
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedMerchantRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedMerchantRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedMerchantRequest'
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Merchant'
+          description: ''
+    delete:
+      operationId: merchants_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this merchant.
+        required: true
+      tags:
+      - merchants
+      security:
+      - accessToken: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/tags/:
+    get:
+      operationId: tags_list
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      tags:
+      - tags
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedTagList'
+          description: ''
+    post:
+      operationId: tags_create
+      tags:
+      - tags
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TagRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TagRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TagRequest'
+        required: true
+      security:
+      - accessToken: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tag'
+          description: ''
+  /api/v1/tags/{id}/:
+    get:
+      operationId: tags_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this tag.
+        required: true
+      tags:
+      - tags
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tag'
+          description: ''
+    put:
+      operationId: tags_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this tag.
+        required: true
+      tags:
+      - tags
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TagRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TagRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TagRequest'
+        required: true
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tag'
+          description: ''
+    patch:
+      operationId: tags_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this tag.
+        required: true
+      tags:
+      - tags
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedTagRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedTagRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedTagRequest'
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tag'
+          description: ''
+    delete:
+      operationId: tags_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this tag.
+        required: true
+      tags:
+      - tags
+      security:
+      - accessToken: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/tags/{id}/restore/:
+    post:
+      operationId: tags_restore_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this tag.
+        required: true
+      tags:
+      - tags
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TagRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TagRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TagRequest'
+        required: true
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tag'
+          description: ''
+  /api/v1/tracker-invites/accept:
+    post:
+      operationId: tracker_invites_accept_create
+      tags:
+      - tracker-invites
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InviteAcceptRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/InviteAcceptRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/InviteAcceptRequest'
+        required: true
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Membership'
+          description: ''
+  /api/v1/trackers/:
+    get:
+      operationId: trackers_list
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      tags:
+      - trackers
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedTrackerList'
+          description: ''
+    post:
+      operationId: trackers_create
+      tags:
+      - trackers
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TrackerRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TrackerRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TrackerRequest'
+        required: true
+      security:
+      - accessToken: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tracker'
+          description: ''
+  /api/v1/trackers/{id}/:
+    get:
+      operationId: trackers_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this tracker.
+        required: true
+      tags:
+      - trackers
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tracker'
+          description: ''
+    put:
+      operationId: trackers_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this tracker.
+        required: true
+      tags:
+      - trackers
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TrackerRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TrackerRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TrackerRequest'
+        required: true
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tracker'
+          description: ''
+    patch:
+      operationId: trackers_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this tracker.
+        required: true
+      tags:
+      - trackers
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedTrackerRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedTrackerRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedTrackerRequest'
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tracker'
+          description: ''
+    delete:
+      operationId: trackers_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this tracker.
+        required: true
+      tags:
+      - trackers
+      security:
+      - accessToken: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/trackers/{id}/archive/:
+    post:
+      operationId: trackers_archive_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this tracker.
+        required: true
+      tags:
+      - trackers
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TrackerRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TrackerRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TrackerRequest'
+        required: true
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tracker'
+          description: ''
+  /api/v1/trackers/{id}/invites/:
+    get:
+      operationId: trackers_invites_list
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this tracker.
+        required: true
+      tags:
+      - trackers
+      security:
+      - accessToken: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InviteCreated'
+          description: ''
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedInviteList'
+          description: ''
+    post:
+      operationId: trackers_invites_create
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this tracker.
+        required: true
+      tags:
+      - trackers
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InviteCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/InviteCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/InviteCreateRequest'
+        required: true
+      security:
+      - accessToken: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InviteCreated'
+          description: ''
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedInviteList'
+          description: ''
+  /api/v1/trackers/{id}/invites/{invite_id}/:
+    delete:
+      operationId: trackers_invites_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this tracker.
+        required: true
+      - in: path
+        name: invite_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - trackers
+      security:
+      - accessToken: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/trackers/{id}/members/:
+    get:
+      operationId: trackers_members_list
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this tracker.
+        required: true
+      tags:
+      - trackers
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedMembershipList'
+          description: ''
+  /api/v1/trackers/{id}/members/{membership_id}/:
+    patch:
+      operationId: trackers_members_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this tracker.
+        required: true
+      - in: path
+        name: membership_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - trackers
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedMembershipUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedMembershipUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedMembershipUpdateRequest'
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Membership'
+          description: ''
+    delete:
+      operationId: trackers_members_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this tracker.
+        required: true
+      - in: path
+        name: membership_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - trackers
+      security:
+      - accessToken: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/trackers/{id}/restore/:
+    post:
+      operationId: trackers_restore_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this tracker.
+        required: true
+      tags:
+      - trackers
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TrackerRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TrackerRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TrackerRequest'
+        required: true
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tracker'
+          description: ''
+  /api/v1/trackers/{id}/transfer-ownership/:
+    post:
+      operationId: trackers_transfer_ownership_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this tracker.
+        required: true
+      tags:
+      - trackers
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransferOwnershipRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TransferOwnershipRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TransferOwnershipRequest'
+        required: true
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tracker'
+          description: ''
+  /api/v1/transactions/:
+    get:
+      operationId: transactions_list
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      tags:
+      - transactions
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedTransactionReadList'
+          description: ''
+    post:
+      operationId: transactions_create
+      tags:
+      - transactions
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransactionWriteRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TransactionWriteRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TransactionWriteRequest'
+        required: true
+      security:
+      - accessToken: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionRead'
+          description: ''
+  /api/v1/transactions/{id}/:
+    get:
+      operationId: transactions_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this transaction.
+        required: true
+      tags:
+      - transactions
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionRead'
+          description: ''
+    put:
+      operationId: transactions_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this transaction.
+        required: true
+      tags:
+      - transactions
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransactionWriteRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TransactionWriteRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TransactionWriteRequest'
+        required: true
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionRead'
+          description: ''
+    delete:
+      operationId: transactions_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this transaction.
+        required: true
+      tags:
+      - transactions
+      security:
+      - accessToken: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/transactions/{id}/revisions/:
+    get:
+      operationId: transactions_revisions_list
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this transaction.
+        required: true
+      tags:
+      - transactions
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedTransactionRevisionList'
+          description: ''
+  /api/v1/transactions/{id}/void/:
+    post:
+      operationId: transactions_void_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this transaction.
+        required: true
+      tags:
+      - transactions
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BaseVersionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/BaseVersionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/BaseVersionRequest'
+        required: true
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionRead'
+          description: ''
 components:
   schemas:
+    Account:
+      type: object
+      description: Model serializer with strict input-field handling.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        tracker_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          maxLength: 120
+        type:
+          $ref: '#/components/schemas/TypeEnum'
+        currency:
+          type: string
+          maxLength: 3
+        currency_exponent:
+          type: integer
+          readOnly: true
+        opening_balance_minor:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
+        opening_date:
+          type: string
+          format: date
+        color:
+          type: string
+          maxLength: 16
+        icon:
+          type: string
+          maxLength: 80
+        include_in_net_worth:
+          type: boolean
+        credit_limit_minor:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
+        balance_minor:
+          type: integer
+          readOnly: true
+        archived_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        version:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - archived_at
+      - balance_minor
+      - created_at
+      - currency
+      - currency_exponent
+      - id
+      - name
+      - opening_date
+      - tracker_id
+      - type
+      - updated_at
+      - version
+    AccountRequest:
+      type: object
+      description: Model serializer with strict input-field handling.
+      properties:
+        tracker_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        type:
+          $ref: '#/components/schemas/TypeEnum'
+        currency:
+          type: string
+          minLength: 1
+          maxLength: 3
+        opening_balance_minor:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
+        opening_date:
+          type: string
+          format: date
+        color:
+          type: string
+          minLength: 1
+          maxLength: 16
+        icon:
+          type: string
+          minLength: 1
+          maxLength: 80
+        include_in_net_worth:
+          type: boolean
+        credit_limit_minor:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
+      required:
+      - currency
+      - name
+      - opening_date
+      - tracker_id
+      - type
+    Allocation:
+      type: object
+      description: Model serializer with strict input-field handling.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        category_id:
+          type: string
+          format: uuid
+          readOnly: true
+        category_version:
+          type: integer
+          readOnly: true
+        amount_minor:
+          type: integer
+          readOnly: true
+      required:
+      - amount_minor
+      - category_id
+      - category_version
+      - id
+    AllocationInputRequest:
+      type: object
+      description: Serializer that rejects misspelled or unsupported request fields.
+      properties:
+        category_id:
+          type: string
+          format: uuid
+        amount_minor:
+          type: integer
+          minimum: 1
+      required:
+      - amount_minor
+      - category_id
+    AllocationRevision:
+      type: object
+      description: Model serializer with strict input-field handling.
+      properties:
+        category_id:
+          type: string
+          format: uuid
+          readOnly: true
+        category_version:
+          type: integer
+          readOnly: true
+        amount_minor:
+          type: integer
+          readOnly: true
+      required:
+      - amount_minor
+      - category_id
+      - category_version
+    AuditEvent:
+      type: object
+      description: Model serializer with strict input-field handling.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        actor_id:
+          type: string
+          format: uuid
+          nullable: true
+          readOnly: true
+        tracker_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        action:
+          type: string
+          readOnly: true
+        target_type:
+          type: string
+          readOnly: true
+        target_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        request_id:
+          type: string
+          readOnly: true
+        safe_metadata:
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - action
+      - actor_id
+      - created_at
+      - id
+      - request_id
+      - safe_metadata
+      - target_id
+      - target_type
+      - tracker_id
+    BaseVersionRequest:
+      type: object
+      description: Serializer that rejects misspelled or unsupported request fields.
+      properties:
+        base_version:
+          type: integer
+          minimum: 1
+      required:
+      - base_version
+    Category:
+      type: object
+      description: Model serializer with strict input-field handling.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        tracker_id:
+          type: string
+          format: uuid
+          nullable: true
+        parent_id:
+          type: string
+          format: uuid
+          nullable: true
+        kind:
+          $ref: '#/components/schemas/CategoryKind'
+        name:
+          type: string
+          maxLength: 120
+        icon:
+          type: string
+          maxLength: 80
+        color:
+          type: string
+          maxLength: 16
+        sort_order:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        archived_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        version:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - archived_at
+      - created_at
+      - id
+      - kind
+      - name
+      - tracker_id
+      - updated_at
+      - version
+    CategoryKind:
+      enum:
+      - expense
+      - income
+      type: string
+      description: |-
+        * `expense` - Expense
+        * `income` - Income
+    CategoryMergeRequest:
+      type: object
+      description: Serializer that rejects misspelled or unsupported request fields.
+      properties:
+        target_category_id:
+          type: string
+          format: uuid
+      required:
+      - target_category_id
+    CategoryRequest:
+      type: object
+      description: Model serializer with strict input-field handling.
+      properties:
+        tracker_id:
+          type: string
+          format: uuid
+          nullable: true
+        parent_id:
+          type: string
+          format: uuid
+          nullable: true
+        kind:
+          $ref: '#/components/schemas/CategoryKind'
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        icon:
+          type: string
+          minLength: 1
+          maxLength: 80
+        color:
+          type: string
+          minLength: 1
+          maxLength: 16
+        sort_order:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+      required:
+      - kind
+      - name
+      - tracker_id
+    CategoryRevision:
+      type: object
+      description: Model serializer with strict input-field handling.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        recorded_version:
+          type: integer
+          readOnly: true
+        reason:
+          type: string
+          readOnly: true
+        parent_id:
+          type: string
+          format: uuid
+          nullable: true
+          readOnly: true
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/CategoryKind'
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+        icon:
+          type: string
+          readOnly: true
+        color:
+          type: string
+          readOnly: true
+        sort_order:
+          type: integer
+          readOnly: true
+        editor_id:
+          type: string
+          format: uuid
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - color
+      - created_at
+      - editor_id
+      - icon
+      - id
+      - kind
+      - name
+      - parent_id
+      - reason
+      - recorded_version
+      - sort_order
+    Invite:
+      type: object
+      description: Model serializer with strict input-field handling.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        email:
+          type: string
+          format: email
+          readOnly: true
+        role:
+          allOf:
+          - $ref: '#/components/schemas/InviteRole'
+          readOnly: true
+        expires_at:
+          type: string
+          format: date-time
+          readOnly: true
+        accepted_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        revoked_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - accepted_at
+      - created_at
+      - email
+      - expires_at
+      - id
+      - revoked_at
+      - role
+    InviteAcceptRequest:
+      type: object
+      description: Serializer that rejects misspelled or unsupported request fields.
+      properties:
+        token:
+          type: string
+          minLength: 1
+          maxLength: 256
+      required:
+      - token
+    InviteCreateRequest:
+      type: object
+      description: Serializer that rejects misspelled or unsupported request fields.
+      properties:
+        email:
+          type: string
+          format: email
+          minLength: 1
+          maxLength: 254
+        role:
+          $ref: '#/components/schemas/InviteRole'
+        expires_in_days:
+          type: integer
+          maximum: 30
+          minimum: 1
+          default: 7
+      required:
+      - email
+      - role
+    InviteCreated:
+      type: object
+      description: Model serializer with strict input-field handling.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        email:
+          type: string
+          format: email
+          readOnly: true
+        role:
+          allOf:
+          - $ref: '#/components/schemas/InviteRole'
+          readOnly: true
+        expires_at:
+          type: string
+          format: date-time
+          readOnly: true
+        accepted_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        revoked_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        raw_token:
+          type: string
+          readOnly: true
+      required:
+      - accepted_at
+      - created_at
+      - email
+      - expires_at
+      - id
+      - raw_token
+      - revoked_at
+      - role
+    InviteRole:
+      enum:
+      - admin
+      - editor
+      - viewer
+      type: string
+      description: |-
+        * `admin` - Admin
+        * `editor` - Editor
+        * `viewer` - Viewer
     LoginRequest:
       type: object
       properties:
@@ -179,6 +2162,547 @@ components:
       - device_name
       - email
       - password
+    Membership:
+      type: object
+      description: Model serializer with strict input-field handling.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        user_id:
+          type: string
+          format: uuid
+          readOnly: true
+        email:
+          type: string
+          format: email
+          readOnly: true
+        role:
+          allOf:
+          - $ref: '#/components/schemas/MembershipRole'
+          readOnly: true
+        state:
+          allOf:
+          - $ref: '#/components/schemas/StateEnum'
+          readOnly: true
+        joined_at:
+          type: string
+          format: date-time
+          readOnly: true
+        version:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - email
+      - id
+      - joined_at
+      - role
+      - state
+      - updated_at
+      - user_id
+      - version
+    MembershipRole:
+      enum:
+      - owner
+      - admin
+      - editor
+      - viewer
+      type: string
+      description: |-
+        * `owner` - Owner
+        * `admin` - Admin
+        * `editor` - Editor
+        * `viewer` - Viewer
+    MembershipUpdateRoleEnum:
+      enum:
+      - admin
+      - editor
+      - viewer
+      type: string
+      description: |-
+        * `admin` - admin
+        * `editor` - editor
+        * `viewer` - viewer
+    Merchant:
+      type: object
+      description: Model serializer with strict input-field handling.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        tracker_id:
+          type: string
+          format: uuid
+        display_name:
+          type: string
+          maxLength: 160
+        default_category_id:
+          type: string
+          format: uuid
+          nullable: true
+        version:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - display_name
+      - id
+      - tracker_id
+      - updated_at
+      - version
+    MerchantRequest:
+      type: object
+      description: Model serializer with strict input-field handling.
+      properties:
+        tracker_id:
+          type: string
+          format: uuid
+        display_name:
+          type: string
+          minLength: 1
+          maxLength: 160
+        default_category_id:
+          type: string
+          format: uuid
+          nullable: true
+      required:
+      - display_name
+      - tracker_id
+    Movement:
+      type: object
+      description: Model serializer with strict input-field handling.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        account_id:
+          type: string
+          format: uuid
+          readOnly: true
+        signed_amount_minor:
+          type: integer
+          readOnly: true
+        currency:
+          type: string
+          readOnly: true
+        currency_exponent:
+          type: integer
+          readOnly: true
+        conversion_rate:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,16}(?:\.\d{0,12})?$
+          readOnly: true
+          nullable: true
+      required:
+      - account_id
+      - conversion_rate
+      - currency
+      - currency_exponent
+      - id
+      - signed_amount_minor
+    MovementRevision:
+      type: object
+      description: Model serializer with strict input-field handling.
+      properties:
+        account_id:
+          type: string
+          format: uuid
+          readOnly: true
+        signed_amount_minor:
+          type: integer
+          readOnly: true
+        currency:
+          type: string
+          readOnly: true
+        currency_exponent:
+          type: integer
+          readOnly: true
+        conversion_rate:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,16}(?:\.\d{0,12})?$
+          readOnly: true
+          nullable: true
+      required:
+      - account_id
+      - conversion_rate
+      - currency
+      - currency_exponent
+      - signed_amount_minor
+    PaginatedAccountList:
+      type: object
+      required:
+      - results
+      properties:
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cD00ODY%3D"
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Account'
+    PaginatedAuditEventList:
+      type: object
+      required:
+      - results
+      properties:
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cD00ODY%3D"
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditEvent'
+    PaginatedCategoryList:
+      type: object
+      required:
+      - results
+      properties:
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cD00ODY%3D"
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Category'
+    PaginatedCategoryRevisionList:
+      type: object
+      required:
+      - results
+      properties:
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cD00ODY%3D"
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/CategoryRevision'
+    PaginatedInviteList:
+      type: object
+      required:
+      - results
+      properties:
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cD00ODY%3D"
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Invite'
+    PaginatedMembershipList:
+      type: object
+      required:
+      - results
+      properties:
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cD00ODY%3D"
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Membership'
+    PaginatedMerchantList:
+      type: object
+      required:
+      - results
+      properties:
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cD00ODY%3D"
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Merchant'
+    PaginatedTagList:
+      type: object
+      required:
+      - results
+      properties:
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cD00ODY%3D"
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Tag'
+    PaginatedTrackerList:
+      type: object
+      required:
+      - results
+      properties:
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cD00ODY%3D"
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Tracker'
+    PaginatedTransactionReadList:
+      type: object
+      required:
+      - results
+      properties:
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cD00ODY%3D"
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/TransactionRead'
+    PaginatedTransactionRevisionList:
+      type: object
+      required:
+      - results
+      properties:
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cD00ODY%3D"
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/TransactionRevision'
+    PatchedAccountRequest:
+      type: object
+      description: Model serializer with strict input-field handling.
+      properties:
+        tracker_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        type:
+          $ref: '#/components/schemas/TypeEnum'
+        currency:
+          type: string
+          minLength: 1
+          maxLength: 3
+        opening_balance_minor:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
+        opening_date:
+          type: string
+          format: date
+        color:
+          type: string
+          minLength: 1
+          maxLength: 16
+        icon:
+          type: string
+          minLength: 1
+          maxLength: 80
+        include_in_net_worth:
+          type: boolean
+        credit_limit_minor:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
+    PatchedCategoryRequest:
+      type: object
+      description: Model serializer with strict input-field handling.
+      properties:
+        tracker_id:
+          type: string
+          format: uuid
+          nullable: true
+        parent_id:
+          type: string
+          format: uuid
+          nullable: true
+        kind:
+          $ref: '#/components/schemas/CategoryKind'
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        icon:
+          type: string
+          minLength: 1
+          maxLength: 80
+        color:
+          type: string
+          minLength: 1
+          maxLength: 16
+        sort_order:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+    PatchedMembershipUpdateRequest:
+      type: object
+      description: Serializer that rejects misspelled or unsupported request fields.
+      properties:
+        role:
+          $ref: '#/components/schemas/MembershipUpdateRoleEnum'
+    PatchedMerchantRequest:
+      type: object
+      description: Model serializer with strict input-field handling.
+      properties:
+        tracker_id:
+          type: string
+          format: uuid
+        display_name:
+          type: string
+          minLength: 1
+          maxLength: 160
+        default_category_id:
+          type: string
+          format: uuid
+          nullable: true
+    PatchedTagRequest:
+      type: object
+      description: Model serializer with strict input-field handling.
+      properties:
+        tracker_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        color:
+          type: string
+          minLength: 1
+          maxLength: 16
+    PatchedTrackerRequest:
+      type: object
+      description: Model serializer with strict input-field handling.
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        description:
+          type: string
+          maxLength: 2000
+        icon:
+          type: string
+          minLength: 1
+          maxLength: 80
+        color:
+          type: string
+          minLength: 1
+          maxLength: 16
+        base_currency:
+          type: string
+          minLength: 1
+          maxLength: 3
+        sort_order:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        default_account_id:
+          type: string
+          format: uuid
+          nullable: true
+        default_category_id:
+          type: string
+          format: uuid
+          nullable: true
     RefreshRequest:
       type: object
       properties:
@@ -225,6 +2749,105 @@ components:
       - last_seen_at
       - platform
       - revoked_at
+    SourceEnum:
+      enum:
+      - manual
+      - shortcut
+      - recurring
+      - installment
+      - receipt_scan
+      - import
+      - server
+      type: string
+      description: |-
+        * `manual` - Manual
+        * `shortcut` - Shortcut
+        * `recurring` - Recurring
+        * `installment` - Installment
+        * `receipt_scan` - Receipt scan
+        * `import` - Import
+        * `server` - Server
+    StateEnum:
+      enum:
+      - active
+      - removed
+      type: string
+      description: |-
+        * `active` - Active
+        * `removed` - Removed
+    StatusEnum:
+      enum:
+      - draft
+      - posted
+      - pending
+      - voided
+      - reconciled
+      type: string
+      description: |-
+        * `draft` - Draft
+        * `posted` - Posted
+        * `pending` - Pending
+        * `voided` - Voided
+        * `reconciled` - Reconciled
+    Tag:
+      type: object
+      description: Model serializer with strict input-field handling.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        tracker_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          maxLength: 80
+        color:
+          type: string
+          maxLength: 16
+        archived_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        version:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - archived_at
+      - created_at
+      - id
+      - name
+      - tracker_id
+      - updated_at
+      - version
+    TagRequest:
+      type: object
+      description: Model serializer with strict input-field handling.
+      properties:
+        tracker_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        color:
+          type: string
+          minLength: 1
+          maxLength: 16
+      required:
+      - name
+      - tracker_id
     TokenResponse:
       type: object
       properties:
@@ -250,6 +2873,516 @@ components:
       - refresh_token_expires_at
       - session_id
       - token_type
+    Tracker:
+      type: object
+      description: Model serializer with strict input-field handling.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        owner_id:
+          type: string
+          format: uuid
+          readOnly: true
+        role:
+          type: string
+          nullable: true
+          readOnly: true
+        name:
+          type: string
+          maxLength: 120
+        description:
+          type: string
+          maxLength: 2000
+        icon:
+          type: string
+          maxLength: 80
+        color:
+          type: string
+          maxLength: 16
+        base_currency:
+          type: string
+          maxLength: 3
+        sort_order:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        default_account_id:
+          type: string
+          format: uuid
+          nullable: true
+        default_category_id:
+          type: string
+          format: uuid
+          nullable: true
+        archived_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        version:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - archived_at
+      - created_at
+      - id
+      - name
+      - owner_id
+      - role
+      - updated_at
+      - version
+    TrackerRequest:
+      type: object
+      description: Model serializer with strict input-field handling.
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        description:
+          type: string
+          maxLength: 2000
+        icon:
+          type: string
+          minLength: 1
+          maxLength: 80
+        color:
+          type: string
+          minLength: 1
+          maxLength: 16
+        base_currency:
+          type: string
+          minLength: 1
+          maxLength: 3
+        sort_order:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        default_account_id:
+          type: string
+          format: uuid
+          nullable: true
+        default_category_id:
+          type: string
+          format: uuid
+          nullable: true
+      required:
+      - name
+    TransactionKind:
+      enum:
+      - expense
+      - income
+      - transfer
+      - settlement
+      - refund
+      type: string
+      description: |-
+        * `expense` - Expense
+        * `income` - Income
+        * `transfer` - Transfer
+        * `settlement` - Settlement
+        * `refund` - Refund / adjustment
+    TransactionRead:
+      type: object
+      description: Model serializer with strict input-field handling.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        tracker_id:
+          type: string
+          format: uuid
+          readOnly: true
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/TransactionKind'
+          readOnly: true
+        source:
+          allOf:
+          - $ref: '#/components/schemas/SourceEnum'
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/StatusEnum'
+          readOnly: true
+        amount_minor:
+          type: integer
+          readOnly: true
+        currency:
+          type: string
+          readOnly: true
+        currency_exponent:
+          type: integer
+          readOnly: true
+        base_amount_minor:
+          type: integer
+          readOnly: true
+        base_currency:
+          type: string
+          readOnly: true
+        rate_snapshot:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,16}(?:\.\d{0,12})?$
+          readOnly: true
+        rate_source:
+          type: string
+          readOnly: true
+        rate_effective_at:
+          type: string
+          format: date-time
+          readOnly: true
+        merchant_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        merchant:
+          type: string
+          readOnly: true
+          nullable: true
+        payee:
+          type: string
+          readOnly: true
+        note:
+          type: string
+          readOnly: true
+        occurred_at:
+          type: string
+          format: date-time
+          readOnly: true
+        captured_at:
+          type: string
+          format: date-time
+          readOnly: true
+        external_event_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        refund_of_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        creator_id:
+          type: string
+          format: uuid
+          readOnly: true
+        last_editor_id:
+          type: string
+          format: uuid
+          readOnly: true
+        movements:
+          type: array
+          items:
+            $ref: '#/components/schemas/Movement'
+          readOnly: true
+        allocations:
+          type: array
+          items:
+            $ref: '#/components/schemas/Allocation'
+          readOnly: true
+        tag_ids:
+          type: array
+          items:
+            type: string
+          readOnly: true
+        version:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        deleted_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+      required:
+      - allocations
+      - amount_minor
+      - base_amount_minor
+      - base_currency
+      - captured_at
+      - created_at
+      - creator_id
+      - currency
+      - currency_exponent
+      - deleted_at
+      - external_event_id
+      - id
+      - kind
+      - last_editor_id
+      - merchant
+      - merchant_id
+      - movements
+      - note
+      - occurred_at
+      - payee
+      - rate_effective_at
+      - rate_snapshot
+      - rate_source
+      - refund_of_id
+      - source
+      - status
+      - tag_ids
+      - tracker_id
+      - updated_at
+      - version
+    TransactionRevision:
+      type: object
+      description: Model serializer with strict input-field handling.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        recorded_version:
+          type: integer
+          readOnly: true
+        reason:
+          type: string
+          readOnly: true
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/TransactionKind'
+          readOnly: true
+        source:
+          allOf:
+          - $ref: '#/components/schemas/SourceEnum'
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/StatusEnum'
+          readOnly: true
+        amount_minor:
+          type: integer
+          readOnly: true
+        currency:
+          type: string
+          readOnly: true
+        currency_exponent:
+          type: integer
+          readOnly: true
+        base_amount_minor:
+          type: integer
+          readOnly: true
+        base_currency:
+          type: string
+          readOnly: true
+        rate_snapshot:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,16}(?:\.\d{0,12})?$
+          readOnly: true
+        rate_source:
+          type: string
+          readOnly: true
+        rate_effective_at:
+          type: string
+          format: date-time
+          readOnly: true
+        merchant_id:
+          type: string
+          format: uuid
+          nullable: true
+          readOnly: true
+        payee:
+          type: string
+          readOnly: true
+        occurred_at:
+          type: string
+          format: date-time
+          readOnly: true
+        external_event_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        refund_of_id:
+          type: string
+          format: uuid
+          nullable: true
+          readOnly: true
+        editor_id:
+          type: string
+          format: uuid
+          readOnly: true
+        movements:
+          type: array
+          items:
+            $ref: '#/components/schemas/MovementRevision'
+          readOnly: true
+        allocations:
+          type: array
+          items:
+            $ref: '#/components/schemas/AllocationRevision'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - allocations
+      - amount_minor
+      - base_amount_minor
+      - base_currency
+      - created_at
+      - currency
+      - currency_exponent
+      - editor_id
+      - external_event_id
+      - id
+      - kind
+      - merchant_id
+      - movements
+      - occurred_at
+      - payee
+      - rate_effective_at
+      - rate_snapshot
+      - rate_source
+      - reason
+      - recorded_version
+      - refund_of_id
+      - source
+      - status
+    TransactionWriteRequest:
+      type: object
+      description: Serializer that rejects misspelled or unsupported request fields.
+      properties:
+        tracker_id:
+          type: string
+          format: uuid
+        kind:
+          $ref: '#/components/schemas/TransactionKind'
+        source:
+          allOf:
+          - $ref: '#/components/schemas/SourceEnum'
+          default: manual
+        status:
+          allOf:
+          - $ref: '#/components/schemas/StatusEnum'
+          default: posted
+        amount_minor:
+          type: integer
+          minimum: 1
+        currency:
+          type: string
+          minLength: 3
+          maxLength: 3
+        account_id:
+          type: string
+          format: uuid
+        account_amount_minor:
+          type: integer
+          minimum: 1
+        destination_account_id:
+          type: string
+          format: uuid
+        destination_amount_minor:
+          type: integer
+          minimum: 1
+        category_allocations:
+          type: array
+          items:
+            $ref: '#/components/schemas/AllocationInputRequest'
+        tag_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        merchant:
+          type: string
+          default: ''
+          maxLength: 160
+        payee:
+          type: string
+          default: ''
+          maxLength: 160
+        note:
+          type: string
+          default: ''
+          maxLength: 5000
+        occurred_at:
+          type: string
+          format: date-time
+        base_amount_minor:
+          type: integer
+          minimum: 1
+        rate_snapshot:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,16}(?:\.\d{0,12})?$
+        rate_source:
+          type: string
+          minLength: 1
+          maxLength: 80
+        rate_effective_at:
+          type: string
+          format: date-time
+        external_event_id:
+          type: string
+          format: uuid
+          nullable: true
+        refund_of_id:
+          type: string
+          format: uuid
+          nullable: true
+        base_version:
+          type: integer
+          minimum: 1
+          writeOnly: true
+      required:
+      - account_id
+      - amount_minor
+      - currency
+      - kind
+      - occurred_at
+      - tracker_id
+    TransferOwnershipRequest:
+      type: object
+      description: Serializer that rejects misspelled or unsupported request fields.
+      properties:
+        new_owner_id:
+          type: string
+          format: uuid
+      required:
+      - new_owner_id
+    TypeEnum:
+      enum:
+      - cash
+      - checking
+      - savings
+      - credit
+      - digital_wallet
+      - custom
+      type: string
+      description: |-
+        * `cash` - Cash
+        * `checking` - Checking / bank
+        * `savings` - Savings
+        * `credit` - Credit
+        * `digital_wallet` - Digital wallet
+        * `custom` - Custom
   securitySchemes:
     accessToken:
       type: http

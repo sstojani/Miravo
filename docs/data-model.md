@@ -26,13 +26,17 @@ Exactly one active owner relationship exists per tracker. Object references may 
 | Merchant | Tracker-scoped normalized/display name and optional default category |
 | Transaction | Tracker, kind/source/status, positive display amount/currency, merchant/note/time, creator/editor/external ID/version |
 | AccountMovement | Transaction/account, signed amount in account currency, conversion snapshot |
-| CategoryAllocation | Transaction/category and exact minor-unit amount |
+| CategoryAllocation | Transaction/category, exact minor-unit amount, and category-version snapshot |
 | TransactionTag | Explicit transaction/tag relation |
+| TransactionRevision | Immutable prior material transaction fields before update/void/delete/merge |
+| MovementRevision | Prior account and signed movement linked to a transaction revision |
+| AllocationRevision | Prior category, category version, and amount linked to a transaction revision |
+| CategoryRevision | Prior category name/kind/parent/presentation values by monotonic version |
 | SplitPayment | Transaction/participant and amount paid |
 | SplitShare | Transaction/participant and amount owed; optional source percentage |
 | Settlement | From/to participant, currency/amount, optional transaction link |
 
-Balances derive from posted, non-voided movements. Transfer movements net between accounts and do not count as spending/income. Allocations, paid amounts, and owed shares must each sum exactly at currency precision. Used entities archive instead of disappearing.
+Balances derive from posted/reconciled, non-deleted movements. Transfer movements net between accounts and do not count as spending/income. Allocations, paid amounts, and owed shares must each sum exactly at currency precision. Used entities archive instead of disappearing. Clients cannot author arbitrary signed movements; a locked domain service derives them from validated transaction commands.
 
 ## Planning, media, sync, and operations
 
@@ -61,7 +65,7 @@ Balances derive from posted, non-voided movements. Transfer movements net betwee
 - Exact transaction allocation, split paid, and split owed totals.
 - Role/state validity and exactly one active tracker owner.
 - Protected history: account/category delete is rejected when referenced; archive instead.
+- Unique relational revision versions per transaction/category; allocation rows retain the category version used at posting time.
 - Refresh expiry follows creation; consumed/revoked credential cannot rotate successfully.
 
 Cross-row totals and ownership are enforced in locked domain services plus deferred PostgreSQL triggers/constraint mechanisms where safely expressible. A serializer-only invariant is insufficient.
-

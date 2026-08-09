@@ -24,6 +24,10 @@ Useful endpoints:
 - `POST /api/v1/auth/logout`
 - `GET /api/v1/auth/sessions`
 - `DELETE /api/v1/auth/sessions/{id}`
+- `/api/v1/trackers/` plus member, invite, ownership, archive, and restore actions
+- `/api/v1/accounts/`, `/categories/`, `/tags/`, and `/merchants/`
+- `/api/v1/transactions/` plus void and immutable revision actions
+- `GET /api/v1/audit-events/?tracker_id=<UUID>` for owner/admin audit review
 
 The OpenAPI source is generated at `backend/openapi-schema.yml`. The schema endpoint and Django Admin are intentionally denied by the public reverse proxy.
 
@@ -33,3 +37,8 @@ Access tokens are JWTs with a short expiry and a device-session ID. Refresh cred
 
 Never copy real tokens into issues, tests, logs, screenshots, or documentation.
 
+Tracker invitations use a separate pepper and store only an HMAC digest. The raw invite value appears only in the create response, is email-bound, expiring, one-time, and revocable.
+
+## Financial write behavior
+
+Clients submit transaction commands with a tracker/account, positive integer minor-unit amount, ISO currency, and optional exact category allocations. The server creates signed account movements; clients cannot submit an arbitrary balance. Cross-currency records require an explicit base amount, decimal rate, source, and effective timestamp. Full transaction replacements require `base_version`; stale updates return HTTP 409.

@@ -2,7 +2,7 @@
 
 ## Current state
 
-Milestone 0 is complete. Milestone 1 is locally verified on Linux for dependency locking, migrations, Django checks, authentication/session tests, static analysis, OpenAPI freshness, and source audits. Docker and hosted CI acceptance remain open. A small Milestone 3 iOS contract scaffold exists but has not been compiled. No production system has been contacted.
+Milestones 0–2 are complete at the locally verifiable tier. Authentication, tracker collaboration boundaries, the core relational ledger API, migrations, OpenAPI, revision history, and source audits pass on Linux. Docker/PostgreSQL integration and hosted CI remain unverified environmental checks. Milestone 3 iOS work is now active; its initial SwiftData scaffold has not been compiled. No production system has been contacted.
 
 ## Verified
 
@@ -11,8 +11,9 @@ Milestone 0 is complete. Milestone 1 is locally verified on Linux for dependency
 - Architecture, trust boundaries, sync semantics, test categories, deployment separation, and stop conditions are documented.
 - Current official documentation still supports the core Wallet-Shortcut/API bridge and warns that Tailscale CLI syntax is version-dependent.
 - `uv.lock`, initial migrations, and the committed OpenAPI schema are reproducible and current.
-- `make check` passes: 14 tests, 82.92% branch-aware coverage, Ruff, strict mypy, Django checks, and OpenAPI validation/freshness.
+- `make check` passes: 38 tests, 82.11% branch-aware coverage, Ruff, strict mypy, Django checks, and OpenAPI validation/freshness.
 - Fresh-database migration checks, Django deployment checks with synthetic secrets, Bandit, `pip-audit`, YAML parsing, localization parity, whitespace checks, and a targeted secret scan pass locally.
+- Owner/admin/editor/viewer APIs, invitation lifecycle, derived balances, exact allocations, transfers/refunds/voids, cross-currency snapshots, revision conflicts, tombstones, category history/merge, and archive/restore flows are locally acceptance-tested.
 
 ## Not yet verified
 

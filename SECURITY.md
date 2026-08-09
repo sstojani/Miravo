@@ -6,7 +6,7 @@ Project Ledger stores sensitive financial and identity data. Report suspected vu
 
 - Non-development traffic is HTTPS-only and authenticated except deliberate liveness/public-config routes.
 - Passwords use Argon2. Access JWTs are short lived. Refresh credentials rotate, are stored as keyed hashes, and revoke the device session on reuse.
-- Shortcut credentials will be independent, scoped, hashed, revocable, rate-limited, optionally expiring, and shown once.
+- Tracker invitation credentials are independent, email-bound, expiring, HMAC-hashed, revocable, and shown once. Shortcut credentials will use a separate scoped credential family.
 - iOS secrets belong only in Keychain. The IPA contains public configuration only.
 - Authorization is enforced per object on the server. Shared-tracker tests cover every role.
 - Financial values are integer minor units; exchange rates use decimal arithmetic and immutable historical snapshots.
@@ -18,7 +18,7 @@ Project Ledger stores sensitive financial and identity data. Report suspected vu
 
 ## Secrets that must never enter Git or an IPA
 
-Passwords, Django/JWT/refresh peppers, database/Redis credentials, access/refresh/Shortcut tokens, signing credentials, Tailscale auth keys, server SSH keys, SMTP credentials, backup keys, and administration credentials.
+Passwords, Django/JWT/refresh/invitation peppers, database/Redis credentials, access/refresh/invite/Shortcut tokens, signing credentials, Tailscale auth keys, server SSH keys, SMTP credentials, backup keys, and administration credentials.
 
 ## Supported disclosure information
 
@@ -31,4 +31,3 @@ Include the affected revision, endpoint/component, safe reproduction steps with 
 - Other security defects: acknowledge within 7 days.
 
 These are project targets, not a commercial SLA.
-

@@ -37,6 +37,7 @@ jobs:
       PROJECT_LEDGER_SECRET_KEY: ci-only-secret-key-not-for-production-000000000000000000
       PROJECT_LEDGER_JWT_SIGNING_KEY: ci-only-jwt-key-not-for-production-0000000000000000000
       PROJECT_LEDGER_REFRESH_TOKEN_PEPPER: ci-only-pepper-not-for-production-00000000000000000000
+      PROJECT_LEDGER_INVITE_TOKEN_PEPPER: ci-only-invite-pepper-not-for-production-000000000000000
       PROJECT_LEDGER_DATABASE_URL: postgresql://projectledger:test-only-password@127.0.0.1:5432/projectledger_test
       PROJECT_LEDGER_REDIS_URL: redis://127.0.0.1:6379/0
     steps:
@@ -65,4 +66,3 @@ jobs:
           path: |
             coverage.xml
             /tmp/openapi-schema.yml
-

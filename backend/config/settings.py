@@ -48,20 +48,31 @@ MINIMUM_PRODUCTION_SECRET_LENGTH = 50
 SECRET_KEY = env("PROJECT_LEDGER_SECRET_KEY", "development-only-secret-key-change-me")
 JWT_SIGNING_KEY = env("PROJECT_LEDGER_JWT_SIGNING_KEY", SECRET_KEY + ":jwt")
 REFRESH_TOKEN_PEPPER = env("PROJECT_LEDGER_REFRESH_TOKEN_PEPPER", SECRET_KEY + ":refresh")
+INVITE_TOKEN_PEPPER = env("PROJECT_LEDGER_INVITE_TOKEN_PEPPER", SECRET_KEY + ":invite")
 
 if IS_PRODUCTION:
     forbidden = {"development-only-secret-key-change-me", "replace-me", "change-me"}
-    for setting_name, setting_value in {
+    production_secrets = {
         "PROJECT_LEDGER_SECRET_KEY": SECRET_KEY,
         "PROJECT_LEDGER_JWT_SIGNING_KEY": JWT_SIGNING_KEY,
         "PROJECT_LEDGER_REFRESH_TOKEN_PEPPER": REFRESH_TOKEN_PEPPER,
-    }.items():
+        "PROJECT_LEDGER_INVITE_TOKEN_PEPPER": INVITE_TOKEN_PEPPER,
+    }
+    missing_production_secrets = [name for name in production_secrets if name not in os.environ]
+    if missing_production_secrets:
+        raise ImproperlyConfigured(
+            "Production requires explicit independent secrets: "
+            + ", ".join(missing_production_secrets)
+        )
+    for setting_name, setting_value in production_secrets.items():
         if len(setting_value) < MINIMUM_PRODUCTION_SECRET_LENGTH or any(
             token in setting_value for token in forbidden
         ):
             raise ImproperlyConfigured(
                 f"{setting_name} must be an independent high-entropy production secret"
             )
+    if len(set(production_secrets.values())) != len(production_secrets):
+        raise ImproperlyConfigured("Production secrets must not reuse the same value")
     if DEBUG:
         raise ImproperlyConfigured("PROJECT_LEDGER_DEBUG must be false in production")
 
@@ -85,6 +96,7 @@ INSTALLED_APPS = [
     "apps.common",
     "apps.users",
     "apps.audit",
+    "apps.ledger",
 ]
 
 MIDDLEWARE = [
@@ -184,7 +196,7 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "EXCEPTION_HANDLER": "apps.common.exceptions.api_exception_handler",
-    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.CursorPagination",
+    "DEFAULT_PAGINATION_CLASS": "apps.common.pagination.LedgerCursorPagination",
     "PAGE_SIZE": 100,
     "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
     "DEFAULT_THROTTLE_RATES": {
@@ -202,7 +214,12 @@ SPECTACULAR_SETTINGS = {
     "SERVE_INCLUDE_SCHEMA": False,
     "SCHEMA_PATH_PREFIX": r"/api/v1",
     "COMPONENT_SPLIT_REQUEST": True,
-    "ENUM_NAME_OVERRIDES": {},
+    "ENUM_NAME_OVERRIDES": {
+        "TransactionKind": "apps.ledger.models.Transaction.Kind",
+        "CategoryKind": "apps.ledger.models.Category.Kind",
+        "MembershipRole": "apps.ledger.models.TrackerMembership.Role",
+        "InviteRole": "apps.ledger.models.TrackerInvite.Role",
+    },
 }
 
 APP_NAME = env("PROJECT_LEDGER_APP_NAME", "Project Ledger")

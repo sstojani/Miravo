@@ -2,6 +2,8 @@
 
 Last updated: 2026-08-09. A checked item is complete; its verification tier is recorded in `IMPLEMENT.md`. Items are not checked merely because scaffolding exists.
 
+Current focus: **Milestone 3 — Native iOS local-first foundation**. Milestone 2 passed its local acceptance gate; PostgreSQL/Redis Docker and hosted CI verification remain external environment checks rather than hidden claims.
+
 ## Milestone 0 — Discovery and durable project plan
 
 - [x] Inspect workspace, Git state, and applicable `AGENTS.md`.
@@ -31,11 +33,11 @@ Acceptance: a clean clone starts the development stack, creates an owner, authen
 
 ## Milestone 2 — Core financial domain API
 
-- [ ] Trackers, roles, memberships, invites, ownership transfer, object permissions, and audit.
-- [ ] Accounts and auditable movements, including transfers/refunds/voids and cross-currency snapshots.
-- [ ] Categories/subcategories, tags, merchants, allocations, archive/merge behavior, and seed data.
-- [ ] Transactions with integer minor units, constraints, history, tombstones, versions, and permission tests.
-- [ ] Django Admin suitable only for private operation.
+- [x] Trackers, roles, memberships, invites, ownership transfer, object permissions, and audit.
+- [x] Accounts and auditable movements, including transfers/refunds/voids and cross-currency snapshots.
+- [x] Categories/subcategories, tags, merchants, allocations, archive/merge behavior, and seed data.
+- [x] Transactions with integer minor units, constraints, history, tombstones, versions, and permission tests.
+- [x] Django Admin suitable only for private operation.
 
 ## Milestone 3 — Native iOS local-first foundation
 

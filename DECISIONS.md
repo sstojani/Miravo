@@ -59,3 +59,15 @@
 - **Decision:** Treat a dependency advisory as a lock-file failure even when it affects development tooling; raise the compatible minimum, refresh `uv.lock`, and rerun all checks.
 - **Why:** The first local audit identified an advisory in the resolved pytest version. Resolving to pytest 9.1.1 removed the finding without weakening tests.
 - **Consequence:** `pip-audit` now reports no known vulnerability locally; hosted dependency and container scans remain required before Milestone 10 acceptance.
+
+## D-011 — Relational financial revisions and category-version snapshots
+
+- **Decision:** Capture immutable transaction, movement, allocation, and category revision rows before financially meaningful edits; each current allocation records the category version used when posted.
+- **Why:** Audit event names alone cannot reproduce old money semantics, while generic JSON would hide critical financial relationships. Category renames and merges must not rewrite what an older record meant.
+- **Consequence:** Edits and merges cost extra rows and transactions, but prior amounts/accounts/categories remain queryable and protected by foreign keys. Large merges may move to an audited background job later without changing the data model.
+
+## D-012 — Server-derived movements behind command serializers
+
+- **Decision:** Clients submit transaction commands; they never submit arbitrary signed account movements. The server creates movements transactionally after validating tracker roles, currencies, conversions, allocations, and references.
+- **Why:** Accepting client-authored balances or unrestricted signed movements would make authorization and ledger invariants fragile.
+- **Consequence:** API write shapes differ from read representations. Full replacements require `base_version`; conflicting versions return HTTP 409 and preserve the current record.
