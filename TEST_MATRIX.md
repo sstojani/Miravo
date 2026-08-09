@@ -12,6 +12,11 @@ Status values: `planned`, `implemented`, `passing-local`, `passing-docker`, `pas
 | Errors/logging | Stable code/message/details/request ID; redaction | `backend/tests/test_errors_and_logging.py` | Inspect support bundle | passing-local |
 | Permissions | Owner/admin/editor/viewer object boundaries | `test_tracker_api.py` role matrix/invites/ownership | Two-user device flow | passing-local |
 | Money | ISO code/exponent and integer minor-unit validation | `test_currency.py`, transaction serializer tests | Locale UI checks | passing-local |
+| iOS money input | Strict ASCII digits, locale decimal separator, precision/overflow/currency-lookalike rejection | `MoneyTests.swift` (authored) | Albanian/English keypad on device | implemented |
+| iOS local ledger | Scoped default data and create/edit/tombstone/restore commit with a payload and ordered outbox | `LocalLedgerRepositoryTests.swift` (authored) | Airplane-mode quick add/relaunch | implemented |
+| iOS balances | Opening balance plus posted local movements; deleted/void/draft/pending exclusion | `LocalBalanceCalculatorTests.swift` (authored) | Compare Overview/account values | implemented |
+| iOS session security | HTTPS/release policy, loopback-only debug HTTP, JWT scope, Keychain round-trip, preference isolation | `ServerURLPolicyTests.swift`, `KeychainSessionTokenStoreTests.swift`, `AppPreferencesTests.swift` (authored) | Face ID/passcode and expired-token checks | implemented |
+| iOS store failure | Persistent store is never automatically replaced; blocking recovery state uses only temporary memory | source contract; macOS failure-injection test pending | Preserve a device container and recover | implemented |
 | Accounts | Derived balances, transfer links, cross-currency snapshots | `test_ledger_transactions.py` | Compare ledger totals | passing-local |
 | Transactions | Refund/void/allocation/audit/tombstone/revision semantics | `test_ledger_transactions.py`, `test_taxonomy_and_audit.py` | Offline quick-add scenario | passing-local |
 | Sync | Atomic outbox, duplicate-safe push, paged pull/cursor/tombstones/bootstrap | Milestone 4 server+iOS tests | Airplane-mode/reinstall scenarios | planned |
@@ -25,11 +30,12 @@ Status values: `planned`, `implemented`, `passing-local`, `passing-docker`, `pas
 | Currency | Manual snapshots are required and immutable; provider abstraction/report caveats remain | `test_currency.py`, cross-currency API tests | Partially unconverted report | implemented |
 | Analytics | Offline/server totals consistent; transfers/voids excluded | Milestone 9 golden data tests | 50k record check | planned |
 | Exports | UTF-8 CSV, PDF/full portability, authorized expiry/audit | Milestone 9 report tests | UI total comparison | planned |
-| Localization | Every implemented user string exists in English and Albanian | Milestone 3 resource parity test | Native-speaker review | planned |
+| Localization | Every implemented user string exists in English and Albanian | `check-localizations.sh` and 168-key coverage/format check | Native-speaker review | passing-local |
+| iOS privacy/transport | Release has HTTPS-only ATS, Debug loopback exception, CA92.1, accurate linked-data/no-tracking declaration | `check-project-contract.py` | Inspect generated Xcode privacy report | passing-local |
 | Accessibility | Dynamic Type, VoiceOver labels, contrast/reduced motion, touch targets | Milestone 5 tests/audit | Physical-device audit | planned |
 | Backup | DB/media/config manifest, checksum, encryption, retention, isolated restore | Milestone 10 restore CI/script | Disaster-recovery drill | planned |
 | Exposure | Public API only; no DB/Redis/admin/metrics/debug/raw media | Proxy policy tests | External port/path probe | planned |
-| iOS CI | Regenerate project, simulator build/test, no secrets | `.github/workflows/ios-ci.yml` | Review xcresult | planned |
+| iOS CI | Regenerate project, simulator build/test, no secrets | `.github/workflows/ios-ci.yml`; tests authored | Review xcresult | blocked-external |
 | Unsigned IPA | Device app, Payload structure, metadata, architectures, SHA-256/manifest | `.github/workflows/unsigned-ipa.yml` | Signer + device checklist | planned |
 
 ## Required end-to-end scenarios

@@ -50,6 +50,15 @@ Core financial changes are performed by domain services inside database transact
 
 No view binds directly to a remote response. WebSockets carry invalidation hints only; they never contain authoritative financial payloads.
 
+### Implemented local foundation
+
+- Every local entity and outbox record carries a scope composed from the normalized server origin and the authenticated JWT user UUID. Queries never expose another scope after an account/server change.
+- Tracker, account, category, transaction, and outbox changes execute through a main-actor repository and one `ModelContext.save()`. Failure rolls back the entity and mutation together.
+- `SyncCursor.nextOutboxSequence` allocates a monotonically increasing per-scope sequence in the same store transaction. Push order therefore does not depend on timestamp precision or random UUID order.
+- Server/auth preferences contain only public URL, normalized last email, scope, and device identifier. Access/refresh credentials are non-synchronizing Keychain items with `AfterFirstUnlockThisDeviceOnly` accessibility; passwords are transient.
+- Release uses a strict ATS plist and HTTPS-only URL policy. Debug alone has a local-network ATS exception, further constrained in code to loopback hosts.
+- A persistent-store initialization failure does not trigger destructive recreation. A temporary in-memory container renders a blocking recovery state while leaving the original store untouched.
+
 ## Deployment request path
 
 1. Funnel terminates the public `*.ts.net` TLS request and forwards only to loopback.
@@ -66,4 +75,3 @@ No view binds directly to a remote response. WebSockets carry invalidation hints
 - Cursor expiry triggers staged bootstrap without discarding unsent mutations.
 - Redis/WebSocket/Celery outage cannot invalidate already posted ledger state; readiness and queued work expose the degradation.
 - Restore is performed into isolation and verified before any production recovery decision.
-

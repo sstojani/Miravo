@@ -2,7 +2,7 @@
 
 Last updated: 2026-08-09. A checked item is complete; its verification tier is recorded in `IMPLEMENT.md`. Items are not checked merely because scaffolding exists.
 
-Current focus: **Milestone 3 — Native iOS local-first foundation**. Milestone 2 passed its local acceptance gate; PostgreSQL/Redis Docker and hosted CI verification remain external environment checks rather than hidden claims.
+Current focus: **Milestone 4 — Synchronization and collaboration transport (independent server work)**. Milestone 3 source/static checks are complete, while its macOS compile/test acceptance remains an explicit external check. PostgreSQL/Redis Docker and hosted CI verification are likewise not hidden claims.
 
 ## Milestone 0 — Discovery and durable project plan
 
@@ -41,11 +41,11 @@ Acceptance: a clean clone starts the development stack, creates an owner, authen
 
 ## Milestone 3 — Native iOS local-first foundation
 
-- [ ] XcodeGen SwiftUI/iOS 18 project, design tokens, navigation, privacy manifest, localization resources, and CI.
-- [ ] SwiftData domain/outbox/cursor models and repository/use-case boundaries.
-- [ ] Onboarding, server URL, login, Keychain session storage, optional local Face ID gate.
-- [ ] Offline tracker/account/category and transaction create/edit/delete/reopen flows.
-- [ ] Simulator unit/integration/UI tests on GitHub macOS.
+- [x] XcodeGen SwiftUI/iOS 18 project, design tokens, navigation, privacy manifest, localization resources, and CI source.
+- [x] SwiftData domain/outbox/cursor models and repository/use-case boundaries.
+- [x] Onboarding, server URL, login, Keychain session storage, optional local Face ID/passcode gate.
+- [x] Offline tracker/account/category and transaction create/edit/delete/reopen flows.
+- [ ] Compile and pass the authored unit/integration/UI tests on GitHub macOS.
 
 ## Milestone 4 — Synchronization and collaboration transport
 

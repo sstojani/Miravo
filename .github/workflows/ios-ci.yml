@@ -26,6 +26,8 @@ jobs:
           sw_vers
           xcodebuild -version
           swift --version
+          swiftformat --version
+          xcbeautify --version
 
       - name: Install pinned XcodeGen
         run: |
@@ -36,10 +38,11 @@ jobs:
 
       - name: Validate source resources
         run: |
-          plutil -lint ios/ProjectLedger/Info.plist ios/Resources/PrivacyInfo.xcprivacy
+          plutil -lint ios/ProjectLedger/Info.plist ios/ProjectLedger/Info.Debug.plist ios/Resources/PrivacyInfo.xcprivacy
           chmod +x ios/check-localizations.sh
           ios/check-localizations.sh
-          swiftformat --lint ios/ProjectLedger ios/ProjectLedgerTests ios/ProjectLedgerUITests
+          python3 ios/check-project-contract.py
+          swiftformat --config ios/.swiftformat --lint ios/ProjectLedger ios/ProjectLedgerTests ios/ProjectLedgerUITests
 
       - name: Generate project and prove generation did not alter sources
         working-directory: ios
@@ -79,4 +82,3 @@ jobs:
             ios/DerivedData/ProjectLedgerTests.xcresult
             ios/DerivedData/Logs
           retention-days: 14
-

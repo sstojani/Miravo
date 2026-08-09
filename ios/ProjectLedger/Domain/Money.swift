@@ -17,8 +17,8 @@ struct Money: Equatable, Sendable {
             throw MoneyError.invalidAmount
         }
         let normalizedCurrency = currencyCode.uppercased()
-        guard normalizedCurrency.count == 3,
-              normalizedCurrency.unicodeScalars.allSatisfy({ CharacterSet.uppercaseLetters.contains($0) })
+        guard normalizedCurrency.utf8.count == 3,
+              normalizedCurrency.utf8.allSatisfy({ (65 ... 90).contains($0) })
         else {
             throw MoneyError.invalidAmount
         }
@@ -33,31 +33,42 @@ struct Money: Equatable, Sendable {
         exponent: Int,
         locale: Locale
     ) throws -> Money {
-        let formatter = NumberFormatter()
-        formatter.locale = locale
-        formatter.numberStyle = .decimal
-        formatter.generatesDecimalNumbers = true
-        guard let number = formatter.number(from: text) else {
+        guard exponent >= 0, exponent <= 4 else { throw MoneyError.invalidAmount }
+        let input = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !input.isEmpty else { throw MoneyError.invalidAmount }
+        let separator = locale.decimalSeparator ?? "."
+        let components = input.components(separatedBy: separator)
+        guard components.count <= 2,
+              let integerPart = components.first,
+              !integerPart.isEmpty,
+              integerPart.utf8.allSatisfy({ (48 ... 57).contains($0) })
+        else {
+            throw MoneyError.invalidAmount
+        }
+        let fractionPart = components.count == 2 ? components[1] : ""
+        guard fractionPart.utf8.allSatisfy({ (48 ... 57).contains($0) }) else {
+            throw MoneyError.invalidAmount
+        }
+        guard fractionPart.count <= exponent else {
+            throw MoneyError.tooManyFractionDigits
+        }
+        if components.count == 2, fractionPart.isEmpty {
             throw MoneyError.invalidAmount
         }
 
-        var major = number.decimalValue
-        var scaled = Decimal()
-        guard NSDecimalMultiplyByPowerOf10(&scaled, &major, Int16(exponent), .plain) == .noError else {
-            throw MoneyError.outOfRange
+        let paddedFraction = fractionPart + String(
+            repeating: "0",
+            count: exponent - fractionPart.count
+        )
+        var minorUnits: Int64 = 0
+        for byte in (integerPart + paddedFraction).utf8 {
+            let (scaled, multiplicationOverflow) = minorUnits.multipliedReportingOverflow(by: 10)
+            let (next, additionOverflow) = scaled.addingReportingOverflow(Int64(byte - 48))
+            guard !multiplicationOverflow, !additionOverflow else {
+                throw MoneyError.outOfRange
+            }
+            minorUnits = next
         }
-        var rounded = Decimal()
-        NSDecimalRound(&rounded, &scaled, 0, .plain)
-        guard scaled == rounded else {
-            throw MoneyError.tooManyFractionDigits
-        }
-
-        let decimalNumber = NSDecimalNumber(decimal: rounded)
-        let maximum = NSDecimalNumber(value: Int64.max)
-        guard decimalNumber.compare(maximum) != .orderedDescending else {
-            throw MoneyError.outOfRange
-        }
-        let minorUnits = decimalNumber.int64Value
         guard minorUnits > 0 else {
             throw MoneyError.nonPositiveAmount
         }
@@ -83,5 +94,20 @@ struct Money: Equatable, Sendable {
         )
         return formatter.string(from: number) ?? "\(minorUnits) \(currencyCode)"
     }
-}
 
+    func editableMajorUnits(locale: Locale) -> String {
+        let formatter = NumberFormatter()
+        formatter.locale = locale
+        formatter.numberStyle = .decimal
+        formatter.usesGroupingSeparator = false
+        formatter.minimumFractionDigits = exponent
+        formatter.maximumFractionDigits = exponent
+        let magnitude = minorUnits == Int64.min ? UInt64(Int64.max) + 1 : UInt64(abs(minorUnits))
+        let number = NSDecimalNumber(
+            mantissa: magnitude,
+            exponent: Int16(-exponent),
+            isNegative: minorUnits < 0
+        )
+        return formatter.string(from: number) ?? String(minorUnits)
+    }
+}

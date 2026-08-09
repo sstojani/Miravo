@@ -71,3 +71,21 @@
 - **Decision:** Clients submit transaction commands; they never submit arbitrary signed account movements. The server creates movements transactionally after validating tracker roles, currencies, conversions, allocations, and references.
 - **Why:** Accepting client-authored balances or unrestricted signed movements would make authorization and ledger invariants fragile.
 - **Consequence:** API write shapes differ from read representations. Full replacements require `base_version`; conflicting versions return HTTP 409 and preserve the current record.
+
+## D-013 — Local identity scope and monotonic mutation order
+
+- **Decision:** Scope every SwiftData domain/outbox row by normalized server URL plus the authenticated JWT `sub` UUID, and allocate a per-scope monotonically increasing outbox sequence inside the same local transaction.
+- **Why:** A shared phone installation must never reveal one server/account’s cached ledger after another account signs in. Timestamps and random UUIDs cannot prove create-before-edit ordering when actions occur in one clock tick.
+- **Consequence:** Sign-out hides rather than destroys possibly unsynchronized records. The Milestone 4 sync actor must batch by local sequence and retain per-scope cursors; changing server origin intentionally selects another cache.
+
+## D-014 — Device-only Keychain with release/debug transport separation
+
+- **Decision:** Store only access/refresh bundles in a non-synchronizing Keychain item using `AfterFirstUnlockThisDeviceOnly`, with no custom access group. Release accepts HTTPS only and has no local ATS exception; Debug permits HTTP only to loopback. Credential-bearing URLSession requests refuse redirects.
+- **Why:** This accessibility class is the most restrictive practical choice compatible with best-effort post-unlock background work. Explicit build configuration prevents a development convenience from leaking into the unsigned Release IPA.
+- **Consequence:** Re-signing that changes the application identifier may make old Keychain entries inaccessible. Offline local data still works; server authentication may need to be repeated. CI validates both source plists and the packaged Release plist.
+
+## D-015 — Honest privacy manifest and non-destructive store failure
+
+- **Decision:** Declare linked identity/device, purchase/financial, receipt-media, name, and user-content collection solely for app functionality, with no tracking. If SwiftData initialization fails, leave the persistent store untouched and show a blocking recovery state using a temporary in-memory container.
+- **Why:** An empty collection declaration is inaccurate once financial data synchronizes to the owner’s server. Automatically recreating a damaged or unmigratable store risks losing the only copy of offline money records.
+- **Consequence:** Recovery may require a device-container export or later pending-data export; the app will not trade recoverability for a clean-looking launch.

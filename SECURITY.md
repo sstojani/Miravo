@@ -8,6 +8,10 @@ Project Ledger stores sensitive financial and identity data. Report suspected vu
 - Passwords use Argon2. Access JWTs are short lived. Refresh credentials rotate, are stored as keyed hashes, and revoke the device session on reuse.
 - Tracker invitation credentials are independent, email-bound, expiring, HMAC-hashed, revocable, and shown once. Shortcut credentials will use a separate scoped credential family.
 - iOS secrets belong only in Keychain. The IPA contains public configuration only.
+- iOS access/refresh credentials use a non-synchronizing Keychain item with `AfterFirstUnlockThisDeviceOnly` accessibility and no custom access group; a password is never persisted.
+- Cached iOS entities are partitioned by normalized server origin and authenticated user UUID. Sign-out hides the scope without destructively deleting possibly unsynchronized records.
+- Release URL validation and ATS permit HTTPS only. The Debug-only ATS exception is constrained in code to loopback, and redirects are refused for credential-bearing requests.
+- The privacy manifest declares linked app-functionality data accurately, declares no tracking domains, and records only the CA92.1 app-owned UserDefaults required reason.
 - Authorization is enforced per object on the server. Shared-tracker tests cover every role.
 - Financial values are integer minor units; exchange rates use decimal arithmetic and immutable historical snapshots.
 - Request bodies and sensitive fields are excluded from logs. Safe errors include request IDs.

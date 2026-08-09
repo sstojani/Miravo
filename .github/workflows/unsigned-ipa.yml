@@ -28,6 +28,7 @@ jobs:
           sw_vers
           xcodebuild -version
           swift --version
+          xcbeautify --version
 
       - name: Install pinned XcodeGen
         run: |
@@ -39,8 +40,20 @@ jobs:
       - name: Generate a clean project
         working-directory: ios
         run: |
+          python3 check-project-contract.py
+          ./check-localizations.sh
+          swiftformat --config .swiftformat --lint ProjectLedger ProjectLedgerTests ProjectLedgerUITests
           xcodegen generate --spec project.yml
           git diff --exit-code -- .
+
+      - name: Scan application source for production-secret patterns
+        run: |
+          if rg -n --hidden --glob '*.swift' --glob '*.plist' \
+            '(-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----|sk-[A-Za-z0-9]{20,}|postgres(ql)?://[^[:space:]]+:[^[:space:]]+@)' \
+            ios/ProjectLedger ios/Resources; then
+            echo "Potential secret pattern found in iOS source." >&2
+            exit 1
+          fi
 
       - name: Build unsigned Release app for a physical device
         working-directory: ios
@@ -76,10 +89,25 @@ jobs:
           test -n "$(plutil -extract CFBundleShortVersionString raw "$info")"
           test -n "$(plutil -extract CFBundleVersion raw "$info")"
           test -n "$(plutil -extract NSCameraUsageDescription raw "$info")"
+          test -n "$(plutil -extract NSFaceIDUsageDescription raw "$info")"
           test -n "$(plutil -extract NSPhotoLibraryUsageDescription raw "$info")"
+          test "$(plutil -extract NSAppTransportSecurity.NSAllowsArbitraryLoads raw "$info")" = "false"
+          if plutil -extract NSAppTransportSecurity.NSAllowsLocalNetworking raw "$info" >/dev/null 2>&1; then
+            echo "Release app contains a development-only local-network ATS exception." >&2
+            exit 1
+          fi
           test -f "$app/PrivacyInfo.xcprivacy"
+          test "$(plutil -extract NSPrivacyTracking raw "$app/PrivacyInfo.xcprivacy")" = "false"
           lipo -archs "$executable" | grep -qw arm64
-          codesign -d --entitlements :- "$app" >/tmp/project-ledger-entitlements.plist 2>/dev/null || true
+          if codesign --verify "$app" >/dev/null 2>&1; then
+            echo "Expected an unsigned app, but code-signature verification succeeded." >&2
+            exit 1
+          fi
+          if strings "$executable" | rg -q \
+            '(-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----|sk-[A-Za-z0-9]{20,}|postgres(ql)?://[^[:space:]]+:[^[:space:]]+@)'; then
+            echo "Potential secret pattern found in compiled application." >&2
+            exit 1
+          fi
 
           mkdir -p "$artifacts" "$stage/Payload"
           ditto "$app" "$stage/Payload/ProjectLedger.app"
@@ -117,4 +145,3 @@ jobs:
           path: ios/artifacts/
           if-no-files-found: error
           retention-days: 30
-

@@ -22,6 +22,7 @@ struct MoneyTests {
             locale: Locale(identifier: "sq_AL")
         )
         #expect(money.minorUnits == 1_250)
+        #expect(money.editableMajorUnits(locale: Locale(identifier: "sq_AL")) == "12,50")
     }
 
     @Test func rejectsExcessFractionPrecision() {
@@ -45,5 +46,31 @@ struct MoneyTests {
             )
         }
     }
-}
 
+    @Test func rejectsPartialOrGroupedInputInsteadOfSilentlyTruncating() {
+        for value in ["12abc", "1,000.00", "12."] {
+            #expect(throws: MoneyError.invalidAmount) {
+                try Money.positive(
+                    majorUnits: value,
+                    currencyCode: "USD",
+                    exponent: 2,
+                    locale: Locale(identifier: "en_US")
+                )
+            }
+        }
+    }
+
+    @Test func rejectsNonASCIICurrencyLookalikesAndIntegerOverflow() {
+        #expect(throws: MoneyError.invalidAmount) {
+            try Money(minorUnits: 100, currencyCode: "ËUR", exponent: 2)
+        }
+        #expect(throws: MoneyError.outOfRange) {
+            try Money.positive(
+                majorUnits: "999999999999999999999999999999",
+                currencyCode: "EUR",
+                exponent: 2,
+                locale: Locale(identifier: "en_US")
+            )
+        }
+    }
+}

@@ -2,7 +2,7 @@
 
 ## Current state
 
-Milestones 0–2 are complete at the locally verifiable tier. Authentication, tracker collaboration boundaries, the core relational ledger API, migrations, OpenAPI, revision history, and source audits pass on Linux. Docker/PostgreSQL integration and hosted CI remain unverified environmental checks. Milestone 3 iOS work is now active; its initial SwiftData scaffold has not been compiled. No production system has been contacted.
+Milestones 0–2 are complete at the locally verifiable tier. Milestone 3 native source/tests are implemented and its Linux static privacy, localization, YAML/plist, whitespace, and syntax-tree checks pass; Swift/Xcode compilation is still unverified. Docker/PostgreSQL integration and hosted CI remain environmental checks. No production system has been contacted.
 
 ## Verified
 
@@ -14,6 +14,8 @@ Milestones 0–2 are complete at the locally verifiable tier. Authentication, tr
 - `make check` passes: 38 tests, 82.11% branch-aware coverage, Ruff, strict mypy, Django checks, and OpenAPI validation/freshness.
 - Fresh-database migration checks, Django deployment checks with synthetic secrets, Bandit, `pip-audit`, YAML parsing, localization parity, whitespace checks, and a targeted secret scan pass locally.
 - Owner/admin/editor/viewer APIs, invitation lifecycle, derived balances, exact allocations, transfers/refunds/voids, cross-currency snapshots, revision conflicts, tombstones, category history/merge, and archive/restore flows are locally acceptance-tested.
+- The iOS source now has strict locale-aware minor-unit input, server/user-scoped SwiftData models, atomic CRUD/outbox writes with monotonic ordering, Keychain login, optional app lock, non-destructive store-failure handling, local management screens, and authored unit/UI tests.
+- English/Albanian implemented-screen coverage (168 literal keys), release/debug ATS separation, privacy-manifest disclosure, YAML/plist structure, and independent Swift syntax-tree parsing pass locally.
 
 ## Not yet verified
 
@@ -38,3 +40,6 @@ Milestones 0–2 are complete at the locally verifiable tier. Authentication, tr
 - Tailscale Funnel: https://tailscale.com/docs/features/tailscale-funnel
 - Tailscale Funnel CLI: https://tailscale.com/docs/reference/tailscale-cli/funnel
 - OpenAI long-horizon Codex workflow: https://developers.openai.com/blog/run-long-horizon-tasks-with-codex
+- GitHub macOS 15 runner image/tool inventory: https://github.com/actions/runner-images/blob/main/images/macos/macos-15-Readme.md
+- Apple privacy manifest data-use guidance: https://developer.apple.com/documentation/bundleresources/describing-data-use-in-privacy-manifests
+- Apple app privacy details: https://developer.apple.com/app-store/app-privacy-details/

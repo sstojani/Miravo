@@ -1,45 +1,107 @@
+import SwiftData
 import SwiftUI
 
 struct RootView: View {
+    let storeUnavailable: Bool
+
+    @Environment(\.modelContext) private var modelContext
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @EnvironmentObject private var session: SessionController
+
+    var body: some View {
+        Group {
+            if storeUnavailable {
+                LocalStoreRecoveryView()
+            } else {
+                sessionContent
+            }
+        }
+        .tint(LedgerTheme.accent)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: session.phase)
+    }
+
+    @ViewBuilder
+    private var sessionContent: some View {
+        switch session.phase {
+            case .loading:
+                ProgressView("Opening local data…")
+            case .onboarding:
+                OnboardingView()
+            case .signIn:
+                LoginView()
+            case .locked:
+                LockedView()
+            case .authenticated:
+                if let scopeKey = session.scopeKey {
+                    MainTabView(scopeKey: scopeKey)
+                        .task {
+                            try? LocalLedgerRepository(context: modelContext)
+                                .bootstrapDefaults(scopeKey: scopeKey)
+                        }
+                } else {
+                    ProgressView("Opening local data…")
+                }
+        }
+    }
+}
+
+private struct LocalStoreRecoveryView: View {
+    var body: some View {
+        ContentUnavailableView {
+            Label("Local data needs attention", systemImage: "externaldrive.badge.exclamationmark")
+        } description: {
+            Text("Project Ledger did not erase or replace the persistent store. Do not delete the app if it may contain unsynchronized records. Restart once, then use the documented recovery steps if this message returns.")
+        } actions: {
+            Text("Support code: local_store_unavailable")
+                .font(.caption.monospaced())
+                .textSelection(.enabled)
+        }
+        .padding()
+    }
+}
+
+private struct MainTabView: View {
+    let scopeKey: String
+
     var body: some View {
         TabView {
             NavigationStack {
-                OverviewView()
+                OverviewView(scopeKey: scopeKey)
             }
             .tabItem {
                 Label("Overview", systemImage: "chart.pie")
             }
 
             NavigationStack {
-                TransactionsView()
+                TransactionsView(scopeKey: scopeKey)
             }
             .tabItem {
                 Label("Transactions", systemImage: "list.bullet.rectangle")
             }
 
             NavigationStack {
-                QuickAddView()
+                QuickAddView(scopeKey: scopeKey)
             }
             .tabItem {
                 Label("Add", systemImage: "plus.circle.fill")
             }
 
             NavigationStack {
-                PlaceholderView(title: "Plans", systemImage: "calendar.badge.clock")
+                PlansView(scopeKey: scopeKey)
             }
             .tabItem {
                 Label("Plans", systemImage: "calendar.badge.clock")
             }
 
             NavigationStack {
-                PlaceholderView(title: "Insights", systemImage: "chart.xyaxis.line")
+                InsightsView(scopeKey: scopeKey)
             }
             .tabItem {
                 Label("Insights", systemImage: "chart.xyaxis.line")
             }
 
             NavigationStack {
-                PlaceholderView(title: "Settings", systemImage: "gearshape")
+                SettingsView(scopeKey: scopeKey)
             }
             .tabItem {
                 Label("Settings", systemImage: "gearshape")
@@ -47,18 +109,3 @@ struct RootView: View {
         }
     }
 }
-
-private struct PlaceholderView: View {
-    let title: LocalizedStringKey
-    let systemImage: String
-
-    var body: some View {
-        ContentUnavailableView(
-            title,
-            systemImage: systemImage,
-            description: Text("This feature is scheduled in the implementation plan.")
-        )
-        .navigationTitle(title)
-    }
-}
-

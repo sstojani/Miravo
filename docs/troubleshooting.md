@@ -26,7 +26,14 @@ Run the SQLite-backed local checks for fast feedback, but keep PostgreSQL/Redis 
 
 Expected. XcodeGen source can be reviewed on Linux, but compilation/simulator tests/device archive require the GitHub-hosted macOS workflow or a Mac. Never claim a generated project or IPA works before that job succeeds.
 
+## iOS shows `local_store_unavailable`
+
+Do not delete/reinstall the app if it may contain records that have not synchronized. Restart once. If the state returns, preserve the installation, record the app/build version, available disk space, and support code, then use a Mac/Xcode device container export or the documented pending-data export once available. The app does not silently erase or replace a store that failed initialization or migration.
+
+## Release accepts an HTTP server URL
+
+Treat this as a security defect. The Release plist intentionally has no local-network ATS exception and `ServerURLPolicy` rejects all non-HTTPS URLs. Only Debug has a loopback-only development path. Run `python3 ios/check-project-contract.py` and inspect the unsigned artifact’s `Info.plist`.
+
 ## Third-party-signed app appears as a new app
 
 The signer likely changed the bundle identifier. That creates a different local container. Synchronized data can bootstrap after login; pending-only data in the previous container must be exported before deletion.
-

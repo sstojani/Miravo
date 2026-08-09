@@ -6,7 +6,7 @@ The local database drives every ordinary app view. Remote responses update local
 
 1. Validate the command locally using the currency exponent and domain rules.
 2. In one SwiftData transaction, mutate the client-generated UUID entity and append an outbox operation.
-3. The outbox records operation ID/idempotency key, entity/type, command, changed fields, base server version, creation time, attempt state, and dependency IDs.
+3. The outbox records operation ID/idempotency key, a per-user monotonic local sequence, entity/type, command, versioned payload, base server version, creation time, and retry state.
 4. Commit, update UI, and dismiss without a network spinner.
 5. Ask the synchronization actor to run if appropriate.
 
@@ -14,7 +14,7 @@ If step 2 fails, neither entity nor outbox persists. Undo is another auditable l
 
 ## Push
 
-- One synchronization actor sends bounded, stable-order batches.
+- One synchronization actor sends bounded batches ordered by the durable local sequence. An immediate edit or tombstone can never sort ahead of its create merely because both share a clock tick.
 - Operations carry independent IDs and base versions. Server processing is transactional per operation and returns accepted, duplicate, rejected, unauthorized, or conflict.
 - Lost responses are retried with identical IDs. Validation/permission/revocation failures stop automatic retry; transient failures use exponential backoff with jitter.
 - Conflicts and permanent failures do not block unrelated operations.
@@ -51,4 +51,3 @@ A bootstrap failure leaves the prior local store/cursor usable.
 Attempt on login/bootstrap, launch/foreground, local change, pull-to-refresh, active connectivity return, periodic active timer, best-effort BackgroundTasks, and WebSocket invalidation. Correctness never assumes a precise background or Wi-Fi event.
 
 The UI always exposes last success, current state, pending/failed/conflict counts, and manual retry. States are pending, syncing, synced, failed, and conflicted.
-

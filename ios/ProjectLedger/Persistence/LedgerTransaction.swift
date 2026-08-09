@@ -6,7 +6,35 @@ enum TransactionKind: String, Codable, CaseIterable, Sendable {
     case income
     case transfer
     case settlement
-    case adjustment
+    case refund
+
+    var displayName: String {
+        switch self {
+        case .expense: String(localized: "Expense")
+        case .income: String(localized: "Income")
+        case .transfer: String(localized: "Transfer")
+        case .settlement: String(localized: "Settlement")
+        case .refund: String(localized: "Refund")
+        }
+    }
+}
+
+enum TransactionSource: String, Codable, CaseIterable, Sendable {
+    case manual
+    case shortcut
+    case recurring
+    case installment
+    case receiptScan = "receipt_scan"
+    case imported = "import"
+    case server
+}
+
+enum TransactionStatus: String, Codable, CaseIterable, Sendable {
+    case draft
+    case posted
+    case pending
+    case voided
+    case reconciled
 }
 
 enum LocalSyncState: String, Codable, Sendable {
@@ -15,27 +43,56 @@ enum LocalSyncState: String, Codable, Sendable {
     case synced
     case failed
     case conflicted
+
+    var displayName: String {
+        switch self {
+        case .pending: String(localized: "Pending")
+        case .syncing: String(localized: "Syncing")
+        case .synced: String(localized: "Synced")
+        case .failed: String(localized: "Failed")
+        case .conflicted: String(localized: "Conflict")
+        }
+    }
 }
 
 @Model
 final class LedgerTransaction {
     @Attribute(.unique) var id: UUID
+    var scopeKey: String
+    var trackerID: UUID
+    var accountID: UUID
+    var destinationAccountID: UUID?
+    var categoryID: UUID?
     var kindRaw: String
+    var sourceRaw: String
+    var statusRaw: String
     var amountMinor: Int64
+    var accountAmountMinor: Int64
+    var destinationAmountMinor: Int64?
     var currencyCode: String
     var currencyExponent: Int
     var merchant: String
     var note: String
     var occurredAt: Date
     var syncStateRaw: String
+    var serverVersion: Int64?
     var createdAt: Date
     var updatedAt: Date
     var deletedAt: Date?
 
     init(
         id: UUID = UUID(),
+        scopeKey: String,
+        trackerID: UUID,
+        accountID: UUID,
+        destinationAccountID: UUID? = nil,
+        categoryID: UUID? = nil,
         kind: TransactionKind,
         money: Money,
+        accountAmountMinor: Int64? = nil,
+        destinationAmountMinor: Int64? = nil,
+        source: TransactionSource = .manual,
+        status: TransactionStatus = .posted,
         merchant: String = "",
         note: String = "",
         occurredAt: Date = .now,
@@ -43,8 +100,17 @@ final class LedgerTransaction {
         createdAt: Date = .now
     ) {
         self.id = id
+        self.scopeKey = scopeKey
+        self.trackerID = trackerID
+        self.accountID = accountID
+        self.destinationAccountID = destinationAccountID
+        self.categoryID = categoryID
         kindRaw = kind.rawValue
+        sourceRaw = source.rawValue
+        statusRaw = status.rawValue
         amountMinor = money.minorUnits
+        self.accountAmountMinor = accountAmountMinor ?? money.minorUnits
+        self.destinationAmountMinor = destinationAmountMinor
         currencyCode = money.currencyCode
         currencyExponent = money.exponent
         self.merchant = merchant
@@ -63,6 +129,14 @@ final class LedgerTransaction {
         LocalSyncState(rawValue: syncStateRaw) ?? .failed
     }
 
+    var source: TransactionSource {
+        TransactionSource(rawValue: sourceRaw) ?? .manual
+    }
+
+    var status: TransactionStatus {
+        TransactionStatus(rawValue: statusRaw) ?? .posted
+    }
+
     var money: Money? {
         try? Money(
             minorUnits: amountMinor,
@@ -71,4 +145,3 @@ final class LedgerTransaction {
         )
     }
 }
-

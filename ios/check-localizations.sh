@@ -23,5 +23,6 @@ extract_keys "$ios_dir/Resources/en.lproj/InfoPlist.strings" "$temporary_dir/en-
 extract_keys "$ios_dir/Resources/sq.lproj/InfoPlist.strings" "$temporary_dir/sq-info"
 diff -u "$temporary_dir/en-info" "$temporary_dir/sq-info"
 
-echo "English and Albanian localization keys match."
+python3 "$ios_dir/check-localization-coverage.py"
 
+echo "English and Albanian localization keys match."

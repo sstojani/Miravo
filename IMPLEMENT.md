@@ -90,3 +90,46 @@ Run the committed backend workflow and iOS workflow on a GitHub repository with 
 ### Next exact action
 
 Expand the native iOS scaffold into the Milestone 3 local-first foundation: complete SwiftData entities/repositories, Keychain-backed authentication, onboarding/server configuration, offline tracker/account/category/transaction flows, design/localization/accessibility states, and macOS-runner tests. Preserve the existing Linux-verifiable project-generation and resource checks while clearly leaving Xcode compilation unverified until hosted CI runs.
+
+## 2026-08-09 — Milestone 3 native local-first source checkpoint
+
+### Acceptance checks established
+
+- Release URL validation and ATS allow HTTPS only; Debug’s separate plist permits local networking while application policy restricts cleartext to loopback.
+- A successful login stores access/refresh values only in a non-synchronizing, device-only Keychain item. Passwords remain transient. Local rows are hidden across server/user scopes.
+- Tracker/account/category/transaction mutations and their versioned outbox payload commit in one SwiftData save. Every mutation receives a durable per-scope monotonic sequence.
+- Quick add, edit, duplicate, tombstone delete, restore, local taxonomy/account/tracker management, derived balances, onboarding, lock, diagnostics, and non-destructive local-store failure states have implemented screens.
+- Implemented UI strings have matching English and Albanian entries and format placeholders; accessibility labels, Dynamic Type-friendly financial values, non-color state markers, and reduced-motion handling cover the critical paths.
+- Simulator unit/UI tests are authored, but no Swift test is marked passing before Xcode actually executes it.
+
+### Material work
+
+- Expanded the SwiftData schema with per-server/user trackers, accounts, categories, transactions, ordered outbox operations, and cursor/sequence state.
+- Replaced lenient number parsing with strict digit-by-digit, overflow-checked minor-unit conversion; added local balance calculation that excludes deleted, voided, draft, and pending records.
+- Added an atomic local repository for default bootstrap and tracker/account/category/transaction create/update/archive/tombstone/restore/duplicate commands. The repository enforces scope, tracker, category-kind, account-currency, positive amount, and immutable tracker rules.
+- Added privacy-oriented onboarding, configurable HTTPS login, explicit Django DTO coding keys, redirect refusal, safe request-ID errors, Keychain token persistence, offline reopening, optional Face ID/passcode lock, and local sign-out behavior.
+- Added original design tokens, Overview, Quick Add, searchable/deletable Transactions, local Insights, staged Plans state, and Settings/local-data management in English and Albanian.
+- Added a conservative SwiftData boot path: store failure never triggers deletion/recreation; a temporary in-memory container displays `local_store_unavailable` recovery guidance.
+- Corrected `PrivacyInfo.xcprivacy` to disclose linked identity/device, purchase/financial, receipt, name, and user content solely for app functionality; tracking remains false and UserDefaults uses CA92.1.
+- Split Release and Debug Info plists, strengthened unsigned-IPA ATS/privacy/unsigned/secret checks, and added Linux-runnable localization and project-contract validators.
+- Authored money, balance, repository/outbox, URL/JWT/DTO, preferences, Keychain, onboarding, and critical offline Quick Add UI tests.
+
+### Commands and outcomes
+
+- `ios/check-localizations.sh`: **passed locally**; 168 literal implemented UI keys covered and English/Albanian keys/placeholders match.
+- `python3 ios/check-project-contract.py`: **passed locally**; Release/Debug ATS separation, CA92.1, collected-data purposes/linkage, and no-tracking contract verified.
+- Parsed all plist files with Python `plistlib`, all YAML with PyYAML, and ran `git diff --check`: **passed locally**.
+- Parsed every Swift source/test file with `tree-sitter-swift` 0.7.1 after removing debug conditional branches: **no syntax-tree ERROR or missing node**. This is a static parser check, not a Swift compiler result.
+- Re-checked the official GitHub `macos-15` image inventory on 2026-08-09: Xcode 16.4 and iOS 18.5 simulator remain available; the workflow selects that Xcode explicitly and prints actual versions.
+- Re-checked Apple privacy-manifest data-use guidance and required-reason documentation before correcting the manifest.
+
+### Verification state
+
+- iOS localization, privacy/transport plist contract, YAML/plist structure, source secret patterns, whitespace, and independent Swift syntax parsing: **verified locally on Linux**.
+- XcodeGen generation, Swift 6 type/concurrency checking, SwiftData runtime behavior, simulator unit/UI tests, and SwiftFormat lint: **authored but not verified** because Xcode/Swift/macOS are unavailable.
+- Unsigned device build and IPA checks: **authored but not run**.
+- Physical-device, third-party signer, Face ID, and real server behavior: **not attempted**.
+
+### Next exact action
+
+Run `.github/workflows/ios-ci.yml` on a repository with hosted macOS. Fix any compiler, SwiftFormat, SwiftData, or simulator failure before marking Milestone 3 accepted. In parallel, begin Milestone 4’s Linux-verifiable server sync change log and push/pull/bootstrap APIs without claiming the pending Apple checks.
