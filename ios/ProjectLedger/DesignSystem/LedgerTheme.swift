@@ -6,7 +6,9 @@ enum LedgerTheme {
     static let warning = Color(red: 0.90, green: 0.50, blue: 0.08)
     static let negative = Color(red: 0.82, green: 0.22, blue: 0.25)
     static let cornerRadius: CGFloat = 18
+    static let smallSpacing: CGFloat = 8
     static let contentSpacing: CGFloat = 16
+    static let sectionSpacing: CGFloat = 24
 }
 
 struct LedgerCard: ViewModifier {

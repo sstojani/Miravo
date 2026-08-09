@@ -101,6 +101,24 @@ def main() -> int:
     if "NSPrivacyCollectedDataTypePaymentInfo" in declared_types:
         fail("The app must not collect payment credentials or payment information.")
 
+    shortcut_view = (IOS_ROOT / "ProjectLedger/Features/Settings/ShortcutSettingsView.swift").read_text(
+        encoding="utf-8"
+    )
+    if ".localOnly: true" not in shortcut_view or ".expirationDate:" not in shortcut_view:
+        fail("Shortcut-token clipboard writes must be local-only and explicitly expiring.")
+    forbidden_shortcut_storage = {
+        "ProjectLedger/App/AppPreferences.swift",
+        "ProjectLedger/Security/KeychainSessionTokenStore.swift",
+    }
+    forbidden_shortcut_storage.update(
+        str(path.relative_to(IOS_ROOT))
+        for path in (IOS_ROOT / "ProjectLedger/Persistence").glob("*.swift")
+    )
+    for relative_path in sorted(forbidden_shortcut_storage):
+        source = (IOS_ROOT / relative_path).read_text(encoding="utf-8")
+        if "rawToken" in source or "raw_token" in source or "OneTimeShortcutToken" in source:
+            fail(f"Raw Shortcut credentials must not enter persistent storage: {relative_path}")
+
     print("iOS transport, background-task, and privacy contract verified.")
     return 0
 

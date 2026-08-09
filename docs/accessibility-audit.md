@@ -11,6 +11,7 @@ Status: source-audited on Linux on 2026-08-09; simulator Accessibility Inspector
 | Detail/edit | LabeledContent semantics, full text alternatives for related records/rates/tags, explicit read-only label, native edit/delete/restore controls | Large monetary-value clipping and VoiceOver sheet focus return |
 | Local data | Native list/menu/sheet controls, role text alongside tracker, collaborator role text, archive text in addition to opacity/color, labeled presentation/default pickers, and system reorder controls shown only with management access | Confirm disabled/read-only affordance, reorder announcements, and sheet focus with VoiceOver and Full Keyboard Access |
 | Sync/conflicts | Overview text/icon badge distinguishes never-synced, syncing, offline, pending, failed, conflict, and synced states; diagnostics adds counts/error codes, manual retry, field-by-field current/proposed values, and explicit keep-server/keep-mine actions | Focus behavior after resolution and long localized payload values |
+| Wallet Shortcut | Native labeled tracker/default/scope controls, text-plus-symbol credential states, explicit rotation/revocation actions, inline offline/errors, and a raw-token value whose accessibility label does not speak the secret; the Copy action remains labeled | VoiceOver focus after issuance/revocation, Dynamic Type token wrapping, pasteboard confirmation, and screenshot/task-switcher privacy on device |
 | Appearance | Semantic system fonts, Dynamic Type styles, system materials, SF Symbols, light/dark-aware theme tokens, no custom motion dependency | High-contrast screenshots, Reduce Motion audit, color-blind simulation |
 
 ## Automated/source evidence
@@ -23,7 +24,7 @@ Status: source-audited on Linux on 2026-08-09; simulator Accessibility Inspector
 ## Required macOS/device closure
 
 1. Run unit/UI tests on the pinned hosted macOS/Xcode image and retain the xcresult.
-2. Test the largest accessibility Dynamic Type sizes in English and Albanian on Quick Add, transaction list/detail, Local Data, and conflict review.
+2. Test the largest accessibility Dynamic Type sizes in English and Albanian on Quick Add, transaction list/detail, Local Data, conflict review, and Wallet Shortcut management.
 3. Use Accessibility Inspector and VoiceOver to confirm labels, values, order, and modal focus.
 4. Enable Increase Contrast, Differentiate Without Color, Reduce Motion, and light/dark appearance.
 5. Run the 50,000-record test on the representative simulator profile and profile SwiftData fetch/render separately from the pure filtering ceiling.

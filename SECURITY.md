@@ -8,6 +8,7 @@ Project Ledger stores sensitive financial and identity data. Report suspected vu
 - Passwords use Argon2. Access JWTs are short lived. Refresh credentials rotate, are stored as keyed hashes, and revoke the device session on reuse.
 - Tracker invitation credentials are independent, email-bound, expiring, HMAC-hashed, revocable, and shown once.
 - Shortcut credentials use their own secret pepper and high-entropy token family. Only a prefix and HMAC-SHA-256 digest are stored; the raw token is shown once, can be tracker-restricted, carries explicit read/create scopes, expires by default, and is immediately revocable. The narrow routes apply client-attempt, per-token, and per-user throttles.
+- The iOS credential screen never writes a raw Shortcut token to SwiftData, UserDefaults, Keychain, logs, or descriptions. It holds the create response only in memory; user-initiated copy uses a local-only pasteboard item with a five-minute expiry, and closing the one-time screen clears the app reference.
 - iOS secrets belong only in Keychain. The IPA contains public configuration only.
 - iOS access/refresh credentials use a non-synchronizing Keychain item with `AfterFirstUnlockThisDeviceOnly` accessibility and no custom access group; a password is never persisted.
 - Cached iOS entities are partitioned by normalized server origin and authenticated user UUID. Sign-out hides the scope without destructively deleting possibly unsynchronized records.

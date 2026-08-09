@@ -2,7 +2,7 @@
 
 Last updated: 2026-08-09. A checked item is complete; its verification tier is recorded in `IMPLEMENT.md`. Items are not checked merely because scaffolding exists.
 
-Current focus: **Milestone 6 — Shortcut automation**. The server now has locally tested, independently keyed scoped credentials plus narrow context/category/account/single/batch capture routes, transactional user-scoped idempotency, throttling, audit, revocation, and checked-in setup samples. The native token/default-management screen and physical-iPhone online/offline-queue verification are next. Swift compilation, simulator accessibility/performance, Docker, and hosted CI remain explicit external checks.
+Current focus: **Milestone 7 — budgets, recurring/subscriptions, and installments**, while Milestone 6 waits only on external macOS/physical-iPhone validation. Its server routes pass locally, and its native source now creates/lists/rotates/revokes tracker-scoped credentials, exposes tracker defaults, keeps the raw token in memory only, and uses an explicitly expiring local-only pasteboard on user request. Swift compilation, actual Wallet-trigger mapping, queue-file behavior, Docker, and hosted CI remain explicit external checks.
 
 ## Milestone 0 — Discovery and durable project plan
 
@@ -64,12 +64,12 @@ Current acceptance: an authenticated device can push an ordered offline tracker/
 
 - [x] Overview, fast amount-first quick add, transaction detail/list/filter/search, transfers, refunds, and undo (source implemented; macOS/device verification pending).
 - [x] Tracker/account/category/tag settings, synchronized offline collaborator roster, role-aware local states, and owner/admin tracker presentation/default/reordering (source implemented; online invite/role mutation remains Milestone 8 and macOS verification is pending).
-- [x] Complete implemented-screen English/Albanian strings, source accessibility/state audit, explicit empty/offline/error/permission/conflict presentation, and authored 50k-record performance check (294 strings and static checks pass locally; simulator/device audit and timing remain unverified).
+- [x] Complete implemented-screen English/Albanian strings, source accessibility/state audit, explicit empty/offline/error/permission/conflict presentation, and authored 50k-record performance check (356 strings and static checks pass locally; simulator/device audit and timing remain unverified).
 
 ## Milestone 6 — Shortcut automation
 
 - [x] Scoped hashed Shortcut credentials, context/category/account/create/batch endpoints, throttles, audit, revoke, replay and mismatch tests (server behavior verified locally; PostgreSQL/Redis/hosted CI pending).
-- [ ] App token/default management screen.
+- [x] App token/default management screen (source, wire-model/controller tests, localization, non-persistence and clipboard contracts implemented; Xcode/runtime verification pending).
 - [ ] Verified manual online and queued/offline Shortcut construction guides and sample requests (contract and JSON samples authored; current-iPhone execution pending).
 
 ## Milestone 7 — Budgets, recurring/subscriptions, and installments

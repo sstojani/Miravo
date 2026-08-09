@@ -156,26 +156,11 @@ actor APIClient: SyncTransport {
     }
 
     func logout(accessToken: String) async throws {
-        var request = URLRequest(url: endpoint("api/v1/auth/logout"))
-        request.httpMethod = "POST"
-        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-        request.setValue(UUID().uuidString.lowercased(), forHTTPHeaderField: "X-Request-ID")
-        let (data, response) = try await session.data(for: request)
-        guard let http = response as? HTTPURLResponse else {
-            throw APIClientError(
-                code: "invalid_response",
-                message: String(localized: "The server returned an invalid response."),
-                requestID: nil,
-                statusCode: nil
-            )
-        }
-        guard isSameOrigin(http.url) else {
-            throw invalidOriginError(response: http)
-        }
-        guard http.statusCode == 204 else {
-            throw decodeError(from: data, response: http)
-        }
+        try await sendWithoutResponse(
+            path: "api/v1/auth/logout",
+            method: "POST",
+            accessToken: accessToken
+        )
     }
 
     func refresh(refreshToken: String) async throws -> SessionTokenBundle {
@@ -249,6 +234,38 @@ actor APIClient: SyncTransport {
         )
     }
 
+    func listShortcutCredentials(
+        accessToken: String
+    ) async throws -> [ShortcutCredentialSummary] {
+        try await send(
+            [ShortcutCredentialSummary].self,
+            path: "api/v1/shortcut/credentials",
+            method: "GET",
+            accessToken: accessToken
+        )
+    }
+
+    func createShortcutCredential(
+        _ request: ShortcutCredentialCreateRequest,
+        accessToken: String
+    ) async throws -> IssuedShortcutCredential {
+        try await send(
+            IssuedShortcutCredential.self,
+            path: "api/v1/shortcut/credentials",
+            method: "POST",
+            accessToken: accessToken,
+            body: encoder.encode(request)
+        )
+    }
+
+    func revokeShortcutCredential(id: UUID, accessToken: String) async throws {
+        try await sendWithoutResponse(
+            path: "api/v1/shortcut/credentials/\(id.uuidString.lowercased())",
+            method: "DELETE",
+            accessToken: accessToken
+        )
+    }
+
     private func endpoint(_ path: String) -> URL {
         path.split(separator: "/").reduce(baseURL) { partial, component in
             partial.appending(path: String(component))
@@ -297,6 +314,41 @@ actor APIClient: SyncTransport {
             response: response,
             maximumResponseBytes: maximumResponseBytes
         )
+    }
+
+    private func sendWithoutResponse(
+        path: String,
+        method: String,
+        accessToken: String
+    ) async throws {
+        var request = URLRequest(url: endpoint(path))
+        request.httpMethod = method
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        request.setValue(UUID().uuidString.lowercased(), forHTTPHeaderField: "X-Request-ID")
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            throw APIClientError(
+                code: "invalid_response",
+                message: String(localized: "The server returned an invalid response."),
+                requestID: nil,
+                statusCode: nil
+            )
+        }
+        guard isSameOrigin(http.url) else {
+            throw invalidOriginError(response: http)
+        }
+        guard http.statusCode == 204 else {
+            throw decodeError(from: data, response: http)
+        }
+        guard data.count <= 1_024 else {
+            throw APIClientError(
+                code: "response_too_large",
+                message: String(localized: "The server response was unexpectedly large."),
+                requestID: http.value(forHTTPHeaderField: "X-Request-ID"),
+                statusCode: http.statusCode
+            )
+        }
     }
 
     private func decode<Value: Decodable>(
@@ -365,3 +417,5 @@ actor APIClient: SyncTransport {
         )
     }
 }
+
+extension APIClient: ShortcutCredentialTransport {}

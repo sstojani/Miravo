@@ -44,6 +44,11 @@ struct SettingsView: View {
                 } label: {
                     Label("Trackers, accounts, and categories", systemImage: "square.stack.3d.up")
                 }
+                NavigationLink {
+                    ShortcutSettingsView(scopeKey: scopeKey)
+                } label: {
+                    Label("Apple Wallet Shortcut", systemImage: "bolt.horizontal.circle")
+                }
             }
 
             Section("Privacy") {

@@ -47,6 +47,7 @@ Core financial changes are performed by domain services inside database transact
 - **Domain:** money/currency types, commands, calculations, validation, conflict decisions.
 - **Persistence:** SwiftData models, atomic local writes/outbox, cursor/bootstrap staging, conflicts, and a durable attachment-transfer queue boundary.
 - **Networking:** URLSession DTOs, Keychain-backed session refresh, reachability hint, retry policy.
+- **Shortcut management:** normal access-JWT client for safe credential metadata and create/revoke; one-time raw create response remains memory-only and an explicit pasteboard copy expires locally.
 - **Synchronization actor:** one serialized coordinator per local store; push then pull; independent conflicts.
 - **Platform services:** Vision OCR, camera/files, LocalAuthentication, best-effort BackgroundTasks.
 

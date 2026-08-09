@@ -26,6 +26,12 @@ Pending means stored locally and durably queued. Foreground synchronization push
 
 Owner controls ownership/deletion; admin manages settings/members; editor changes financial records; viewer is read-only. The synchronized collaborator roster and roles remain visible offline. The repository rejects viewer writes even if a stale screen attempts one; a role change received during pull updates the local permission state. Creating invitations and changing roles remain online collaboration work for Milestone 8. Expenses can eventually be split among registered/guest participants, and settlements will not count as spending.
 
+## Optional Apple Wallet Shortcut
+
+The app never needs the Shortcut for ordinary entry. When the server is reachable, Settings → Apple Wallet Shortcut can create a credential restricted to one editable tracker, show its account/category defaults, list active/expired/revoked credentials, create a replacement, and revoke an old token. The three fixed permissions can read expense categories/accounts and create expenses; they cannot read transaction history or use the normal app session.
+
+The raw token appears only after creation. Copy it into the Shortcut authorization header, then close the screen; Project Ledger does not persist it. The clipboard copy is local-only and expires after five minutes, but screenshots, keyboards, or other local software remain risks. During rotation, test the replacement before revoking the old credential. See `docs/shortcut-setup.md` for the versioned online and bounded queue flows. Those physical-iPhone construction steps remain unverified until a signed build and HTTPS server are available.
+
 ## Privacy and recovery
 
 Receipts are private, OCR is on-device and reviewable, and no advertising/third-party analytics SDK is used initially. Revoke lost devices/Shortcut tokens promptly. Synchronized records return after reinstall; export pending-only local data before uninstalling an unsynced app.

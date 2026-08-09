@@ -2,7 +2,7 @@
 
 ## Current state
 
-Milestones 0–2 and Milestones 4–5 source work are complete at the locally verifiable tier. Milestone 5 includes offline transfer/refund/tag workflows, cached collaborator roles, repository-enforced permission boundaries, tracker presentation/default/reordering, combined discovery, explicit unavailable and synchronization states, and an authored 50,000-record check. Milestone 6 now includes locally tested scoped Shortcut credentials and narrow lookup/single/batch capture routes with audit, revocation, throttling, explicit conversion, payment-credential rejection, and user-scoped replay safety. Its native token screen and current-iPhone construction/queue verification remain. Linux static privacy, localization, YAML/plist, whitespace, and syntax-tree checks pass, while Swift/Xcode compilation remains unverified. Binary receipt transport remains Milestone 9. Docker/PostgreSQL/Redis integration and hosted CI remain environmental checks. No production system has been contacted.
+Milestones 0–2 and Milestones 4–5 source work are complete at the locally verifiable tier. Milestone 5 includes offline transfer/refund/tag workflows, cached collaborator roles, repository-enforced permission boundaries, tracker presentation/default/reordering, combined discovery, explicit unavailable and synchronization states, and an authored 50,000-record check. Milestone 6 now includes locally tested scoped Shortcut credentials and narrow lookup/single/batch capture routes plus a native create/list/replace/revoke/default-management screen. The raw value is held only in a one-time in-memory presentation; an explicit copy uses a local-only five-minute pasteboard. Current-iPhone construction/queue verification remains. Linux static privacy, localization, YAML/plist, whitespace, and syntax-tree checks pass, while Swift/Xcode compilation remains unverified. Milestone 7 is the current independent implementation focus; binary receipt transport remains Milestone 9. Docker/PostgreSQL/Redis integration and hosted CI remain environmental checks. No production system has been contacted.
 
 ## Verified
 
@@ -15,9 +15,10 @@ Milestones 0–2 and Milestones 4–5 source work are complete at the locally ve
 - Fresh-database migration checks, Django deployment checks with synthetic secrets, Bandit, `pip-audit`, YAML parsing, localization parity, whitespace checks, and a targeted secret scan pass locally.
 - Owner/admin/editor/viewer APIs, invitation lifecycle, derived balances, exact allocations, transfers/refunds/voids, cross-currency snapshots, revision conflicts, tombstones, category history/merge, and archive/restore flows are locally acceptance-tested.
 - Shortcut credentials store only a prefix/HMAC digest under an independent pepper, expose the raw value once, support tracker/scopes/expiry/revoke, and enforce current membership. Narrow capture is payment-credential rejecting, explicit-conversion only, throttled by client/token/user, duplicate-safe across token rotation, and locally covered by 10 focused API tests. Single/batch JSON samples and an honest manual setup guide are checked in.
+- The native Wallet Shortcut screen has strict snake-case credential DTOs, tracker-restricted creation by default, safe unrestricted warnings, default account/category visibility, create/list/replace/revoke flows, in-memory-only raw-token state, redacted descriptions, and an expiring local-only pasteboard. Five deterministic Swift tests are authored; Linux contracts prove the raw value cannot enter preferences, Keychain, or SwiftData source.
 - The iOS source now has strict locale-aware minor-unit input, compound server/user-scoped SwiftData models, atomic CRUD/outbox/movement/allocation/tag-link writes, Keychain login/rotation, optional app lock, non-destructive store-failure handling, synchronized tag/collaborator screens, repository-enforced role restrictions, editable tracker presentation/defaults, shared ordering, and authored unit/UI/performance tests.
 - The native sync source implements stable ordered pushes, transient backoff, atomic pull/cursor pages, paginated bootstrap staging/reconciliation plus catch-up pull, access revocation, diagnostics, structured conflict decisions, a restart-safe attachment-transfer queue, optional foreground invalidation, connectivity-return sync, and best-effort background refresh. Deterministic tests are authored for these boundaries.
-- English/Albanian implemented-screen coverage (294 literal keys), release/debug ATS separation, privacy-manifest disclosure, YAML/plist structure, and independent Swift syntax-tree parsing pass locally. The source accessibility audit and outstanding runtime checks are in `docs/accessibility-audit.md`.
+- English/Albanian implemented-screen coverage (356 literal keys), release/debug ATS separation, privacy-manifest disclosure, YAML/plist structure, and independent Swift syntax-tree parsing pass locally. The source accessibility audit and outstanding runtime checks are in `docs/accessibility-audit.md`.
 
 ## Not yet verified
 
@@ -25,7 +26,7 @@ Milestones 0–2 and Milestones 4–5 source work are complete at the locally ve
 - Swift/Xcode project generation, simulator build/tests, device archive, IPA packaging, signer, and physical-device behavior.
 - GitHub Actions execution because no remote repository has been supplied.
 - Ubuntu deployment, real Funnel hostname, backup restore, and external collaboration.
-- Native Shortcut credential/default management plus Wallet trigger and offline queue-file behavior on the current physical iPhone.
+- Native Shortcut credential/default-management compilation/runtime plus Wallet trigger and offline queue-file behavior on the current physical iPhone.
 
 ## Configuration still required later
 

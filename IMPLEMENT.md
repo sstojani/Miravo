@@ -408,3 +408,39 @@ Commit this Milestone 5 source checkpoint, then begin Milestone 6 with the scope
 ### Next exact action
 
 Implement the native Settings → Shortcut credential/default-management screen using the normal access-JWT API, never persist or log the one-time raw token, add English/Albanian and repository/client tests, then run the Linux static gates. Physical automation and queue verification wait for the signed iPhone build and deployed HTTPS host.
+
+## 2026-08-09 — Milestone 6 native Shortcut management checkpoint
+
+### Acceptance checks established
+
+- The normal app session may create, list, replace, and revoke Shortcut credentials, while the optional automation still uses only its narrow token. Creating a replacement never silently revokes the working credential before the user updates and tests the Shortcut.
+- Tracker restriction is the default. The screen exposes the selected tracker’s synchronized account/category defaults and makes an unrestricted token an explicit, warned choice; editor-or-higher local state is required before offering capture.
+- A raw create response is never encoded or written to SwiftData, UserDefaults, Keychain, diagnostics, or descriptions. It exists only in a one-time in-memory presentation; explicit Copy is device-local and expires after five minutes; dismissal clears the app reference.
+- Offline/server/authentication failures are explicit and do not affect manual entry or existing automations. Credential status uses text plus symbols, and the raw value’s accessibility label does not speak the secret.
+- Native source completion is not Xcode/runtime or physical automation verification.
+
+### Material work
+
+- Added strict credential DTOs and API client methods for exact list/create/revoke paths. The issued response validates the `pls.` shape, tracker, and complete fixed scope set; safe list DTOs contain no raw field.
+- Added a main-actor controller with injected transport tests, name validation, safe error/request-ID state, create/list/revoke behavior, a non-`Codable` one-time token, and redacted `String`/debug descriptions.
+- Added Settings → Apple Wallet Shortcut with role-filtered tracker choice, shared default visibility, active/expired/revoked metadata, scope summaries, safe replacement flow, confirmed revoke, inline offline/error states, exact API host/path display, and the optional/non-reconciliation boundary.
+- Added a mandatory one-time acknowledgement view. The pasteboard write is `.localOnly` with a five-minute `.expirationDate`; source contracts fail if those options disappear or if raw-token types enter preferences, Keychain, or persistence.
+- Authored five Swift tests for wire keys/scopes, invalid raw format, fail-closed expiry parsing, one-time clearing/non-reconstruction, normalized creation, revocation, and pre-network name validation. Expanded English/Albanian copy and the accessibility/source audit.
+
+### Commands and outcomes
+
+- `.venv/bin/pytest backend/tests/test_shortcut_api.py -q`: **10 passed locally** after the native integration work.
+- `ios/check-localizations.sh`: **passed locally** — 356 literal UI keys with identical English/Albanian key sets and compatible placeholders.
+- `python3 ios/check-project-contract.py`: **passed locally**, including HTTPS/privacy/background invariants, local-only expiring clipboard enforcement, and absence of raw Shortcut credentials from persistent-storage source.
+- Parsed `ios/project.yml` and all three plists, ran the targeted iOS production-secret scan, and ran `git diff --check`: **passed locally**.
+- Parsed all 69 Swift source/test files with `tree-sitter-swift` 0.7.1 after excluding conditional directive lines and that parser version’s unsupported iOS 18 `#Unique` grammar: **no syntax-tree errors or missing nodes**.
+
+### Verification boundary
+
+- Backend Shortcut regression, localization parity, privacy/transport/non-persistence source contracts, resource parsing, secret scan, whitespace, and independent Swift syntax-tree structure: **verified locally on Linux**.
+- The five new Swift tests are **authored but not executed**. Swift 6 type/concurrency checking, SwiftFormat, XcodeGen regeneration, simulator rendering/accessibility, URLSession integration, pasteboard expiry, and modal focus remain **unverified until the macOS workflow**.
+- Wallet Transaction fields, immediate-run behavior, online capture, offline file rewrite/flush, real Funnel, signing, and the physical iPhone remain **unverified external checks**. No production or third-party service was contacted.
+
+### Next exact action
+
+Commit the native Milestone 6 checkpoint. Then begin Milestone 7 with the budget period/domain model and posted-expense-only calculation as the smallest offline/server vertical slice; keep physical Shortcut verification open rather than blocking independent work.

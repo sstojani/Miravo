@@ -1,18 +1,18 @@
 # Apple Wallet Transaction Shortcut setup
 
-Status: the server credential, lookup, single-capture, and batch-capture endpoints are implemented and pass local automated tests. The native token/default-management screen is still in progress. These construction steps are a reproducible contract, not a claim that an importable `.shortcut` file or current-device behavior has been signed or verified.
+Status: the server credential, lookup, single-capture, and batch-capture endpoints are implemented and pass local automated tests. The native token/default-management source is implemented and passes Linux privacy/localization/syntax contracts, but has not yet compiled or run under Xcode. These construction steps are a reproducible contract, not a claim that an importable `.shortcut` file or current-device behavior has been signed or verified.
 
 On 2026-08-09, Apple’s current [Transaction trigger guide](https://support.apple.com/guide/shortcuts/transaction-trigger-apd65c67538a/ios) still documents Wallet transaction automation, and [Get Contents of URL](https://support.apple.com/guide/shortcuts/request-your-first-api-apd58d46713f/ios) still documents JSON POST bodies. Apple may vary exposed fields, labels, card-selection choices, and immediate-run behavior by iOS version, region, and payment configuration; inspect the actual Transaction input on the target iPhone.
 
 ## Before creating the automation
 
 1. Confirm ordinary manual app entry and foreground sync work.
-2. In Project Ledger Settings → Shortcut, create a token restricted to `categories:read`, `accounts:read`, and `transactions:create`, optionally locked to one tracker.
-3. Copy the raw token once into the Shortcut. Do not screenshot/share it. The server stores only its digest.
+2. In Project Ledger Settings → Apple Wallet Shortcut, create a token. The screen requests only `categories:read`, `accounts:read`, and `transactions:create`, and recommends locking it to one tracker.
+3. Copy the raw token once into the Shortcut. Project Ledger does not persist it; the explicit copy is local to the iPhone clipboard and expires after five minutes. Do not screenshot/share it. The server stores only its digest.
 4. Select a default tracker/account to reduce prompts.
 5. Replace `https://replace-me.ts.net` below with the exact HTTPS API host shown by the app.
 
-Until the native screen is complete, a developer can exercise the same authenticated management contract with `POST /api/v1/shortcut/credentials` and this JSON body:
+A developer can also exercise the same authenticated management contract with `POST /api/v1/shortcut/credentials` and this JSON body:
 
 ```json
 {
