@@ -140,14 +140,9 @@ struct PlansView: View {
                     }
                 }
 
-                VStack(alignment: .leading, spacing: LedgerTheme.smallSpacing) {
-                    Label("Recurring and installments", systemImage: "clock.arrow.circlepath")
-                        .font(.headline)
-                    Text("Budgeting works offline now. Subscription schedules and installment plans are the next planning slices.")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                if let selectedTracker {
+                    RecurringPlansSection(scopeKey: scopeKey, tracker: selectedTracker)
                 }
-                .ledgerCard()
             }
             .padding()
         }
@@ -653,7 +648,7 @@ private struct BudgetEditorView: View {
     }
 }
 
-private struct SyncStateIcon: View {
+struct SyncStateIcon: View {
     let state: LocalSyncState
 
     var body: some View {

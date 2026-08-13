@@ -536,6 +536,8 @@ struct LocalLedgerRepositoryTests {
             LocalBudget.self,
             LocalBudgetCategory.self,
             LocalBudgetThreshold.self,
+            LocalRecurringRule.self,
+            LocalRecurringOccurrence.self,
             LedgerTransaction.self,
             LocalAccountMovement.self,
             LocalCategoryAllocation.self,

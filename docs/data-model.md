@@ -68,6 +68,8 @@ Budget child rows belong to the budget synchronization aggregate. Historical cat
 
 Recurring month/year generation clamps with the original anchor rather than chaining a shortened date. Occurrence and transaction identities are deterministic per rule/due date. Worker retry, task overlap, and downtime catch-up therefore converge on one posted transaction. An edit snapshots the prior template and affects only future due dates. Server-produced occurrences are read-only to clients; rules accept versioned offline commands.
 
+The native cache mirrors `RecurringRule` and the read-only occurrence fields under compound `(scopeKey, UUID)` identity. It validates account/tracker/category scope, identity and converted-money snapshots, state timestamps, wall-time-derived `next_due_at`, and occurrence keys before publishing a sync page. Local rule commands are optimistic and outboxed. In particular, skip advances the local next-due presentation but does not invent a server occurrence UUID or audit row; normal pull supplies that canonical history.
+
 ## Required constraints
 
 - Valid ISO currency and amount/exponent combinations; positive display amounts.

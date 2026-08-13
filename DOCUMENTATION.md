@@ -2,7 +2,7 @@
 
 ## Current state
 
-Milestones 0–2 and Milestones 4–6 are complete at the available local/source tier. Milestone 7 includes offline-first budgets and now a locally passing recurring/subscription backend: civil-date/IANA-zone scheduling, DST policy, revision history, scoped REST/sync state transitions, deterministic occurrence/transaction identity, bounded Celery catch-up, failure recovery, and subscription metadata. Native recurrence caching, outbox/UI, cost normalization, and reminders are the current focus. Binary receipt transport remains Milestone 9. Docker/PostgreSQL/Redis integration and hosted CI remain environmental checks. No production system has been contacted.
+Milestones 0–2 and Milestones 4–6 are complete at the available local/source tier. Milestone 7 includes offline-first budgets and a locally passing recurring/subscription backend: civil-date/IANA-zone scheduling, DST policy, revision history, scoped REST/sync state transitions, deterministic occurrence/transaction identity, bounded Celery catch-up, failure recovery, and subscription metadata. The native scoped rule/occurrence cache, atomic outbox lifecycle, matching calendar/cost logic, strict sync reconciliation, and role-aware Plans UI are implemented with authored tests; optional reminder delivery remains next. Binary receipt transport remains Milestone 9. Docker/PostgreSQL/Redis integration and hosted CI remain environmental checks. No production system has been contacted.
 
 ## Verified
 
@@ -17,10 +17,11 @@ Milestones 0–2 and Milestones 4–6 are complete at the available local/source
 - Shortcut credentials store only a prefix/HMAC digest under an independent pepper, expose the raw value once, support tracker/scopes/expiry/revoke, and enforce current membership. Narrow capture is payment-credential rejecting, explicit-conversion only, throttled by client/token/user, duplicate-safe across token rotation, and locally covered by 10 focused API tests. Single/batch JSON samples and an honest manual setup guide are checked in.
 - Budget create/update/archive/restore/tombstone, role checks, strict fields, category/version snapshots, DST-aware period bounds, posted-expense-only progress, proportional allocation conversion, signed rollover, threshold detection, partial conversion, and sync replay/conflict/bootstrap behavior are locally covered by five focused backend tests.
 - Recurring rules/subscriptions are locally covered by seven focused tests: month-end/leap anchors, DST gaps/folds, revisions, roles/version conflicts, pause/resume/skip/end, bounded downtime catch-up, stable retry identity, cross-currency templates, failed-occurrence recovery, Celery delegation, sync replay/bootstrap/tombstones, and preservation of posted history.
+- Native recurrence source stores rules and server-authored occurrence history in scoped SwiftData, commits create/edit/archive/pause/resume/skip/end/delete commands with the outbox, validates downloaded money/schedule/relationship invariants, and calculates deterministic month/year/DST schedules plus monthly/annualized subscription costs. Swift tests cover lifecycle ordering, permission rollback, schedule edges, identity, bootstrap, and corrupt-schedule rejection but remain unexecuted until macOS.
 - The native Wallet Shortcut screen has strict snake-case credential DTOs, tracker-restricted creation by default, safe unrestricted warnings, default account/category visibility, create/list/replace/revoke flows, in-memory-only raw-token state, redacted descriptions, and an expiring local-only pasteboard. Five deterministic Swift tests are authored; Linux contracts prove the raw value cannot enter preferences, Keychain, or SwiftData source.
 - The iOS source now has strict locale-aware minor-unit input, compound server/user-scoped SwiftData models, atomic CRUD/outbox/movement/allocation/tag-link writes, Keychain login/rotation, optional app lock, non-destructive store-failure handling, synchronized tag/collaborator screens, repository-enforced role restrictions, editable tracker presentation/defaults, shared ordering, and authored unit/UI/performance tests.
 - The native sync source implements stable ordered pushes, transient backoff, atomic pull/cursor pages, paginated bootstrap staging/reconciliation plus catch-up pull, access revocation, diagnostics, structured conflict decisions, a restart-safe attachment-transfer queue, optional foreground invalidation, connectivity-return sync, and best-effort background refresh. Deterministic tests are authored for these boundaries.
-- English/Albanian implemented-screen coverage (402 literal keys), release/debug ATS separation, privacy-manifest disclosure, and YAML/plist/JSON resource structure pass locally. The source accessibility audit and outstanding runtime checks are in `docs/accessibility-audit.md`.
+- English/Albanian implemented-screen coverage (455 literal keys), release/debug ATS separation, privacy-manifest disclosure, and YAML/plist/JSON resource structure pass locally. The source accessibility audit and outstanding runtime checks are in `docs/accessibility-audit.md`.
 
 ## Not yet verified
 
@@ -30,6 +31,7 @@ Milestones 0–2 and Milestones 4–6 are complete at the available local/source
 - Ubuntu deployment, real Funnel hostname, backup restore, and external collaboration.
 - Native Shortcut credential/default-management compilation/runtime plus Wallet trigger and offline queue-file behavior on the current physical iPhone.
 - Native budget Swift 6 type/concurrency checking, SwiftData behavior, calculator tests, and Plans UI interaction on a simulator/device.
+- Native recurrence Swift 6 type/concurrency checking, SwiftData/outbox/sync tests, Plans interaction, and local notification delivery on a simulator/device.
 
 ## Configuration still required later
 

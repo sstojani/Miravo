@@ -476,6 +476,320 @@ struct LocalLedgerRepository {
     }
 
     @discardableResult
+    func createRecurringRule(
+        scopeKey: String,
+        tracker: LocalTracker,
+        account: LocalAccount,
+        category: LocalCategory?,
+        name: String,
+        kind: RecurringRuleKind,
+        isSubscription: Bool,
+        money: Money,
+        accountMoney: Money? = nil,
+        manualBaseMoney: Money? = nil,
+        merchant: String = "",
+        note: String = "",
+        cadence: RecurringCadence,
+        customIntervalUnit: RecurringIntervalUnit? = nil,
+        customIntervalCount: Int = 1,
+        timeZoneIdentifier: String,
+        startsOn: Date,
+        endsOn: Date? = nil,
+        localTimeSeconds: Int,
+        subscriptionProvider: String = "",
+        trialEndsOn: Date? = nil,
+        cancellationURL: String = "",
+        subscriptionNote: String = ""
+    ) throws -> LocalRecurringRule {
+        try validate(tracker: tracker, scopeKey: scopeKey)
+        try validate(account: account, tracker: tracker, scopeKey: scopeKey)
+        try validate(
+            category: category,
+            tracker: tracker,
+            scopeKey: scopeKey,
+            kind: kind == .income ? .income : .expense
+        )
+        let schedule = try validatedRecurringSchedule(
+            cadence: cadence,
+            customIntervalUnit: customIntervalUnit,
+            customIntervalCount: customIntervalCount,
+            timeZoneIdentifier: timeZoneIdentifier,
+            startsOn: startsOn,
+            endsOn: endsOn,
+            localTimeSeconds: localTimeSeconds,
+            nextDueOn: nil
+        )
+        let accountAmount = try validatedRecurringAccountAmount(
+            money: money,
+            account: account,
+            accountMoney: accountMoney
+        )
+        let conversion = try ReportingConversionSnapshot.resolved(
+            original: money,
+            baseCurrencyCode: tracker.baseCurrencyCode,
+            baseCurrencyExponent: tracker.baseCurrencyExponent,
+            manualBaseMoney: manualBaseMoney,
+            effectiveAt: schedule.nextDueAt
+        )
+        let subscription = try validatedSubscriptionValues(
+            isSubscription: isSubscription,
+            provider: subscriptionProvider,
+            trialEndsOn: trialEndsOn,
+            cancellationURL: cancellationURL,
+            note: subscriptionNote
+        )
+        let rule = LocalRecurringRule(
+            scopeKey: scopeKey,
+            trackerID: tracker.id,
+            name: try validatedName(name),
+            kind: kind,
+            isSubscription: isSubscription,
+            money: money,
+            accountID: account.id,
+            accountAmountMinor: accountAmount,
+            categoryID: category?.id,
+            merchant: try validatedOptionalText(merchant, maximumLength: 160),
+            note: try validatedOptionalText(note, maximumLength: 5_000),
+            conversion: conversion,
+            cadence: cadence,
+            customIntervalUnit: schedule.customUnit,
+            customIntervalCount: schedule.customCount,
+            timeZoneIdentifier: timeZoneIdentifier,
+            startsOn: schedule.startsOn,
+            endsOn: schedule.endsOn,
+            localTimeSeconds: localTimeSeconds,
+            nextDueOn: schedule.nextDueOn,
+            nextDueAt: schedule.nextDueAt,
+            subscriptionProvider: subscription.provider,
+            trialEndsOn: subscription.trialEndsOn,
+            cancellationURL: subscription.cancellationURL,
+            subscriptionNote: subscription.note
+        )
+        try commit {
+            context.insert(rule)
+            try enqueue(rule, command: .create)
+        }
+        return rule
+    }
+
+    func updateRecurringRule(
+        _ rule: LocalRecurringRule,
+        tracker: LocalTracker,
+        account: LocalAccount,
+        category: LocalCategory?,
+        name: String,
+        kind: RecurringRuleKind,
+        isSubscription: Bool,
+        money: Money,
+        accountMoney: Money? = nil,
+        manualBaseMoney: Money? = nil,
+        merchant: String = "",
+        note: String = "",
+        cadence: RecurringCadence,
+        customIntervalUnit: RecurringIntervalUnit? = nil,
+        customIntervalCount: Int = 1,
+        timeZoneIdentifier: String,
+        startsOn: Date,
+        endsOn: Date? = nil,
+        localTimeSeconds: Int,
+        subscriptionProvider: String = "",
+        trialEndsOn: Date? = nil,
+        cancellationURL: String = "",
+        subscriptionNote: String = ""
+    ) throws {
+        guard rule.scopeKey == tracker.scopeKey,
+              rule.trackerID == tracker.id,
+              rule.deletedAt == nil,
+              rule.state != .ended
+        else {
+            throw LocalLedgerError.invalidReference
+        }
+        try validate(tracker: tracker, scopeKey: rule.scopeKey)
+        try validate(account: account, tracker: tracker, scopeKey: rule.scopeKey)
+        try validate(
+            category: category,
+            tracker: tracker,
+            scopeKey: rule.scopeKey,
+            kind: kind == .income ? .income : .expense
+        )
+        let schedule = try validatedRecurringSchedule(
+            cadence: cadence,
+            customIntervalUnit: customIntervalUnit,
+            customIntervalCount: customIntervalCount,
+            timeZoneIdentifier: timeZoneIdentifier,
+            startsOn: startsOn,
+            endsOn: endsOn,
+            localTimeSeconds: localTimeSeconds,
+            nextDueOn: rule.nextDueOn
+        )
+        let accountAmount = try validatedRecurringAccountAmount(
+            money: money,
+            account: account,
+            accountMoney: accountMoney
+        )
+        let conversion: ReportingConversionSnapshot
+        if let stored = preservedRecurringConversion(
+            rule: rule,
+            tracker: tracker,
+            money: money,
+            manualBaseMoney: manualBaseMoney
+        ) {
+            conversion = stored
+        } else {
+            conversion = try ReportingConversionSnapshot.resolved(
+                original: money,
+                baseCurrencyCode: tracker.baseCurrencyCode,
+                baseCurrencyExponent: tracker.baseCurrencyExponent,
+                manualBaseMoney: manualBaseMoney,
+                effectiveAt: schedule.nextDueAt
+            )
+        }
+        let subscription = try validatedSubscriptionValues(
+            isSubscription: isSubscription,
+            provider: subscriptionProvider,
+            trialEndsOn: trialEndsOn,
+            cancellationURL: cancellationURL,
+            note: subscriptionNote
+        )
+        let cleanName = try validatedName(name)
+        let cleanMerchant = try validatedOptionalText(merchant, maximumLength: 160)
+        let cleanNote = try validatedOptionalText(note, maximumLength: 5_000)
+        try commit {
+            rule.name = cleanName
+            rule.kindRaw = kind.rawValue
+            rule.isSubscription = isSubscription
+            rule.amountMinor = money.minorUnits
+            rule.currencyCode = money.currencyCode
+            rule.currencyExponent = money.exponent
+            rule.accountID = account.id
+            rule.accountAmountMinor = accountAmount
+            rule.categoryID = category?.id
+            rule.merchant = cleanMerchant
+            rule.note = cleanNote
+            rule.baseAmountMinor = conversion.baseAmountMinor
+            rule.baseCurrencyCode = conversion.baseCurrencyCode
+            rule.rateSnapshot = conversion.rateSnapshot
+            rule.rateSource = conversion.rateSource
+            rule.rateEffectiveAt = conversion.effectiveAt
+            rule.cadenceRaw = cadence.rawValue
+            rule.customIntervalUnitRaw = schedule.customUnit?.rawValue ?? ""
+            rule.customIntervalCount = schedule.customCount
+            rule.timeZoneIdentifier = timeZoneIdentifier
+            rule.startsOn = schedule.startsOn
+            rule.endsOn = schedule.endsOn
+            rule.localTimeSeconds = localTimeSeconds
+            rule.nextDueOn = schedule.nextDueOn
+            rule.nextDueAt = schedule.nextDueAt
+            rule.subscriptionProvider = subscription.provider
+            rule.trialEndsOn = subscription.trialEndsOn
+            rule.cancellationURL = subscription.cancellationURL
+            rule.subscriptionNote = subscription.note
+            touch(rule)
+            try enqueue(rule, command: .update)
+        }
+    }
+
+    func setRecurringRuleArchived(_ rule: LocalRecurringRule, archived: Bool) throws {
+        try validateTrackerAccess(id: rule.trackerID, scopeKey: rule.scopeKey)
+        guard rule.deletedAt == nil else { throw LocalLedgerError.invalidReference }
+        try commit {
+            rule.archivedAt = archived ? .now : nil
+            touch(rule)
+            try enqueue(rule, command: archived ? .archive : .restore)
+        }
+    }
+
+    func pauseRecurringRule(_ rule: LocalRecurringRule) throws {
+        try validateAvailableRecurringRule(rule)
+        guard rule.state == .active else { throw LocalLedgerError.invalidReference }
+        try commit {
+            rule.stateRaw = RecurringRuleState.paused.rawValue
+            rule.pausedAt = .now
+            touch(rule)
+            try enqueue(rule, command: .pause)
+        }
+    }
+
+    func resumeRecurringRule(_ rule: LocalRecurringRule) throws {
+        try validateAvailableRecurringRule(rule)
+        guard rule.state == .paused else { throw LocalLedgerError.invalidReference }
+        try commit {
+            rule.stateRaw = RecurringRuleState.active.rawValue
+            rule.pausedAt = nil
+            touch(rule)
+            try enqueue(rule, command: .resume)
+        }
+    }
+
+    func endRecurringRule(_ rule: LocalRecurringRule) throws {
+        try validateAvailableRecurringRule(rule)
+        guard rule.state != .ended else { return }
+        try commit {
+            rule.stateRaw = RecurringRuleState.ended.rawValue
+            rule.pausedAt = nil
+            rule.endedAt = .now
+            touch(rule)
+            try enqueue(rule, command: .end)
+        }
+    }
+
+    func skipNextRecurringOccurrence(_ rule: LocalRecurringRule) throws {
+        try validateAvailableRecurringRule(rule)
+        let startComponents = recurringStorageCalendar.dateComponents(
+            [.year, .month, .day],
+            from: rule.startsOn
+        )
+        guard rule.state != .ended,
+              let anchorDay = startComponents.day,
+              let anchorMonth = startComponents.month
+        else {
+            throw LocalLedgerError.invalidReference
+        }
+        let following = try LocalRecurrenceCalculator.nextDueDate(
+            after: rule.nextDueOn,
+            cadence: rule.cadence,
+            customIntervalUnit: rule.customIntervalUnit,
+            customIntervalCount: rule.customIntervalCount,
+            anchorDay: anchorDay,
+            anchorMonth: anchorMonth
+        )
+        let now = Date.now
+        let endsAfterRule = rule.endsOn.map { following > $0 } ?? false
+        let nextDueAt = endsAfterRule ? rule.nextDueAt : try LocalRecurrenceCalculator.scheduledDate(
+            civilDate: following,
+            localTimeSeconds: rule.localTimeSeconds,
+            timeZoneIdentifier: rule.timeZoneIdentifier
+        )
+        try commit {
+            if endsAfterRule {
+                rule.stateRaw = RecurringRuleState.ended.rawValue
+                rule.pausedAt = nil
+                rule.endedAt = now
+            } else {
+                rule.nextDueOn = following
+                rule.nextDueAt = nextDueAt
+            }
+            touch(rule)
+            try enqueue(rule, command: .skipNext)
+        }
+    }
+
+    func deleteRecurringRule(_ rule: LocalRecurringRule) throws {
+        try validateTrackerAccess(id: rule.trackerID, scopeKey: rule.scopeKey)
+        guard rule.deletedAt == nil else { return }
+        let now = Date.now
+        try commit {
+            rule.deletedAt = now
+            rule.archivedAt = now
+            rule.stateRaw = RecurringRuleState.ended.rawValue
+            rule.pausedAt = nil
+            rule.endedAt = now
+            touch(rule)
+            try enqueue(rule, command: .delete)
+        }
+    }
+
+    @discardableResult
     func createTransaction(
         scopeKey: String,
         tracker: LocalTracker,
@@ -1022,6 +1336,227 @@ struct LocalLedgerRepository {
         budget.syncStateRaw = LocalSyncState.pending.rawValue
     }
 
+    private func touch(_ rule: LocalRecurringRule) {
+        rule.updatedAt = .now
+        rule.syncStateRaw = LocalSyncState.pending.rawValue
+    }
+
+    private var recurringStorageCalendar: Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        return calendar
+    }
+
+    private func validatedOptionalText(
+        _ value: String,
+        maximumLength: Int
+    ) throws -> String {
+        let clean = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard clean.count <= maximumLength else { throw LocalLedgerError.invalidReference }
+        return clean
+    }
+
+    private func validatedRecurringAccountAmount(
+        money: Money,
+        account: LocalAccount,
+        accountMoney: Money?
+    ) throws -> Int64 {
+        guard money.minorUnits > 0 else { throw MoneyError.nonPositiveAmount }
+        if money.currencyCode == account.currencyCode {
+            guard money.exponent == account.currencyExponent,
+                  accountMoney == nil || accountMoney == money
+            else {
+                throw LocalLedgerError.invalidReference
+            }
+            return money.minorUnits
+        }
+        guard let accountMoney,
+              accountMoney.minorUnits > 0,
+              accountMoney.currencyCode == account.currencyCode,
+              accountMoney.exponent == account.currencyExponent
+        else {
+            throw MoneyError.conversionRequired
+        }
+        return accountMoney.minorUnits
+    }
+
+    private func preservedRecurringConversion(
+        rule: LocalRecurringRule,
+        tracker: LocalTracker,
+        money: Money,
+        manualBaseMoney: Money?
+    ) -> ReportingConversionSnapshot? {
+        guard rule.money == money,
+              rule.baseCurrencyCode == tracker.baseCurrencyCode,
+              rule.baseAmountMinor > 0,
+              let existingBase = try? Money(
+                  minorUnits: rule.baseAmountMinor,
+                  currencyCode: rule.baseCurrencyCode,
+                  exponent: tracker.baseCurrencyExponent
+              ),
+              let storedRate = Decimal(
+                  string: rule.rateSnapshot,
+                  locale: Locale(identifier: "en_US_POSIX")
+              ),
+              storedRate > 0,
+              let expected = try? ReportingConversionSnapshot.resolved(
+                  original: money,
+                  baseCurrencyCode: tracker.baseCurrencyCode,
+                  baseCurrencyExponent: tracker.baseCurrencyExponent,
+                  manualBaseMoney: money.currencyCode == tracker.baseCurrencyCode
+                      ? nil : existingBase,
+                  effectiveAt: rule.rateEffectiveAt
+              ),
+              let expectedRate = Decimal(
+                  string: expected.rateSnapshot,
+                  locale: Locale(identifier: "en_US_POSIX")
+              ),
+              storedRate == expectedRate,
+              expected.baseAmountMinor == rule.baseAmountMinor,
+              (money.currencyCode == tracker.baseCurrencyCode
+                  ? (manualBaseMoney == nil || manualBaseMoney == money) &&
+                    rule.rateSource == "identity"
+                  : manualBaseMoney == existingBase &&
+                    !rule.rateSource.trimmingCharacters(
+                        in: .whitespacesAndNewlines
+                    ).isEmpty)
+        else {
+            return nil
+        }
+        return ReportingConversionSnapshot(
+            baseAmountMinor: rule.baseAmountMinor,
+            baseCurrencyCode: rule.baseCurrencyCode,
+            rateSnapshot: rule.rateSnapshot,
+            rateSource: rule.rateSource,
+            effectiveAt: rule.rateEffectiveAt
+        )
+    }
+
+    private func validatedRecurringSchedule(
+        cadence: RecurringCadence,
+        customIntervalUnit: RecurringIntervalUnit?,
+        customIntervalCount: Int,
+        timeZoneIdentifier: String,
+        startsOn: Date,
+        endsOn: Date?,
+        localTimeSeconds: Int,
+        nextDueOn: Date?
+    ) throws -> (
+        startsOn: Date,
+        endsOn: Date?,
+        nextDueOn: Date,
+        nextDueAt: Date,
+        customUnit: RecurringIntervalUnit?,
+        customCount: Int
+    ) {
+        guard TimeZone(identifier: timeZoneIdentifier) != nil,
+              (0 ... 86_399).contains(localTimeSeconds),
+              let canonicalStart = BudgetDateCodec.canonicalDate(from: startsOn)
+        else {
+            throw LocalLedgerError.invalidReference
+        }
+        let canonicalEnd: Date?
+        if let endsOn {
+            guard let value = BudgetDateCodec.canonicalDate(from: endsOn) else {
+                throw LocalLedgerError.invalidReference
+            }
+            canonicalEnd = value
+        } else {
+            canonicalEnd = nil
+        }
+        let canonicalNext: Date
+        if let nextDueOn {
+            guard let value = BudgetDateCodec.canonicalDate(
+                from: nextDueOn,
+                calendar: recurringStorageCalendar
+            ) else {
+                throw LocalLedgerError.invalidReference
+            }
+            canonicalNext = value
+        } else {
+            canonicalNext = canonicalStart
+        }
+        guard canonicalEnd == nil || canonicalEnd! >= canonicalStart,
+              canonicalNext >= canonicalStart,
+              canonicalEnd == nil || canonicalNext <= canonicalEnd!
+        else {
+            throw LocalLedgerError.invalidReference
+        }
+        let normalizedUnit: RecurringIntervalUnit?
+        let normalizedCount: Int
+        if cadence == .custom {
+            guard let customIntervalUnit, (2 ... 365).contains(customIntervalCount) else {
+                throw LocalLedgerError.invalidReference
+            }
+            normalizedUnit = customIntervalUnit
+            normalizedCount = customIntervalCount
+        } else {
+            guard customIntervalUnit == nil, customIntervalCount == 1 else {
+                throw LocalLedgerError.invalidReference
+            }
+            normalizedUnit = nil
+            normalizedCount = 1
+        }
+        let nextDueAt = try LocalRecurrenceCalculator.scheduledDate(
+            civilDate: canonicalNext,
+            localTimeSeconds: localTimeSeconds,
+            timeZoneIdentifier: timeZoneIdentifier
+        )
+        return (
+            canonicalStart,
+            canonicalEnd,
+            canonicalNext,
+            nextDueAt,
+            normalizedUnit,
+            normalizedCount
+        )
+    }
+
+    private func validatedSubscriptionValues(
+        isSubscription: Bool,
+        provider: String,
+        trialEndsOn: Date?,
+        cancellationURL: String,
+        note: String
+    ) throws -> (provider: String, trialEndsOn: Date?, cancellationURL: String, note: String) {
+        let cleanProvider = try validatedOptionalText(provider, maximumLength: 160)
+        let cleanURL = try validatedOptionalText(cancellationURL, maximumLength: 500)
+        let cleanNote = try validatedOptionalText(note, maximumLength: 2_000)
+        let canonicalTrial = try trialEndsOn.map { date -> Date in
+            guard let value = BudgetDateCodec.canonicalDate(from: date) else {
+                throw LocalLedgerError.invalidReference
+            }
+            return value
+        }
+        if isSubscription {
+            guard !cleanProvider.isEmpty else { throw LocalLedgerError.blankName }
+            if !cleanURL.isEmpty {
+                guard let value = URL(string: cleanURL),
+                      value.scheme?.lowercased() == "https",
+                      value.host != nil
+                else {
+                    throw LocalLedgerError.invalidReference
+                }
+            }
+        } else {
+            guard cleanProvider.isEmpty,
+                  canonicalTrial == nil,
+                  cleanURL.isEmpty,
+                  cleanNote.isEmpty
+            else {
+                throw LocalLedgerError.invalidReference
+            }
+        }
+        return (cleanProvider, canonicalTrial, cleanURL, cleanNote)
+    }
+
+    private func validateAvailableRecurringRule(_ rule: LocalRecurringRule) throws {
+        try validateTrackerAccess(id: rule.trackerID, scopeKey: rule.scopeKey)
+        guard rule.deletedAt == nil, rule.archivedAt == nil else {
+            throw LocalLedgerError.invalidReference
+        }
+    }
+
     private func validatedBudgetValues(
         tracker: LocalTracker,
         scopeKey: String,
@@ -1390,6 +1925,54 @@ struct LocalLedgerRepository {
             entity: .budget,
             command: command,
             baseServerVersion: budget.serverVersion,
+            payload: payload
+        )
+    }
+
+    private func enqueue(
+        _ rule: LocalRecurringRule,
+        command: LocalMutationCommand
+    ) throws {
+        let payload = RecurringRuleMutationPayload(
+            id: rule.id,
+            trackerID: rule.trackerID,
+            name: rule.name,
+            kind: rule.kindRaw,
+            isSubscription: rule.isSubscription,
+            amountMinor: rule.amountMinor,
+            currency: rule.currencyCode,
+            currencyExponent: rule.currencyExponent,
+            accountID: rule.accountID,
+            accountAmountMinor: rule.accountAmountMinor,
+            categoryID: rule.categoryID,
+            merchant: rule.merchant,
+            note: rule.note,
+            baseAmountMinor: rule.baseAmountMinor,
+            baseCurrency: rule.baseCurrencyCode,
+            rateSnapshot: rule.rateSnapshot,
+            rateSource: rule.rateSource,
+            rateEffectiveAt: rule.rateEffectiveAt,
+            cadence: rule.cadenceRaw,
+            customIntervalUnit: rule.customIntervalUnitRaw,
+            customIntervalCount: rule.customIntervalCount,
+            timeZone: rule.timeZoneIdentifier,
+            startsOn: BudgetDateCodec.string(from: rule.startsOn),
+            endsOn: rule.endsOn.map { BudgetDateCodec.string(from: $0) },
+            localTime: RecurringTimeCodec.string(from: rule.localTimeSeconds),
+            nextDueOn: BudgetDateCodec.string(from: rule.nextDueOn),
+            subscriptionProvider: rule.subscriptionProvider,
+            trialEndsOn: rule.trialEndsOn.map { BudgetDateCodec.string(from: $0) },
+            cancellationURL: rule.cancellationURL,
+            subscriptionNote: rule.subscriptionNote,
+            archivedAt: rule.archivedAt,
+            deletedAt: rule.deletedAt
+        )
+        try insertOutbox(
+            scopeKey: rule.scopeKey,
+            entityID: rule.id,
+            entity: .recurringRule,
+            command: command,
+            baseServerVersion: rule.serverVersion,
             payload: payload
         )
     }

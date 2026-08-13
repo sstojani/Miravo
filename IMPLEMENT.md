@@ -524,3 +524,41 @@ Commit the budget vertical slice. Then implement `RecurringRule` and determinist
 ### Next exact action
 
 Checkpoint the authoritative server scheduler, then add scoped SwiftData recurring-rule/occurrence models, explicit local mutation commands, wire/bootstrap reconciliation, a matching calendar calculator, subscription cost normalization, and Plans create/edit/pause/resume/skip/end views. Run Linux localization/project/resource gates and leave Xcode/runtime/reminder delivery as explicit macOS/device checks.
+
+## 2026-08-13 — Milestone 7 native recurrence/subscription checkpoint
+
+### Acceptance checks established
+
+- Recurring expense/income and subscription templates persist under compound server/user scope, validate all tracker/account/category and money references before mutation, and commit each create/edit/archive/restore/pause/resume/skip/end/delete command with its outbox row in one rollback boundary.
+- The native calculator preserves the original month/day anchor across short months and leap years, advances DST gaps to the first valid minute, chooses the first repeated wall time, derives the server-compatible SHA-256 occurrence key, and normalizes monthly/annual subscription cost using decimal integer-minor-unit rounding.
+- Bootstrap and pull decode rules before transaction-linked occurrences, retain pending local rules during replacement, handle tombstones, and reject inconsistent account/base amounts, rate identity, state shape, category scope, due instant, occurrence state, transaction scope, or occurrence key without advancing the cursor.
+- Plans remains local-first and role-aware: editors can create/edit/archive/restore/pause/resume/skip/end/delete; viewers see synchronized state without mutation controls; due/overdue, sync, subscription cost, and occurrence outcomes use text plus symbols.
+- Server-authored occurrence history remains canonical. An offline skip advances the local due pointer and queues `skip_next` but does not invent an occurrence UUID or audit row.
+
+### Material work
+
+- Added scoped `LocalRecurringRule` and `LocalRecurringOccurrence` SwiftData models, schedule/state/source enums, wall-time encoding, and registration in persistent, recovery, and test schemas.
+- Added `LocalRecurrenceCalculator` for anchor-preserving daily/weekly/monthly/yearly/custom progression, explicit DST gap/fold policy, decimal cost normalization, and deterministic occurrence keys matching the server.
+- Extended the local repository and strict snake-case payloads with atomic rule creation/editing, subscription validation, account/base snapshots, archive/restore, state transitions, skip advancement, tombstones, and ordered mutation commands.
+- Added recurrence rule/occurrence wire snapshots and full bootstrap/pull/reconcile/tombstone/state handling. Bootstrap publication orders rules before transactions and occurrences, validates cross-entity references, and preserves pending rule commands.
+- Added a role-aware recurring/subscription section to Plans with create/edit forms, cadence/custom interval, account/category, subscription metadata, due/overdue state, monthly/annual cost, last occurrence status, archive/restore, and destructive confirmation.
+- Added complete English and Albanian copy for the implemented screen and authored native tests for calendar/DST edges, lifecycle/outbox order, cost/identity, validation/role rollback, wire decoding, bootstrap reconstruction, and corrupt schedule rejection.
+
+### Commands and outcomes
+
+- `make check`: **passed locally** — 74 backend tests, 82.66% branch-aware coverage, Ruff format/lint, Django system checks, strict mypy over 92 source files, OpenAPI validation, and schema freshness. The command recreated the ignored `.venv` because its prior interpreter symlink no longer existed.
+- `PROJECT_LEDGER_ENV=test PROJECT_LEDGER_DATABASE_URL=sqlite:///:memory: .venv/bin/python backend/manage.py makemigrations --check --dry-run`: **no changes detected**.
+- `python3 -m compileall -q backend`: **passed locally**.
+- `python3 ios/check-project-contract.py`: **passed locally**.
+- `python3 ios/check-localization-coverage.py` and `bash ios/check-localizations.sh`: **passed locally** — 455 literal UI keys, identical English/Albanian key sets, and compatible format placeholders.
+- `git diff --check`: **passed locally**.
+
+### Verification boundary
+
+- The complete Django/SQLite regression gate, migration drift, OpenAPI freshness, native localization parity, privacy/transport source contract, and whitespace: **verified locally on Linux**.
+- The recurrence Swift source and tests are **implemented and manually/static reviewed only**. Swift 6 type/concurrency checking, XcodeGen regeneration, SwiftFormat, SwiftData runtime/migration behavior, calculator and sync test execution, simulator rendering/accessibility, and interaction remain **unverified because Swift/Xcode are unavailable**.
+- Local notification permission/delivery is intentionally still pending and is not implied by the due-date UI. PostgreSQL/Redis/Celery multi-process overlap, Docker, hosted Actions, real server/Funnel, signing, and physical iPhone behavior remain unverified. No external system was contacted.
+
+### Next exact action
+
+Commit this native recurrence checkpoint. Then add a testable, privacy-safe, explicitly opt-in local reminder planner/scheduler that refreshes after local changes and successful sync without becoming correctness-critical. After its Linux source gates, begin authoritative installment-plan terms, deterministic schedules, revisions, payments, extra-payment/payoff, and overpayment tests on the backend.

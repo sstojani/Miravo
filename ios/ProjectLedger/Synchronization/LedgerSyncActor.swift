@@ -44,6 +44,8 @@ actor LedgerSyncActor {
         case category(CategorySnapshot)
         case tag(TagSnapshot)
         case budget(BudgetSnapshot)
+        case recurringRule(RecurringRuleSnapshot)
+        case recurringOccurrence(RecurringOccurrenceSnapshot)
         case transaction(TransactionSnapshot)
         case tombstone(entityType: String, entityID: UUID, changedAt: Date, version: Int64)
         case ignored
@@ -616,7 +618,9 @@ actor LedgerSyncActor {
             "tags": "tag",
             "merchants": "merchant",
             "budgets": "budget",
+            "recurring_rules": "recurring_rule",
             "transactions": "transaction",
+            "recurring_occurrences": "recurring_occurrence",
         ]
         let encoder = JSONEncoder()
         for (key, entityType) in entityTypes {
@@ -682,7 +686,22 @@ actor LedgerSyncActor {
         let outbox = try fetchOutbox(scopeKey: scopeKey)
         let pendingKeys = Set(outbox.map { "\($0.entityType)|\($0.entityID.uuidString)" })
         var remoteIDs = [String: Set<UUID>]()
-        for (row, remote) in decoded {
+        let bootstrapPriority = [
+            "tracker": 0,
+            "tracker_membership": 1,
+            "account": 2,
+            "category": 3,
+            "tag": 4,
+            "budget": 5,
+            "recurring_rule": 6,
+            "transaction": 7,
+            "recurring_occurrence": 8,
+            "merchant": 9,
+        ]
+        for (row, remote) in decoded.sorted(by: {
+            (bootstrapPriority[$0.0.entityType] ?? 100) <
+                (bootstrapPriority[$1.0.entityType] ?? 100)
+        }) {
             remoteIDs[row.entityType, default: []].insert(row.entityID)
             let key = "\(row.entityType)|\(row.entityID.uuidString)"
             if !pendingKeys.contains(key) {
@@ -709,6 +728,9 @@ actor LedgerSyncActor {
         var categoryIDs = Set<UUID>()
         var categoryTrackers = [UUID: UUID]()
         var tagTrackers = [UUID: UUID]()
+        var recurringRuleTrackers = [UUID: UUID]()
+        var recurringOccurrenceKeys = Set<String>()
+        var transactionTrackers = [UUID: UUID]()
         for item in decoded {
             switch item {
             case let .tracker(snapshot): trackerIDs.insert(snapshot.id)
@@ -719,6 +741,14 @@ actor LedgerSyncActor {
                     categoryTrackers[snapshot.id] = trackerID
                 }
             case let .tag(snapshot): tagTrackers[snapshot.id] = snapshot.trackerID
+            case let .recurringRule(snapshot):
+                recurringRuleTrackers[snapshot.id] = snapshot.trackerID
+            case let .recurringOccurrence(snapshot):
+                guard recurringOccurrenceKeys.insert(snapshot.occurrenceKey).inserted else {
+                    throw SyncEngineError.invalidServerResponse
+                }
+            case let .transaction(snapshot):
+                transactionTrackers[snapshot.id] = snapshot.trackerID
             default: break
             }
         }
@@ -748,11 +778,29 @@ actor LedgerSyncActor {
                 else {
                     throw SyncEngineError.invalidServerResponse
                 }
+            case let .recurringRule(snapshot):
+                guard trackerIDs.contains(snapshot.trackerID),
+                      accountIDs.contains(snapshot.accountID),
+                      snapshot.categoryID.map({
+                          categoryTrackers[$0] == snapshot.trackerID
+                      }) ?? true
+                else {
+                    throw SyncEngineError.invalidServerResponse
+                }
             case let .transaction(snapshot):
                 guard trackerIDs.contains(snapshot.trackerID),
                       snapshot.movements.allSatisfy({ accountIDs.contains($0.accountID) }),
                       snapshot.allocations.allSatisfy({ categoryIDs.contains($0.categoryID) }),
                       snapshot.tagIDs.allSatisfy({ tagTrackers[$0] == snapshot.trackerID })
+                else {
+                    throw SyncEngineError.invalidServerResponse
+                }
+            case let .recurringOccurrence(snapshot):
+                guard trackerIDs.contains(snapshot.trackerID),
+                      recurringRuleTrackers[snapshot.ruleID] == snapshot.trackerID,
+                      snapshot.transactionID.map({
+                          transactionTrackers[$0] == snapshot.trackerID
+                      }) ?? true
                 else {
                     throw SyncEngineError.invalidServerResponse
                 }
@@ -789,6 +837,14 @@ actor LedgerSyncActor {
             .tag(try SyncSnapshotDecoder.decode(TagSnapshot.self, from: data))
         case "budget":
             .budget(try SyncSnapshotDecoder.decode(BudgetSnapshot.self, from: data))
+        case "recurring_rule":
+            .recurringRule(
+                try SyncSnapshotDecoder.decode(RecurringRuleSnapshot.self, from: data)
+            )
+        case "recurring_occurrence":
+            .recurringOccurrence(
+                try SyncSnapshotDecoder.decode(RecurringOccurrenceSnapshot.self, from: data)
+            )
         case "transaction":
             .transaction(try SyncSnapshotDecoder.decode(TransactionSnapshot.self, from: data))
         default:
@@ -804,6 +860,9 @@ actor LedgerSyncActor {
         case let .category(snapshot): try upsertCategory(snapshot, scopeKey: scopeKey)
         case let .tag(snapshot): try upsertTag(snapshot, scopeKey: scopeKey)
         case let .budget(snapshot): try upsertBudget(snapshot, scopeKey: scopeKey)
+        case let .recurringRule(snapshot): try upsertRecurringRule(snapshot, scopeKey: scopeKey)
+        case let .recurringOccurrence(snapshot):
+            try upsertRecurringOccurrence(snapshot, scopeKey: scopeKey)
         case let .transaction(snapshot): try upsertTransaction(snapshot, scopeKey: scopeKey)
         case let .tombstone(entityType, entityID, changedAt, version):
             try applyTombstone(
@@ -1148,6 +1207,321 @@ actor LedgerSyncActor {
         }
     }
 
+    private func upsertRecurringRule(
+        _ snapshot: RecurringRuleSnapshot,
+        scopeKey: String
+    ) throws {
+        guard let kind = RecurringRuleKind(rawValue: snapshot.kind),
+              let cadence = RecurringCadence(rawValue: snapshot.cadence),
+              let state = RecurringRuleState(rawValue: snapshot.state),
+              let localTimeSeconds = RecurringTimeCodec.seconds(from: snapshot.localTime),
+              TimeZone(identifier: snapshot.timeZone) != nil,
+              snapshot.version > 0,
+              snapshot.amountMinor > 0,
+              snapshot.accountAmountMinor > 0,
+              snapshot.baseAmountMinor > 0,
+              let rate = Decimal(
+                  string: snapshot.rateSnapshot,
+                  locale: Locale(identifier: "en_US_POSIX")
+              ),
+              rate > 0
+        else {
+            throw SyncEngineError.invalidServerResponse
+        }
+        let customUnit = snapshot.customIntervalUnit.isEmpty
+            ? nil : RecurringIntervalUnit(rawValue: snapshot.customIntervalUnit)
+        guard (cadence == .custom && customUnit != nil &&
+                (2 ... 365).contains(snapshot.customIntervalCount)) ||
+            (cadence != .custom && customUnit == nil && snapshot.customIntervalCount == 1)
+        else {
+            throw SyncEngineError.invalidServerResponse
+        }
+        let money = try Money(
+            minorUnits: snapshot.amountMinor,
+            currencyCode: snapshot.currency,
+            exponent: snapshot.currencyExponent
+        )
+        let trackerID = snapshot.trackerID
+        let accountID = snapshot.accountID
+        guard let tracker = try modelContext.fetch(
+            FetchDescriptor<LocalTracker>(
+                predicate: #Predicate { $0.scopeKey == scopeKey && $0.id == trackerID }
+            )
+        ).first,
+        let account = try modelContext.fetch(
+            FetchDescriptor<LocalAccount>(
+                predicate: #Predicate { $0.scopeKey == scopeKey && $0.id == accountID }
+            )
+        ).first,
+        account.trackerID == trackerID,
+        snapshot.baseCurrency == tracker.baseCurrencyCode
+        else {
+            throw SyncEngineError.invalidServerResponse
+        }
+        let baseMoney = try Money(
+            minorUnits: snapshot.baseAmountMinor,
+            currencyCode: snapshot.baseCurrency,
+            exponent: tracker.baseCurrencyExponent
+        )
+        guard money.currencyCode != account.currencyCode ||
+            (money.exponent == account.currencyExponent &&
+                snapshot.accountAmountMinor == money.minorUnits)
+        else {
+            throw SyncEngineError.invalidServerResponse
+        }
+        if let categoryID = snapshot.categoryID {
+            guard let category = try modelContext.fetch(
+                FetchDescriptor<LocalCategory>(
+                    predicate: #Predicate {
+                        $0.scopeKey == scopeKey && $0.id == categoryID
+                    }
+                )
+            ).first,
+            category.trackerID == trackerID,
+            category.kind == (kind == .income ? .income : .expense)
+            else {
+                throw SyncEngineError.invalidServerResponse
+            }
+        }
+        let startsOn = try parseDate(snapshot.startsOn)
+        let endsOn = try snapshot.endsOn.map { try parseDate($0) }
+        let nextDueOn = try parseDate(snapshot.nextDueOn)
+        let trialEndsOn = try snapshot.trialEndsOn.map { try parseDate($0) }
+        let pausedAt = try parseOptionalTimestamp(snapshot.pausedAt)
+        let endedAt = try parseOptionalTimestamp(snapshot.endedAt)
+        let nextDueAt = try parseTimestamp(snapshot.nextDueAt)
+        let rateEffectiveAt = try parseTimestamp(snapshot.rateEffectiveAt)
+        let calculatedDueAt = try LocalRecurrenceCalculator.scheduledDate(
+            civilDate: nextDueOn,
+            localTimeSeconds: localTimeSeconds,
+            timeZoneIdentifier: snapshot.timeZone
+        )
+        let expectedConversion = try ReportingConversionSnapshot.resolved(
+            original: money,
+            baseCurrencyCode: tracker.baseCurrencyCode,
+            baseCurrencyExponent: tracker.baseCurrencyExponent,
+            manualBaseMoney: money.currencyCode == tracker.baseCurrencyCode ? nil : baseMoney,
+            effectiveAt: rateEffectiveAt
+        )
+        guard let expectedRate = Decimal(
+            string: expectedConversion.rateSnapshot,
+            locale: Locale(identifier: "en_US_POSIX")
+        ) else {
+            throw SyncEngineError.invalidServerResponse
+        }
+        guard (endsOn == nil || endsOn! >= startsOn),
+              nextDueOn >= startsOn,
+              endsOn == nil || nextDueOn <= endsOn!,
+              nextDueAt == calculatedDueAt,
+              snapshot.baseAmountMinor == expectedConversion.baseAmountMinor,
+              snapshot.baseCurrency == expectedConversion.baseCurrencyCode,
+              rate == expectedRate,
+              snapshot.rateSource == expectedConversion.rateSource ||
+                (money.currencyCode != tracker.baseCurrencyCode &&
+                    !snapshot.rateSource.trimmingCharacters(
+                        in: .whitespacesAndNewlines
+                    ).isEmpty),
+              (state == .active && pausedAt == nil && endedAt == nil) ||
+                (state == .paused && pausedAt != nil && endedAt == nil) ||
+                (state == .ended && pausedAt == nil && endedAt != nil),
+              (snapshot.isSubscription &&
+                  !snapshot.subscriptionProvider.trimmingCharacters(
+                      in: .whitespacesAndNewlines
+                  ).isEmpty) ||
+                (!snapshot.isSubscription &&
+                    snapshot.subscriptionProvider.isEmpty &&
+                    trialEndsOn == nil &&
+                    snapshot.cancellationURL.isEmpty &&
+                    snapshot.subscriptionNote.isEmpty),
+              snapshot.cancellationURL.isEmpty ||
+                URL(string: snapshot.cancellationURL)?.scheme?.lowercased() == "https"
+        else {
+            throw SyncEngineError.invalidServerResponse
+        }
+        let conversion = ReportingConversionSnapshot(
+            baseAmountMinor: snapshot.baseAmountMinor,
+            baseCurrencyCode: snapshot.baseCurrency,
+            rateSnapshot: snapshot.rateSnapshot,
+            rateSource: snapshot.rateSource,
+            effectiveAt: rateEffectiveAt
+        )
+        let snapshotID = snapshot.id
+        let existing = try modelContext.fetch(
+            FetchDescriptor<LocalRecurringRule>(
+                predicate: #Predicate { $0.scopeKey == scopeKey && $0.id == snapshotID }
+            )
+        ).first
+        if let version = existing?.serverVersion, version > snapshot.version { return }
+        let rule = existing ?? LocalRecurringRule(
+            id: snapshot.id,
+            scopeKey: scopeKey,
+            trackerID: snapshot.trackerID,
+            name: snapshot.name,
+            kind: kind,
+            isSubscription: snapshot.isSubscription,
+            money: money,
+            accountID: snapshot.accountID,
+            accountAmountMinor: snapshot.accountAmountMinor,
+            categoryID: snapshot.categoryID,
+            merchant: snapshot.merchant,
+            note: snapshot.note,
+            conversion: conversion,
+            cadence: cadence,
+            customIntervalUnit: customUnit,
+            customIntervalCount: snapshot.customIntervalCount,
+            timeZoneIdentifier: snapshot.timeZone,
+            startsOn: startsOn,
+            endsOn: endsOn,
+            localTimeSeconds: localTimeSeconds,
+            nextDueOn: nextDueOn,
+            nextDueAt: nextDueAt,
+            subscriptionProvider: snapshot.subscriptionProvider,
+            trialEndsOn: trialEndsOn,
+            cancellationURL: snapshot.cancellationURL,
+            subscriptionNote: snapshot.subscriptionNote,
+            syncState: .synced,
+            createdAt: try parseTimestamp(snapshot.createdAt)
+        )
+        if existing == nil { modelContext.insert(rule) }
+        rule.trackerID = snapshot.trackerID
+        rule.name = snapshot.name
+        rule.kindRaw = snapshot.kind
+        rule.isSubscription = snapshot.isSubscription
+        rule.amountMinor = snapshot.amountMinor
+        rule.currencyCode = snapshot.currency
+        rule.currencyExponent = snapshot.currencyExponent
+        rule.accountID = snapshot.accountID
+        rule.accountAmountMinor = snapshot.accountAmountMinor
+        rule.categoryID = snapshot.categoryID
+        rule.merchant = snapshot.merchant
+        rule.note = snapshot.note
+        rule.baseAmountMinor = snapshot.baseAmountMinor
+        rule.baseCurrencyCode = snapshot.baseCurrency
+        rule.rateSnapshot = snapshot.rateSnapshot
+        rule.rateSource = snapshot.rateSource
+        rule.rateEffectiveAt = conversion.effectiveAt
+        rule.cadenceRaw = snapshot.cadence
+        rule.customIntervalUnitRaw = snapshot.customIntervalUnit
+        rule.customIntervalCount = snapshot.customIntervalCount
+        rule.timeZoneIdentifier = snapshot.timeZone
+        rule.startsOn = startsOn
+        rule.endsOn = endsOn
+        rule.localTimeSeconds = localTimeSeconds
+        rule.nextDueOn = nextDueOn
+        rule.nextDueAt = nextDueAt
+        rule.stateRaw = snapshot.state
+        rule.pausedAt = pausedAt
+        rule.endedAt = endedAt
+        rule.subscriptionProvider = snapshot.subscriptionProvider
+        rule.trialEndsOn = trialEndsOn
+        rule.cancellationURL = snapshot.cancellationURL
+        rule.subscriptionNote = snapshot.subscriptionNote
+        rule.serverVersion = snapshot.version
+        rule.syncStateRaw = LocalSyncState.synced.rawValue
+        rule.createdAt = try parseTimestamp(snapshot.createdAt)
+        rule.updatedAt = try parseTimestamp(snapshot.updatedAt)
+        rule.archivedAt = try parseOptionalTimestamp(snapshot.archivedAt)
+        rule.deletedAt = try parseOptionalTimestamp(snapshot.deletedAt)
+    }
+
+    private func upsertRecurringOccurrence(
+        _ snapshot: RecurringOccurrenceSnapshot,
+        scopeKey: String
+    ) throws {
+        guard let state = RecurringOccurrenceState(rawValue: snapshot.state),
+              snapshot.occurrenceKey.count == 64,
+              snapshot.occurrenceKey.allSatisfy({ $0.isHexDigit }),
+              snapshot.version > 0,
+              snapshot.ruleVersion > 0,
+              (state == .posted && snapshot.transactionID != nil &&
+                  snapshot.materializedAt != nil && snapshot.skippedAt == nil &&
+                  snapshot.errorCode.isEmpty) ||
+                (state == .skipped && snapshot.transactionID == nil &&
+                    snapshot.materializedAt == nil && snapshot.skippedAt != nil &&
+                    snapshot.errorCode.isEmpty) ||
+                (state == .failed && snapshot.transactionID == nil &&
+                    snapshot.materializedAt == nil && snapshot.skippedAt == nil &&
+                    !snapshot.errorCode.isEmpty)
+        else {
+            throw SyncEngineError.invalidServerResponse
+        }
+        let ruleID = snapshot.ruleID
+        let dueOn = try parseDate(snapshot.dueOn)
+        guard let rule = try modelContext.fetch(
+            FetchDescriptor<LocalRecurringRule>(
+                predicate: #Predicate { $0.scopeKey == scopeKey && $0.id == ruleID }
+            )
+        ).first,
+        rule.trackerID == snapshot.trackerID,
+        snapshot.occurrenceKey == LocalRecurrenceCalculator.occurrenceKey(
+            ruleID: snapshot.ruleID,
+            dueOn: dueOn
+        )
+        else {
+            throw SyncEngineError.invalidServerResponse
+        }
+        if let transactionID = snapshot.transactionID {
+            guard let transaction = try modelContext.fetch(
+                FetchDescriptor<LedgerTransaction>(
+                    predicate: #Predicate {
+                        $0.scopeKey == scopeKey && $0.id == transactionID
+                    }
+                )
+            ).first,
+            transaction.trackerID == snapshot.trackerID
+            else {
+                throw SyncEngineError.invalidServerResponse
+            }
+        }
+        let snapshotID = snapshot.id
+        let occurrenceKey = snapshot.occurrenceKey
+        if let duplicate = try modelContext.fetch(
+            FetchDescriptor<LocalRecurringOccurrence>(
+                predicate: #Predicate {
+                    $0.scopeKey == scopeKey && $0.occurrenceKey == occurrenceKey
+                }
+            )
+        ).first, duplicate.id != snapshotID {
+            throw SyncEngineError.invalidServerResponse
+        }
+        let existing = try modelContext.fetch(
+            FetchDescriptor<LocalRecurringOccurrence>(
+                predicate: #Predicate { $0.scopeKey == scopeKey && $0.id == snapshotID }
+            )
+        ).first
+        if let existing, existing.serverVersion > snapshot.version { return }
+        let occurrence = existing ?? LocalRecurringOccurrence(
+            id: snapshot.id,
+            scopeKey: scopeKey,
+            trackerID: snapshot.trackerID,
+            ruleID: snapshot.ruleID,
+            occurrenceKey: snapshot.occurrenceKey,
+            dueOn: dueOn,
+            scheduledFor: try parseTimestamp(snapshot.scheduledFor),
+            ruleVersion: snapshot.ruleVersion,
+            state: state,
+            transactionID: snapshot.transactionID,
+            serverVersion: snapshot.version,
+            createdAt: try parseTimestamp(snapshot.createdAt)
+        )
+        if existing == nil { modelContext.insert(occurrence) }
+        occurrence.trackerID = snapshot.trackerID
+        occurrence.ruleID = snapshot.ruleID
+        occurrence.occurrenceKey = snapshot.occurrenceKey
+        occurrence.dueOn = dueOn
+        occurrence.scheduledFor = try parseTimestamp(snapshot.scheduledFor)
+        occurrence.ruleVersion = snapshot.ruleVersion
+        occurrence.stateRaw = snapshot.state
+        occurrence.transactionID = snapshot.transactionID
+        occurrence.materializedAt = try parseOptionalTimestamp(snapshot.materializedAt)
+        occurrence.skippedAt = try parseOptionalTimestamp(snapshot.skippedAt)
+        occurrence.errorCode = snapshot.errorCode
+        occurrence.serverVersion = snapshot.version
+        occurrence.createdAt = try parseTimestamp(snapshot.createdAt)
+        occurrence.updatedAt = try parseTimestamp(snapshot.updatedAt)
+        occurrence.deletedAt = nil
+    }
+
     private func upsertTransaction(_ snapshot: TransactionSnapshot, scopeKey: String) throws {
         guard let kind = TransactionKind(rawValue: snapshot.kind),
               let source = TransactionSource(rawValue: snapshot.source),
@@ -1417,6 +1791,29 @@ actor LedgerSyncActor {
                 value.serverVersion = version
                 value.syncStateRaw = LocalSyncState.synced.rawValue
             }
+        case "recurring_rule":
+            if let value = try modelContext.fetch(
+                FetchDescriptor<LocalRecurringRule>(
+                    predicate: #Predicate { $0.scopeKey == scopeKey && $0.id == entityID }
+                )
+            ).first {
+                value.deletedAt = changedAt
+                value.archivedAt = changedAt
+                value.stateRaw = RecurringRuleState.ended.rawValue
+                value.pausedAt = nil
+                value.endedAt = changedAt
+                value.serverVersion = version
+                value.syncStateRaw = LocalSyncState.synced.rawValue
+            }
+        case "recurring_occurrence":
+            if let value = try modelContext.fetch(
+                FetchDescriptor<LocalRecurringOccurrence>(
+                    predicate: #Predicate { $0.scopeKey == scopeKey && $0.id == entityID }
+                )
+            ).first {
+                value.deletedAt = changedAt
+                value.serverVersion = version
+            }
         case "transaction":
             if let value = try modelContext.fetch(
                 FetchDescriptor<LedgerTransaction>(
@@ -1437,6 +1834,13 @@ actor LedgerSyncActor {
         remoteIDs: [String: Set<UUID>],
         pendingKeys: Set<String>
     ) throws {
+        for value in try modelContext.fetch(
+            FetchDescriptor<LocalRecurringOccurrence>(
+                predicate: #Predicate { $0.scopeKey == scopeKey }
+            )
+        ) where !(remoteIDs["recurring_occurrence"] ?? []).contains(value.id) {
+            modelContext.delete(value)
+        }
         for value in try modelContext.fetch(
             FetchDescriptor<LedgerTransaction>(
                 predicate: #Predicate { $0.scopeKey == scopeKey && $0.serverVersion != nil }
@@ -1476,6 +1880,14 @@ actor LedgerSyncActor {
         ) where !(remoteIDs["budget"] ?? []).contains(value.id) &&
             !pendingKeys.contains("budget|\(value.id.uuidString)") {
             try deleteBudgetAndChildren(value, scopeKey: scopeKey)
+        }
+        for value in try modelContext.fetch(
+            FetchDescriptor<LocalRecurringRule>(
+                predicate: #Predicate { $0.scopeKey == scopeKey && $0.serverVersion != nil }
+            )
+        ) where !(remoteIDs["recurring_rule"] ?? []).contains(value.id) &&
+            !pendingKeys.contains("recurring_rule|\(value.id.uuidString)") {
+            try deleteRecurringRuleAndOccurrences(value, scopeKey: scopeKey)
         }
         for value in try modelContext.fetch(
             FetchDescriptor<LocalTrackerMembership>(
@@ -1540,6 +1952,23 @@ actor LedgerSyncActor {
             )
         ) { modelContext.delete(value) }
         modelContext.delete(budget)
+    }
+
+    private func deleteRecurringRuleAndOccurrences(
+        _ rule: LocalRecurringRule,
+        scopeKey: String
+    ) throws {
+        let ruleID = rule.id
+        for value in try modelContext.fetch(
+            FetchDescriptor<LocalRecurringOccurrence>(
+                predicate: #Predicate {
+                    $0.scopeKey == scopeKey && $0.ruleID == ruleID
+                }
+            )
+        ) {
+            modelContext.delete(value)
+        }
+        modelContext.delete(rule)
     }
 
     private func storeConflict(
@@ -1682,6 +2111,15 @@ actor LedgerSyncActor {
                 value.syncStateRaw = state.rawValue
                 if let serverVersion { value.serverVersion = serverVersion }
             }
+        case "recurring_rule":
+            if let value = try modelContext.fetch(
+                FetchDescriptor<LocalRecurringRule>(
+                    predicate: #Predicate { $0.scopeKey == scopeKey && $0.id == entityID }
+                )
+            ).first {
+                value.syncStateRaw = state.rawValue
+                if let serverVersion { value.serverVersion = serverVersion }
+            }
         case "transaction":
             if let value = try modelContext.fetch(
                 FetchDescriptor<LedgerTransaction>(
@@ -1797,6 +2235,7 @@ actor LedgerSyncActor {
         formatter.calendar = Calendar(identifier: .gregorian)
         formatter.timeZone = TimeZone(secondsFromGMT: 0)
         formatter.dateFormat = "yyyy-MM-dd"
+        formatter.isLenient = false
         guard let date = formatter.date(from: value) else {
             throw SyncEngineError.invalidServerResponse
         }

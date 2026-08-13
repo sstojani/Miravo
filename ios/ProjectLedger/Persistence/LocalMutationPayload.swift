@@ -6,6 +6,7 @@ enum LocalMutationEntity: String, Codable, Sendable {
     case category
     case tag
     case budget
+    case recurringRule = "recurring_rule"
     case transaction
 }
 
@@ -15,6 +16,10 @@ enum LocalMutationCommand: String, Codable, Sendable {
     case archive
     case restore
     case delete
+    case pause
+    case resume
+    case end
+    case skipNext = "skip_next"
 }
 
 struct TrackerMutationPayload: Codable, Sendable {
@@ -91,6 +96,42 @@ struct BudgetMutationPayload: Codable, Sendable {
     let rollover: Bool
     let categoryIDs: [UUID]
     let thresholdPercentages: [Int]
+    let archivedAt: Date?
+    let deletedAt: Date?
+}
+
+struct RecurringRuleMutationPayload: Codable, Sendable {
+    let clientPayloadVersion = 1
+    let id: UUID
+    let trackerID: UUID
+    let name: String
+    let kind: String
+    let isSubscription: Bool
+    let amountMinor: Int64
+    let currency: String
+    let currencyExponent: Int
+    let accountID: UUID
+    let accountAmountMinor: Int64
+    let categoryID: UUID?
+    let merchant: String
+    let note: String
+    let baseAmountMinor: Int64
+    let baseCurrency: String
+    let rateSnapshot: String
+    let rateSource: String
+    let rateEffectiveAt: Date
+    let cadence: String
+    let customIntervalUnit: String
+    let customIntervalCount: Int
+    let timeZone: String
+    let startsOn: String
+    let endsOn: String?
+    let localTime: String
+    let nextDueOn: String
+    let subscriptionProvider: String
+    let trialEndsOn: String?
+    let cancellationURL: String
+    let subscriptionNote: String
     let archivedAt: Date?
     let deletedAt: Date?
 }

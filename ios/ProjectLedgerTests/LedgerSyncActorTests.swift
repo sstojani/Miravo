@@ -170,6 +170,8 @@ struct LedgerSyncActorTests {
         let membershipID = UUID(uuidString: "72000000-0000-0000-0000-000000000007")!
         let transactionID = UUID(uuidString: "73000000-0000-0000-0000-000000000007")!
         let budgetID = UUID(uuidString: "74000000-0000-0000-0000-000000000007")!
+        let recurringRuleID = UUID(uuidString: "75000000-0000-0000-0000-000000000007")!
+        let occurrenceID = UUID(uuidString: "76000000-0000-0000-0000-000000000007")!
         let transport = ScriptedSyncTransport(
             pushResponses: [],
             pullResponses: [emptyPull(cursor: "after-bootstrap")],
@@ -205,11 +207,21 @@ struct LedgerSyncActorTests {
                         )],
                         tags: [tagRepresentation(id: tagID, trackerID: trackerID)],
                         budgets: [budgetRepresentation(id: budgetID, trackerID: trackerID)],
+                        recurringRules: [recurringRuleRepresentation(
+                            id: recurringRuleID,
+                            trackerID: trackerID,
+                            accountID: accountID
+                        )],
                         transactions: [transactionRepresentation(
                             id: transactionID,
                             trackerID: trackerID,
                             accountID: accountID,
                             tagID: tagID
+                        )],
+                        recurringOccurrences: [recurringOccurrenceRepresentation(
+                            id: occurrenceID,
+                            trackerID: trackerID,
+                            ruleID: recurringRuleID
                         )]
                     )
                 ),
@@ -228,6 +240,10 @@ struct LedgerSyncActorTests {
         let tags = try verification.fetch(FetchDescriptor<LocalTag>())
         let memberships = try verification.fetch(FetchDescriptor<LocalTrackerMembership>())
         let budgets = try verification.fetch(FetchDescriptor<LocalBudget>())
+        let recurringRules = try verification.fetch(FetchDescriptor<LocalRecurringRule>())
+        let occurrences = try verification.fetch(
+            FetchDescriptor<LocalRecurringOccurrence>()
+        )
         let budgetThresholds = try verification.fetch(FetchDescriptor<LocalBudgetThreshold>())
         let tagLinks = try verification.fetch(FetchDescriptor<LocalTransactionTag>())
         let staged = try verification.fetch(FetchDescriptor<BootstrapStagedEntity>())
@@ -241,6 +257,10 @@ struct LedgerSyncActorTests {
         #expect(budgets.first?.id == budgetID)
         #expect(budgets.first?.serverVersion == 1)
         #expect(budgetThresholds.map(\.percent).sorted() == [50, 80, 100])
+        #expect(recurringRules.first?.id == recurringRuleID)
+        #expect(recurringRules.first?.nextDueOn == dateOnly("2026-09-30"))
+        #expect(occurrences.first?.id == occurrenceID)
+        #expect(occurrences.first?.state == .skipped)
         #expect(tagLinks.first?.transactionID == transactionID)
         #expect(tagLinks.first?.tagID == tagID)
         #expect(staged.isEmpty)
@@ -323,6 +343,83 @@ struct LedgerSyncActorTests {
         #expect(trackers.first?.name == "Before")
         #expect(trackers.first?.serverVersion == 1)
         #expect(cursors.first?.cursor == "before")
+    }
+
+    @Test func inconsistentRecurringScheduleIsRejectedWithoutAdvancingCursor() async throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let trackerID = UUID(uuidString: "93000000-0000-0000-0000-000000000009")!
+        let accountID = UUID(uuidString: "94000000-0000-0000-0000-000000000009")!
+        let ruleID = UUID(uuidString: "95000000-0000-0000-0000-000000000009")!
+        let tracker = LocalTracker(id: trackerID, scopeKey: scope, name: "Recurring")
+        tracker.serverVersion = 1
+        let account = LocalAccount(
+            id: accountID,
+            scopeKey: scope,
+            trackerID: trackerID,
+            name: "Cash",
+            type: .cash,
+            currencyCode: "ALL",
+            currencyExponent: 2,
+            syncState: .synced
+        )
+        account.serverVersion = 1
+        context.insert(tracker)
+        context.insert(account)
+        let cursor = SyncCursor(scopeKey: scope)
+        cursor.cursor = "before"
+        cursor.bootstrapRequired = false
+        context.insert(cursor)
+        try context.save()
+
+        var invalidRule = try #require(
+            recurringRuleRepresentation(
+                id: ruleID,
+                trackerID: trackerID,
+                accountID: accountID
+            ).objectValue
+        )
+        invalidRule["next_due_at"] = .string("2026-09-30T08:15:00Z")
+        let transport = ScriptedSyncTransport(
+            pushResponses: [],
+            pullResponses: [
+                SyncPullResponse(
+                    protocolVersion: 1,
+                    cursor: "must-not-commit",
+                    hasMore: false,
+                    changes: [
+                        SyncChangeResponse(
+                            sequence: 1,
+                            entityType: "recurring_rule",
+                            entityID: ruleID,
+                            trackerID: trackerID,
+                            operation: "upsert",
+                            version: 2,
+                            changedAt: timestamp,
+                            data: .object(invalidRule)
+                        ),
+                    ]
+                ),
+            ],
+            bootstrapResponses: [],
+            ackResponses: []
+        )
+        let engine = LedgerSyncActor(modelContainer: container)
+
+        var didThrow = false
+        do {
+            _ = try await engine.synchronize(
+                authentication: try authentication(),
+                transport: transport
+            )
+        } catch {
+            didThrow = true
+        }
+
+        let verification = ModelContext(container)
+        #expect(didThrow)
+        #expect(try verification.fetch(FetchDescriptor<LocalRecurringRule>()).isEmpty)
+        #expect(try verification.fetch(FetchDescriptor<SyncCursor>()).first?.cursor == "before")
     }
 
     @Test func authorizationFailureRotatesKeychainTokensOnceThenRetries() async throws {
@@ -487,6 +584,80 @@ struct LedgerSyncActorTests {
         ])
     }
 
+    private func recurringRuleRepresentation(
+        id: UUID,
+        trackerID: UUID,
+        accountID: UUID
+    ) -> JSONValue {
+        .object([
+            "id": .string(id.uuidString.lowercased()),
+            "tracker_id": .string(trackerID.uuidString.lowercased()),
+            "name": .string("Music"),
+            "kind": .string("expense"),
+            "is_subscription": .bool(true),
+            "amount_minor": .integer(999),
+            "currency": .string("ALL"),
+            "currency_exponent": .integer(2),
+            "account_id": .string(accountID.uuidString.lowercased()),
+            "account_amount_minor": .integer(999),
+            "category_id": .null,
+            "merchant": .string(""),
+            "note": .string(""),
+            "base_amount_minor": .integer(999),
+            "base_currency": .string("ALL"),
+            "rate_snapshot": .string("1.000000000000"),
+            "rate_source": .string("identity"),
+            "rate_effective_at": .string(timestamp),
+            "cadence": .string("monthly"),
+            "custom_interval_unit": .string(""),
+            "custom_interval_count": .integer(1),
+            "time_zone": .string("Europe/Tirane"),
+            "starts_on": .string("2026-08-31"),
+            "ends_on": .null,
+            "local_time": .string("09:15:00"),
+            "next_due_on": .string("2026-09-30"),
+            "next_due_at": .string("2026-09-30T07:15:00Z"),
+            "state": .string("active"),
+            "paused_at": .null,
+            "ended_at": .null,
+            "subscription_provider": .string("Example Music"),
+            "trial_ends_on": .null,
+            "cancellation_url": .string("https://example.com/cancel"),
+            "subscription_note": .string(""),
+            "archived_at": .null,
+            "version": .integer(2),
+            "created_at": .string(timestamp),
+            "updated_at": .string(timestamp),
+            "deleted_at": .null,
+        ])
+    }
+
+    private func recurringOccurrenceRepresentation(
+        id: UUID,
+        trackerID: UUID,
+        ruleID: UUID
+    ) -> JSONValue {
+        .object([
+            "id": .string(id.uuidString.lowercased()),
+            "tracker_id": .string(trackerID.uuidString.lowercased()),
+            "rule_id": .string(ruleID.uuidString.lowercased()),
+            "occurrence_key": .string(
+                "be775a3d4e64436b4a1240088e5cbcf4b5e18d46360ee1fcd77ae39ba93fe735"
+            ),
+            "due_on": .string("2026-08-31"),
+            "scheduled_for": .string("2026-08-31T07:15:00Z"),
+            "rule_version": .integer(1),
+            "state": .string("skipped"),
+            "transaction_id": .null,
+            "materialized_at": .null,
+            "skipped_at": .string(timestamp),
+            "error_code": .string(""),
+            "version": .integer(1),
+            "created_at": .string(timestamp),
+            "updated_at": .string(timestamp),
+        ])
+    }
+
     private func transactionRepresentation(
         id: UUID,
         trackerID: UUID,
@@ -537,7 +708,9 @@ struct LedgerSyncActorTests {
         accounts: [JSONValue] = [],
         tags: [JSONValue] = [],
         budgets: [JSONValue] = [],
-        transactions: [JSONValue] = []
+        recurringRules: [JSONValue] = [],
+        transactions: [JSONValue] = [],
+        recurringOccurrences: [JSONValue] = []
     ) -> JSONValue {
         .object([
             "trackers": .array(trackers),
@@ -547,8 +720,19 @@ struct LedgerSyncActorTests {
             "tags": .array(tags),
             "merchants": .array([]),
             "budgets": .array(budgets),
+            "recurring_rules": .array(recurringRules),
             "transactions": .array(transactions),
+            "recurring_occurrences": .array(recurringOccurrences),
         ])
+    }
+
+    private func dateOnly(_ value: String) -> Date? {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.date(from: value)
     }
 
     private func emptyPull(cursor: String) -> SyncPullResponse {
@@ -570,6 +754,8 @@ struct LedgerSyncActorTests {
             LocalBudget.self,
             LocalBudgetCategory.self,
             LocalBudgetThreshold.self,
+            LocalRecurringRule.self,
+            LocalRecurringOccurrence.self,
             LedgerTransaction.self,
             LocalAccountMovement.self,
             LocalCategoryAllocation.self,

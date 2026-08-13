@@ -385,6 +385,124 @@ struct BudgetSnapshot: Decodable, Sendable {
     }
 }
 
+struct RecurringRuleSnapshot: Decodable, Sendable {
+    let id: UUID
+    let trackerID: UUID
+    let name: String
+    let kind: String
+    let isSubscription: Bool
+    let amountMinor: Int64
+    let currency: String
+    let currencyExponent: Int
+    let accountID: UUID
+    let accountAmountMinor: Int64
+    let categoryID: UUID?
+    let merchant: String
+    let note: String
+    let baseAmountMinor: Int64
+    let baseCurrency: String
+    let rateSnapshot: String
+    let rateSource: String
+    let rateEffectiveAt: String
+    let cadence: String
+    let customIntervalUnit: String
+    let customIntervalCount: Int
+    let timeZone: String
+    let startsOn: String
+    let endsOn: String?
+    let localTime: String
+    let nextDueOn: String
+    let nextDueAt: String
+    let state: String
+    let pausedAt: String?
+    let endedAt: String?
+    let subscriptionProvider: String
+    let trialEndsOn: String?
+    let cancellationURL: String
+    let subscriptionNote: String
+    let archivedAt: String?
+    let version: Int64
+    let createdAt: String
+    let updatedAt: String
+    let deletedAt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case trackerID = "tracker_id"
+        case name, kind
+        case isSubscription = "is_subscription"
+        case amountMinor = "amount_minor"
+        case currency
+        case currencyExponent = "currency_exponent"
+        case accountID = "account_id"
+        case accountAmountMinor = "account_amount_minor"
+        case categoryID = "category_id"
+        case merchant, note
+        case baseAmountMinor = "base_amount_minor"
+        case baseCurrency = "base_currency"
+        case rateSnapshot = "rate_snapshot"
+        case rateSource = "rate_source"
+        case rateEffectiveAt = "rate_effective_at"
+        case cadence
+        case customIntervalUnit = "custom_interval_unit"
+        case customIntervalCount = "custom_interval_count"
+        case timeZone = "time_zone"
+        case startsOn = "starts_on"
+        case endsOn = "ends_on"
+        case localTime = "local_time"
+        case nextDueOn = "next_due_on"
+        case nextDueAt = "next_due_at"
+        case state
+        case pausedAt = "paused_at"
+        case endedAt = "ended_at"
+        case subscriptionProvider = "subscription_provider"
+        case trialEndsOn = "trial_ends_on"
+        case cancellationURL = "cancellation_url"
+        case subscriptionNote = "subscription_note"
+        case archivedAt = "archived_at"
+        case version
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+        case deletedAt = "deleted_at"
+    }
+}
+
+struct RecurringOccurrenceSnapshot: Decodable, Sendable {
+    let id: UUID
+    let trackerID: UUID
+    let ruleID: UUID
+    let occurrenceKey: String
+    let dueOn: String
+    let scheduledFor: String
+    let ruleVersion: Int64
+    let state: String
+    let transactionID: UUID?
+    let materializedAt: String?
+    let skippedAt: String?
+    let errorCode: String
+    let version: Int64
+    let createdAt: String
+    let updatedAt: String
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case trackerID = "tracker_id"
+        case ruleID = "rule_id"
+        case occurrenceKey = "occurrence_key"
+        case dueOn = "due_on"
+        case scheduledFor = "scheduled_for"
+        case ruleVersion = "rule_version"
+        case state
+        case transactionID = "transaction_id"
+        case materializedAt = "materialized_at"
+        case skippedAt = "skipped_at"
+        case errorCode = "error_code"
+        case version
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+    }
+}
+
 struct MembershipSnapshot: Decodable, Sendable {
     let id: UUID
     let userID: UUID
