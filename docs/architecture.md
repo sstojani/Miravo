@@ -37,7 +37,7 @@ The app’s SwiftData store is the immediate UI source. Django is the durable mu
 - Milestone 2 domain apps: trackers, ledger, taxonomy, currency.
 - `sync`: transactional reference change log, strict offline command transport, signed cursors, per-user operation receipts, bootstrap, acknowledgement, retention cleanup, and sequence-only Channels fan-out.
 - `apps.shortcut`: independently keyed scoped credentials, narrow lookup/capture endpoints, user-scoped idempotency receipts, and scheduled receipt expiry.
-- `apps.planning`: budget aggregate plus civil-calendar recurring/subscription rules, revisions, deterministic occurrences, bounded Celery catch-up, permissions, audit, and REST/sync representations. Installments extend this boundary next.
+- `apps.planning`: budget aggregate; civil-calendar recurring/subscription rules, revisions, deterministic occurrences and bounded Celery catch-up; and installment terms, exact component schedules, immutable revisions, ledger-backed payments and payoff. The boundary owns permissions, audit, REST, and sync representations.
 - Later apps: sharing, attachments, analytics/exports.
 
 Core financial changes are performed by domain services inside database transactions. REST serializers validate transport shapes; models/constraints protect persistence invariants; views coordinate permissions and service calls.

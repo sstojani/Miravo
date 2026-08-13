@@ -366,3 +366,301 @@ class RecurringRuleRevision(UUIDTimestampedModel):
                 name="unique_recurring_rule_recorded_version",
             )
         ]
+
+
+class InstallmentPlan(SyncableModel):
+    class Cadence(models.TextChoices):
+        WEEKLY = "weekly", "Weekly"
+        MONTHLY = "monthly", "Monthly"
+
+    class State(models.TextChoices):
+        ACTIVE = "active", "Active"
+        PAID_OFF = "paid_off", "Paid off"
+        CANCELLED = "cancelled", "Cancelled"
+
+    tracker = models.ForeignKey(
+        "ledger.Tracker", on_delete=models.PROTECT, related_name="installment_plans"
+    )
+    name = models.CharField(max_length=120)
+    account = models.ForeignKey(
+        "ledger.Account", on_delete=models.PROTECT, related_name="installment_plans"
+    )
+    category = models.ForeignKey(
+        "ledger.Category",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="installment_plans",
+    )
+    principal_minor = models.PositiveBigIntegerField()
+    interest_minor = models.PositiveBigIntegerField(default=0)
+    fees_minor = models.PositiveBigIntegerField(default=0)
+    planned_total_minor = models.PositiveBigIntegerField()
+    currency = models.CharField(max_length=3)
+    currency_exponent = models.PositiveSmallIntegerField()
+    installment_count = models.PositiveSmallIntegerField()
+    planned_installment_minor = models.PositiveBigIntegerField(null=True, blank=True)
+    cadence = models.CharField(max_length=12, choices=Cadence.choices)
+    time_zone = models.CharField(max_length=64)
+    starts_on = models.DateField()
+    anchor_day = models.PositiveSmallIntegerField()
+    state = models.CharField(max_length=12, choices=State.choices, default=State.ACTIVE)
+    revision_number = models.PositiveIntegerField(default=1)
+    paid_off_at = models.DateTimeField(null=True, blank=True)
+    cancelled_at = models.DateTimeField(null=True, blank=True)
+    archived_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="installment_plans_created",
+    )
+    last_editor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="installment_plans_edited",
+    )
+
+    class Meta:
+        ordering = ("starts_on", "created_at")
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(principal_minor__gt=0), name="installment_principal_gt_0"
+            ),
+            models.CheckConstraint(
+                condition=Q(planned_total_minor__gt=0), name="installment_total_gt_0"
+            ),
+            models.CheckConstraint(
+                condition=Q(
+                    planned_total_minor=F("principal_minor") + F("interest_minor") + F("fees_minor")
+                ),
+                name="installment_total_matches_terms",
+            ),
+            models.CheckConstraint(
+                condition=Q(installment_count__gte=1) & Q(installment_count__lte=600),
+                name="installment_count_between_1_and_600",
+            ),
+            models.CheckConstraint(
+                condition=Q(anchor_day__gte=1) & Q(anchor_day__lte=31),
+                name="installment_anchor_day_range",
+            ),
+            models.CheckConstraint(
+                condition=Q(planned_installment_minor__isnull=True)
+                | Q(planned_installment_minor__gt=0),
+                name="installment_planned_amount_positive",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    Q(state="active", paid_off_at__isnull=True, cancelled_at__isnull=True)
+                    | Q(state="paid_off", paid_off_at__isnull=False, cancelled_at__isnull=True)
+                    | Q(state="cancelled", paid_off_at__isnull=True, cancelled_at__isnull=False)
+                ),
+                name="installment_state_timestamp_shape",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=("tracker", "state", "starts_on")),
+            models.Index(fields=("tracker", "archived_at", "deleted_at")),
+        ]
+
+    def __str__(self) -> str:
+        return self.name
+
+
+class InstallmentScheduleItem(SyncableModel):
+    class State(models.TextChoices):
+        PLANNED = "planned", "Planned"
+        PARTIALLY_PAID = "partially_paid", "Partially paid"
+        PAID = "paid", "Paid"
+        SKIPPED = "skipped", "Skipped"
+
+    plan = models.ForeignKey(
+        InstallmentPlan, on_delete=models.PROTECT, related_name="schedule_items"
+    )
+    tracker = models.ForeignKey(
+        "ledger.Tracker",
+        on_delete=models.PROTECT,
+        related_name="installment_schedule_items",
+    )
+    revision_number = models.PositiveIntegerField()
+    sequence = models.PositiveSmallIntegerField()
+    original_due_on = models.DateField()
+    due_on = models.DateField()
+    planned_principal_minor = models.PositiveBigIntegerField()
+    planned_interest_minor = models.PositiveBigIntegerField(default=0)
+    planned_fees_minor = models.PositiveBigIntegerField(default=0)
+    planned_total_minor = models.PositiveBigIntegerField()
+    paid_minor = models.PositiveBigIntegerField(default=0)
+    state = models.CharField(max_length=20, choices=State.choices, default=State.PLANNED)
+    skipped_at = models.DateTimeField(null=True, blank=True)
+    superseded_at = models.DateTimeField(null=True, blank=True, db_index=True)
+
+    class Meta:
+        ordering = ("sequence",)
+        constraints = [
+            models.UniqueConstraint(
+                fields=("plan", "revision_number", "sequence"),
+                name="unique_installment_schedule_sequence",
+            ),
+            models.CheckConstraint(
+                condition=Q(sequence__gte=1), name="installment_schedule_sequence_gt_0"
+            ),
+            models.CheckConstraint(
+                condition=Q(planned_total_minor__gt=0),
+                name="installment_schedule_total_gt_0",
+            ),
+            models.CheckConstraint(
+                condition=Q(
+                    planned_total_minor=F("planned_principal_minor")
+                    + F("planned_interest_minor")
+                    + F("planned_fees_minor")
+                ),
+                name="installment_schedule_total_matches_parts",
+            ),
+            models.CheckConstraint(
+                condition=Q(paid_minor__lte=F("planned_total_minor")),
+                name="installment_schedule_paid_not_above_total",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    Q(state="planned", paid_minor=0, skipped_at__isnull=True)
+                    | Q(
+                        state="partially_paid",
+                        paid_minor__gt=0,
+                        skipped_at__isnull=True,
+                    )
+                    & Q(paid_minor__lt=F("planned_total_minor"))
+                    | Q(
+                        state="paid",
+                        paid_minor=F("planned_total_minor"),
+                        skipped_at__isnull=True,
+                    )
+                    | Q(state="skipped", paid_minor=0, skipped_at__isnull=False)
+                ),
+                name="installment_schedule_state_shape",
+            ),
+        ]
+        indexes = [models.Index(fields=("plan", "superseded_at", "due_on"))]
+
+
+class InstallmentPayment(SyncableModel):
+    plan = models.ForeignKey(InstallmentPlan, on_delete=models.PROTECT, related_name="payments")
+    tracker = models.ForeignKey(
+        "ledger.Tracker", on_delete=models.PROTECT, related_name="installment_payments"
+    )
+    schedule_item = models.ForeignKey(
+        InstallmentScheduleItem,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="payments",
+    )
+    transaction = models.OneToOneField(
+        "ledger.Transaction",
+        on_delete=models.PROTECT,
+        related_name="installment_payment",
+    )
+    amount_minor = models.PositiveBigIntegerField()
+    applied_amount_minor = models.PositiveBigIntegerField()
+    overpayment_minor = models.PositiveBigIntegerField(default=0)
+    extra_payment = models.BooleanField(default=False)
+    applied_at = models.DateTimeField()
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="installment_payments_created",
+    )
+
+    class Meta:
+        ordering = ("applied_at", "created_at")
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(amount_minor__gt=0), name="installment_payment_amount_gt_0"
+            ),
+            models.CheckConstraint(
+                condition=Q(applied_amount_minor__gt=0),
+                name="installment_payment_applied_gt_0",
+            ),
+            models.CheckConstraint(
+                condition=Q(amount_minor=F("applied_amount_minor") + F("overpayment_minor")),
+                name="installment_payment_amount_matches_application",
+            ),
+            models.CheckConstraint(
+                condition=Q(extra_payment=True) | Q(schedule_item__isnull=False),
+                name="regular_installment_payment_has_schedule_item",
+            ),
+        ]
+
+
+class InstallmentPlanRevision(UUIDTimestampedModel):
+    plan = models.ForeignKey(InstallmentPlan, on_delete=models.PROTECT, related_name="revisions")
+    revision_number = models.PositiveIntegerField()
+    recorded_plan_version = models.PositiveBigIntegerField()
+    reason = models.CharField(max_length=24)
+    name = models.CharField(max_length=120)
+    account = models.ForeignKey(
+        "ledger.Account",
+        on_delete=models.PROTECT,
+        related_name="installment_plan_revisions",
+    )
+    category = models.ForeignKey(
+        "ledger.Category",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="installment_plan_revisions",
+    )
+    principal_minor = models.PositiveBigIntegerField()
+    interest_minor = models.PositiveBigIntegerField()
+    fees_minor = models.PositiveBigIntegerField()
+    planned_total_minor = models.PositiveBigIntegerField()
+    currency = models.CharField(max_length=3)
+    currency_exponent = models.PositiveSmallIntegerField()
+    installment_count = models.PositiveSmallIntegerField()
+    planned_installment_minor = models.PositiveBigIntegerField(null=True, blank=True)
+    cadence = models.CharField(max_length=12)
+    time_zone = models.CharField(max_length=64)
+    starts_on = models.DateField()
+    anchor_day = models.PositiveSmallIntegerField()
+    remaining_minor = models.PositiveBigIntegerField()
+    editor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="installment_plan_revisions_recorded",
+    )
+
+    class Meta:
+        ordering = ("-revision_number",)
+        constraints = [
+            models.UniqueConstraint(
+                fields=("plan", "revision_number"),
+                name="unique_installment_plan_revision",
+            )
+        ]
+
+
+class InstallmentScheduleItemRevision(UUIDTimestampedModel):
+    schedule_item = models.ForeignKey(
+        InstallmentScheduleItem,
+        on_delete=models.PROTECT,
+        related_name="revisions",
+    )
+    plan_revision_number = models.PositiveIntegerField()
+    reason = models.CharField(max_length=24)
+    due_on = models.DateField()
+    state = models.CharField(max_length=20)
+    paid_minor = models.PositiveBigIntegerField()
+    skipped_at = models.DateTimeField(null=True, blank=True)
+    editor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="installment_schedule_revisions_recorded",
+    )
+
+    class Meta:
+        ordering = ("-created_at",)
+        constraints = [
+            models.UniqueConstraint(
+                fields=("schedule_item", "plan_revision_number"),
+                name="unique_installment_schedule_item_revision",
+            )
+        ]

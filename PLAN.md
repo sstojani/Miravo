@@ -2,7 +2,7 @@
 
 Last updated: 2026-08-13. A checked item is complete; its verification tier is recorded in `IMPLEMENT.md`. Items are not checked merely because scaffolding exists.
 
-Current focus: **Milestone 7 — installments**. Budgets and the authoritative recurrence/subscription scheduler pass locally. Native recurrence now includes the scoped cache/outbox, strict reconciliation, matching calendar/cost logic, role-aware Plans UI, and an explicitly opt-in privacy-safe reminder scheduler with authored tests. Actual notification delivery, Swift compilation, simulator behavior, Wallet-trigger mapping, queue-file behavior, Docker, and hosted CI remain explicit external checks.
+Current focus: **Milestone 7 — native installments**. The authoritative installment terms/schedule/payment/revision REST and sync domain now passes locally, alongside budgets and recurrence/subscriptions. Next is the scoped SwiftData cache, atomic outbox commands, matching schedule/progress calculator, and role-aware Plans UI. Actual notification delivery, Swift compilation, simulator behavior, Wallet-trigger mapping, queue-file behavior, Docker, and hosted CI remain explicit external checks.
 
 ## Milestone 0 — Discovery and durable project plan
 
@@ -77,7 +77,8 @@ Current acceptance: an authenticated device can push an ordered offline tracker/
 - [x] Budget periods, rollover, thresholds, historical reproducibility, explicit partial conversion, synchronized offline progress, and Plans UI (backend passing locally; native source/tests authored, macOS execution pending).
 - [x] Idempotent recurrence/subscription materialization, pause/skip/edit/end, bounded catch-up, deterministic occurrence identity, offline native rule cache/outbox, cost normalization, and role-aware Plans UI (backend passing locally; native source/tests authored, macOS execution pending).
 - [x] Optional local recurrence reminders with explicit permission, privacy-safe content, bounded scheduling, and denial/revocation states (source/tests implemented; macOS/device delivery pending).
-- [ ] Installment schedules/revisions, regular/extra payments, skip/reschedule, early payoff, and overpayment confirmation.
+- [x] Authoritative installment terms, exact component schedules, immutable revisions, regular/extra payments, skip/reschedule, early payoff, confirmed overpayment, REST, audit, and offline sync transport (backend passing locally).
+- [ ] Scoped native installment cache/outbox, matching calculator, Plans create/detail/payment/payoff experience, reminders, localization, and authored tests.
 
 ## Milestone 8 — Splits and realtime collaboration
 

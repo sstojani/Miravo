@@ -17,6 +17,9 @@ class SyncChange(models.Model):
         BUDGET = "budget", "Budget"
         RECURRING_RULE = "recurring_rule", "Recurring rule"
         RECURRING_OCCURRENCE = "recurring_occurrence", "Recurring occurrence"
+        INSTALLMENT_PLAN = "installment_plan", "Installment plan"
+        INSTALLMENT_SCHEDULE_ITEM = "installment_schedule_item", "Installment schedule item"
+        INSTALLMENT_PAYMENT = "installment_payment", "Installment payment"
         TRANSACTION = "transaction", "Transaction"
 
     class Operation(models.TextChoices):

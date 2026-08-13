@@ -50,9 +50,11 @@ The native transaction cache additionally retains source/destination account IDs
 | RecurringRule | Tracker-owned expense/income template; amount/account/category and explicit conversion; civil dates/local time/IANA zone; original month/day anchors; daily/weekly/monthly/yearly/constrained custom cadence; next due; active/paused/ended; subscription provider/trial/HTTPS cancellation fields; archive/tombstone/version/creator/editor |
 | RecurringOccurrence | Tracker/rule, SHA-256 `(rule UUID, due civil date)` key, scheduled UTC instant, source rule version, posted/skipped/failed state, deterministic linked transaction, safe failure code |
 | RecurringRuleRevision | Explicit prior financial/schedule/subscription fields keyed by unique rule version and editor |
-| InstallmentPlan | Terms, currency, deterministic schedule config, revision/state |
-| InstallmentScheduleItem | Planned due date and principal/interest/fee components |
-| InstallmentPayment | Plan/item, linked posted transaction, amount, extra-payment flag |
+| InstallmentPlan | Tracker/account/optional expense category; principal/interest/fees and exact total; currency/exponent; count or regular amount; weekly/monthly civil-date anchor and IANA zone; active/paid-off/cancelled state; revision/archive/tombstone/creator/editor |
+| InstallmentScheduleItem | Plan/tracker, schedule revision and sequence, immutable original due date, current due date, exact principal/interest/fee/total components, applied amount, planned/partial/paid/skipped state, skip/supersede/version timestamps |
+| InstallmentPayment | Plan/tracker/optional schedule item, one linked posted `source=installment` transaction, actual/applied/overpayment minor units, regular/extra marker, application instant, creator/version |
+| InstallmentPlanRevision | Prior terms/account/category/currency/schedule anchors and remaining amount, keyed by plan revision and editor |
+| InstallmentScheduleItemRevision | Prior due/state/applied/skip fields for an explicit skip or reschedule decision |
 | Attachment | Owner/tracker/transaction, type/size/checksum/private key/upload state |
 | CurrencyRate | Base/quote decimal rate, source, effective/fetched-or-entered timestamps |
 | ShortcutCredential | User/optional tracker scope, name, public prefix, HMAC digest, explicit scope bitmask, expiry/use/revocation; raw token is never stored |
@@ -70,6 +72,10 @@ Recurring month/year generation clamps with the original anchor rather than chai
 
 The native cache mirrors `RecurringRule` and the read-only occurrence fields under compound `(scopeKey, UUID)` identity. It validates account/tracker/category scope, identity and converted-money snapshots, state timestamps, wall-time-derived `next_due_at`, and occurrence keys before publishing a sync page. Local rule commands are optimistic and outboxed. In particular, skip advances the local next-due presentation but does not invent a server occurrence UUID or audit row; normal pull supplies that canonical history.
 
+Installment schedules distribute integer minor units exactly. Without a regular amount, quotient rows receive remainders in deterministic later rows; principal, interest, and fee components use a deterministic largest-remainder allocation and sum to every row and the plan total. Monthly dates always clamp from the original day anchor, so a February clamp does not move March. A wholesale term replacement is allowed only before payment history and supersedes rather than edits original rows. Metadata edits and every skip/reschedule snapshot the prior state. A skip preserves the old row and appends one replacement at the schedule end.
+
+Every installment payment creates an ordinary posted expense through the authoritative ledger service. `amount_minor` is the amount tendered, `applied_amount_minor` is capped at remaining plan value, and `overpayment_minor` is the explicit difference; the latter requires confirmation and the linked financial transaction still records the full tender. Regular payments target one row and cannot exceed it. Extra/payoff commands allocate earliest active rows deterministically. The plan reaches paid-off only when applied payments equal the planned total. Client operation/payment/transaction UUIDs plus sync receipts make replay safe.
+
 ## Required constraints
 
 - Valid ISO currency and amount/exponent combinations; positive display amounts.
@@ -82,5 +88,6 @@ The native cache mirrors `RecurringRule` and the read-only occurrence fields und
 - Unique relational revision versions per transaction/category; allocation rows retain the category version used at posting time.
 - Refresh expiry follows creation; consumed/revoked credential cannot rotate successfully.
 - Positive budget amount, valid start/end/custom combinations, same-tracker expense-category scope, unique selected categories/thresholds, and threshold bounds.
+- Positive installment principal/total/count; exact plan and schedule component sums; applied schedule amount at or below its total; valid state/timestamp shapes; unique plan/revision/sequence and revision history; actual payment equals applied plus explicit overpayment; regular payments reference a schedule item.
 
 Cross-row totals and ownership are enforced in locked domain services plus deferred PostgreSQL triggers/constraint mechanisms where safely expressible. A serializer-only invariant is insufficient.

@@ -601,3 +601,40 @@ Commit this native recurrence checkpoint. Then add a testable, privacy-safe, exp
 ### Next exact action
 
 Commit this reminder checkpoint. Then implement the authoritative installment backend vertical slice: immutable original terms, deterministic principal/interest/fee schedule, explicit schedule revisions, posted regular/extra payments, skip/reschedule, early payoff, and overpayment confirmation with REST/sync/audit tests before adding the native cache and Plans UI.
+
+## 2026-08-13 — Milestone 7 authoritative installment backend checkpoint
+
+### Acceptance checks established
+
+- A plan stores positive integer principal plus nonnegative interest/fees, an exact derived total and ISO exponent, one tracker/account/optional expense category, a civil start/anchor and IANA time zone, and at most 600 weekly/monthly rows. Month-end and leap schedules retain the original day anchor.
+- Every row and every principal/interest/fee component sum exactly in minor units with deterministic remainder placement. Term replacements preserve superseded rows and a prior plan snapshot, and are rejected after payment history. Metadata, skip, and reschedule edits retain explicit history.
+- Regular payments require one active row and cannot exceed it. Extra payments and payoff allocate earliest active rows deterministically. Every payment posts through the authoritative ledger service with `source=installment`, so balances, category snapshots, conversion validation, audit, and permissions have one source of truth.
+- Tendered amount, amount applied to the plan, and overpayment are separate. Any overpayment requires explicit confirmation, remains visible, and records the full tender in the linked financial transaction without applying nonexistent principal.
+- Plan commands are versioned/replay-safe offline sync roots. Schedule items and payments are read-only server changes, bootstrap in dependency order, respect tracker membership, and cannot be client-forged as independent mutations.
+
+### Material work
+
+- Added `InstallmentPlan`, `InstallmentScheduleItem`, `InstallmentPayment`, and explicit plan/item revision models with tracker scoping, protected financial relations, lifecycle/version fields, indexes, database constraints, migrations, and private admin inspection.
+- Added a deterministic schedule calculator with original-anchor month clamping, exact row/component distribution, immutable/superseded schedule creation, paid/remaining/next/payoff progress, plan and item snapshots, and locked skip/reschedule/payment services.
+- Added strict role-aware REST resources for plans, read-only schedules/payments, archive/restore/cancel/tombstone, regular/extra payment, payoff, skip, reschedule, progress, and admin-only history. Client payment and transaction UUIDs make direct command replay safe.
+- Linked installment payments to ordinary posted ledger expenses, including same-account amount handling, tracker-base conversion snapshots, category allocation, plan state transition, and explicit confirmed overpayment adjustment.
+- Added installment plan/schedule/payment change types, signals, pull rendering and dependency-ordered bootstrap. Plan push supports create/update/archive/restore/delete/cancel/record-payment/payoff/skip-payment/reschedule-payment with strict versioned payloads, operation receipts, structured conflicts, and child invalidations.
+- Added six focused tests for exact/month-end/leap schedules, strict validation and role boundaries, term/metadata history, regular/partial/extra/replayed payments, post-payment term protection, payoff, overpayment, skip/reschedule, cross-currency movement snapshots, sync replay/bootstrap/conflict/tombstones, and fresh migrations. Updated OpenAPI, architecture, model, sync, status, decision, and test documents.
+
+### Commands and outcomes
+
+- `PROJECT_LEDGER_ENV=test PROJECT_LEDGER_DATABASE_URL=sqlite:///:memory: .venv/bin/pytest backend/tests/test_installments.py -q`: **6 passed locally**.
+- Fresh SQLite migrations through `planning.0004` and `sync.0004`: **applied successfully from an empty database**.
+- `PROJECT_LEDGER_ENV=test PROJECT_LEDGER_DATABASE_URL=sqlite:///:memory: .venv/bin/python backend/manage.py makemigrations --check --dry-run`: **no changes detected**.
+- `make check`: **passed locally** — 80 tests, 81.74% branch-aware coverage, Ruff format/lint, Django system checks, strict mypy over 93 source files, and validated byte-current OpenAPI.
+- `git diff --check`: **passed**.
+
+### Verification boundary
+
+- Deterministic installment math, SQLite constraints/migrations, REST authorization/actions, linked ledger effects, audit, replay/conflict/tombstone behavior, pull/bootstrap rendering, OpenAPI, typing, lint, and the full backend regression suite are **verified locally on Linux**.
+- PostgreSQL constraint behavior, concurrent multi-process locking under Docker, Redis/Channels invalidation delivery, Celery/ASGI deployment, and hosted CI remain **unverified because Docker/remote runners are unavailable here**.
+- No native installment model, outbox command, calculator, Plans UI, local reminder, or iPhone interaction is claimed in this checkpoint. Swift/Xcode, simulator, signer, and physical-device verification remain external. No production system was contacted.
+
+### Next exact action
+
+Commit the authoritative backend checkpoint. Then mirror its wire/domain invariants in scoped SwiftData models and a pure Swift installment calculator; add atomic create/edit/archive/cancel/payment/payoff/skip/reschedule outbox commands and strict bootstrap reconciliation before exposing a role-aware Plans UI.

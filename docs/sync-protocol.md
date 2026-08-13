@@ -23,6 +23,7 @@ If step 2 fails, neither entity nor outbox persists. Undo is another auditable l
 - Binary attachments use a separate checksum/idempotency queue and never ride in the mutation batch.
 - Budgets are aggregate roots. Their selected category snapshots and threshold percentages are replaced atomically with the root, so child rows cannot be independently reordered ahead of the owning version.
 - Recurring rules accept create/update/archive/restore/delete plus explicit pause/resume/end/skip-next commands. Recurring occurrences are server-produced read-only changes; bootstrap orders rules, then transactions, then occurrences so links resolve atomically on the client.
+- Installment plans accept create/update/archive/restore/delete/cancel plus explicit record-payment/payoff/skip-payment/reschedule-payment commands. A plan UUID is the command/version boundary. Schedule rows and payments are server-produced read-only changes; bootstrap orders plans, schedules, transactions, then payments so every relationship can be resolved before publication.
 
 The current native attachment boundary persists a compound scoped attachment UUID, owning transaction UUID, relative local path, allow-listed MIME type, positive bounded byte count, lowercase SHA-256 digest, state, attempt count, next retry, safe error code, and timestamps. Enqueue is idempotent only for an identical metadata fingerprint; conflicting reuse fails. Interrupted `uploading` rows return to `pending` after restart. This is queue scaffolding, not a claim that binary upload exists—the private upload protocol and server attachment resource arrive with receipts in Milestone 9.
 
@@ -40,7 +41,7 @@ The current native attachment boundary persists a compound scoped attachment UUI
 1. Preserve unsent outbox commands and locally referenced files.
 2. The server fixes an upper change-log sequence and signs one normal target cursor on the first request. Every UUID-ordered page carries that exact opaque token inside its signed, user-bound bootstrap continuation; it is not re-signed between pages.
 3. Persist each page under a local bootstrap generation without changing the visible ledger or normal pull cursor.
-4. Require every page to retain the same target cursor; decode all typed records and validate tracker/membership/account/category/tag/transaction/budget/recurrence relationships, including same-tracker tag assignments, budget category scope, recurrence account/category scope, deterministic due instants, and occurrence keys.
+4. Require every page to retain the same target cursor; decode all typed records and validate tracker/membership/account/category/tag/transaction/budget/recurrence/installment relationships, including same-tracker tag assignments, budget category scope, recurrence account/category scope, deterministic due instants and occurrence keys, exact installment component totals, plan/schedule/payment links, and payment/transaction identity.
 5. Publish the reconciled snapshot and final pull cursor in one SwiftData save, retaining every entity with a queued local mutation.
 6. Immediately pull from the fixed cursor so changes committed while pages were downloading are not deferred to a later launch.
 7. Rebase/replay retained commands against downloaded versions, producing conflicts where required.

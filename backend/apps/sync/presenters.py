@@ -26,9 +26,19 @@ from apps.ledger.serializers import (
     TrackerSerializer,
     TransactionReadSerializer,
 )
-from apps.planning.models import Budget, RecurringOccurrence, RecurringRule
+from apps.planning.models import (
+    Budget,
+    InstallmentPayment,
+    InstallmentPlan,
+    InstallmentScheduleItem,
+    RecurringOccurrence,
+    RecurringRule,
+)
 from apps.planning.serializers import (
     BudgetSerializer,
+    InstallmentPaymentSerializer,
+    InstallmentPlanSerializer,
+    InstallmentScheduleItemSerializer,
     RecurringOccurrenceSerializer,
     RecurringRuleSerializer,
 )
@@ -44,8 +54,11 @@ BOOTSTRAP_ENTITY_ORDER = (
     ("merchants", SyncChange.EntityType.MERCHANT),
     ("budgets", SyncChange.EntityType.BUDGET),
     ("recurring_rules", SyncChange.EntityType.RECURRING_RULE),
+    ("installment_plans", SyncChange.EntityType.INSTALLMENT_PLAN),
+    ("installment_schedule_items", SyncChange.EntityType.INSTALLMENT_SCHEDULE_ITEM),
     ("transactions", SyncChange.EntityType.TRANSACTION),
     ("recurring_occurrences", SyncChange.EntityType.RECURRING_OCCURRENCE),
+    ("installment_payments", SyncChange.EntityType.INSTALLMENT_PAYMENT),
 )
 
 
@@ -86,7 +99,9 @@ def current_max_sequence() -> int:
     return int(SyncChange.objects.aggregate(value=Max("sequence"))["value"] or 0)
 
 
-def _load_instance(entity_type: str, entity_id: UUID | str) -> Any | None:  # noqa: PLR0911
+def _load_instance(  # noqa: PLR0911, PLR0912
+    entity_type: str, entity_id: UUID | str
+) -> Any | None:
     if entity_type == SyncChange.EntityType.TRACKER:
         return Tracker.objects.select_related("owner").filter(id=entity_id).first()
     if entity_type == SyncChange.EntityType.TRACKER_MEMBERSHIP:
@@ -120,6 +135,21 @@ def _load_instance(entity_type: str, entity_id: UUID | str) -> Any | None:  # no
             .filter(id=entity_id)
             .first()
         )
+    if entity_type == SyncChange.EntityType.INSTALLMENT_PLAN:
+        return (
+            InstallmentPlan.objects.select_related(
+                "tracker", "account", "category", "created_by", "last_editor"
+            )
+            .prefetch_related("schedule_items", "payments")
+            .filter(id=entity_id)
+            .first()
+        )
+    if entity_type == SyncChange.EntityType.INSTALLMENT_SCHEDULE_ITEM:
+        return (
+            InstallmentScheduleItem.objects.select_related("tracker", "plan")
+            .filter(id=entity_id)
+            .first()
+        )
     if entity_type == SyncChange.EntityType.TRANSACTION:
         return (
             Transaction.objects.select_related(
@@ -135,6 +165,14 @@ def _load_instance(entity_type: str, entity_id: UUID | str) -> Any | None:  # no
             .filter(id=entity_id)
             .first()
         )
+    if entity_type == SyncChange.EntityType.INSTALLMENT_PAYMENT:
+        return (
+            InstallmentPayment.objects.select_related(
+                "tracker", "plan", "schedule_item", "transaction", "created_by"
+            )
+            .filter(id=entity_id)
+            .first()
+        )
     return None
 
 
@@ -147,7 +185,7 @@ def serialize_instance(
     return _serialize_loaded_instance(entity_type, instance, user)
 
 
-def _serialize_loaded_instance(
+def _serialize_loaded_instance(  # noqa: PLR0912
     entity_type: str, instance: Any, user: User
 ) -> dict[str, Any] | None:
     if entity_type == SyncChange.EntityType.TRACKER:
@@ -175,10 +213,16 @@ def _serialize_loaded_instance(
         data = dict(BudgetSerializer(instance).data)
     elif entity_type == SyncChange.EntityType.RECURRING_RULE:
         data = dict(RecurringRuleSerializer(instance).data)
+    elif entity_type == SyncChange.EntityType.INSTALLMENT_PLAN:
+        data = dict(InstallmentPlanSerializer(instance).data)
+    elif entity_type == SyncChange.EntityType.INSTALLMENT_SCHEDULE_ITEM:
+        data = dict(InstallmentScheduleItemSerializer(instance).data)
     elif entity_type == SyncChange.EntityType.TRANSACTION:
         data = dict(TransactionReadSerializer(instance).data)
     elif entity_type == SyncChange.EntityType.RECURRING_OCCURRENCE:
         data = dict(RecurringOccurrenceSerializer(instance).data)
+    elif entity_type == SyncChange.EntityType.INSTALLMENT_PAYMENT:
+        data = dict(InstallmentPaymentSerializer(instance).data)
     else:
         return None
     return cast(dict[str, Any], json_safe(data))
@@ -217,7 +261,9 @@ def serialize_change(change: SyncChange, user: User) -> dict[str, Any]:
     }
 
 
-def _bootstrap_queryset(entity_type: str, *, user: User, tracker_ids: list[UUID]) -> QuerySet[Any]:  # noqa: PLR0911
+def _bootstrap_queryset(  # noqa: PLR0911, PLR0912
+    entity_type: str, *, user: User, tracker_ids: list[UUID]
+) -> QuerySet[Any]:
     if entity_type == SyncChange.EntityType.TRACKER:
         return (
             Tracker.objects.filter(
@@ -280,6 +326,21 @@ def _bootstrap_queryset(entity_type: str, *, user: User, tracker_ids: list[UUID]
             .select_related("tracker", "account", "category", "created_by", "last_editor")
             .order_by("id")
         )
+    if entity_type == SyncChange.EntityType.INSTALLMENT_PLAN:
+        return (
+            InstallmentPlan.objects.filter(tracker_id__in=tracker_ids, deleted_at__isnull=True)
+            .select_related("tracker", "account", "category", "created_by", "last_editor")
+            .prefetch_related("schedule_items", "payments")
+            .order_by("id")
+        )
+    if entity_type == SyncChange.EntityType.INSTALLMENT_SCHEDULE_ITEM:
+        return (
+            InstallmentScheduleItem.objects.filter(
+                tracker_id__in=tracker_ids, deleted_at__isnull=True
+            )
+            .select_related("tracker", "plan")
+            .order_by("id")
+        )
     if entity_type == SyncChange.EntityType.TRANSACTION:
         return (
             Transaction.objects.filter(tracker_id__in=tracker_ids, deleted_at__isnull=True)
@@ -291,6 +352,12 @@ def _bootstrap_queryset(entity_type: str, *, user: User, tracker_ids: list[UUID]
         return (
             RecurringOccurrence.objects.filter(tracker_id__in=tracker_ids, deleted_at__isnull=True)
             .select_related("tracker", "rule", "transaction")
+            .order_by("id")
+        )
+    if entity_type == SyncChange.EntityType.INSTALLMENT_PAYMENT:
+        return (
+            InstallmentPayment.objects.filter(tracker_id__in=tracker_ids, deleted_at__isnull=True)
+            .select_related("tracker", "plan", "schedule_item", "transaction", "created_by")
             .order_by("id")
         )
     return Tracker.objects.none()

@@ -14,11 +14,25 @@ from apps.planning.models import (
     Budget,
     BudgetCategory,
     BudgetThreshold,
+    InstallmentPayment,
+    InstallmentPlan,
+    InstallmentPlanRevision,
+    InstallmentScheduleItem,
+    InstallmentScheduleItemRevision,
     RecurringOccurrence,
     RecurringRule,
     RecurringRuleRevision,
 )
+from apps.planning.services.installments import (
+    build_schedule,
+    create_schedule_items,
+    installment_progress,
+    planned_total_minor,
+    revise_future_schedule,
+    snapshot_installment_plan,
+)
 from apps.planning.services.recurrence import scheduled_utc
+from apps.users.models import User
 
 DEFAULT_BUDGET_THRESHOLDS = (50, 80, 100)
 MINIMUM_CUSTOM_INTERVAL = 2
@@ -359,7 +373,10 @@ class RecurringRuleSerializer(StrictModelSerializer):
         tracker: Tracker,
         account: Account,
     ) -> None:
-        if account.tracker_id != tracker.id or account.deleted_at or account.archived_at:
+        account_changed = instance is None or account.id != instance.account_id
+        if account.tracker_id != tracker.id or (
+            account_changed and (account.deleted_at or account.archived_at)
+        ):
             raise serializers.ValidationError(
                 {"account_id": "Choose an active account in the recurring rule's tracker."}
             )
@@ -621,3 +638,375 @@ class RecurringMaterializeResultSerializer(StrictSerializer):
     skipped = serializers.IntegerField()
     failed = serializers.IntegerField()
     remaining_due = serializers.BooleanField()
+
+
+class InstallmentProgressSerializer(StrictSerializer):
+    planned_total_minor = serializers.IntegerField()
+    paid_minor = serializers.IntegerField()
+    remaining_minor = serializers.IntegerField()
+    next_due_on = serializers.DateField(allow_null=True)
+    estimated_payoff_on = serializers.DateField(allow_null=True)
+
+
+class InstallmentPlanSerializer(StrictModelSerializer):
+    tracker_id = serializers.PrimaryKeyRelatedField(
+        source="tracker", queryset=Tracker.objects.all()
+    )
+    account_id = serializers.PrimaryKeyRelatedField(
+        source="account", queryset=Account.objects.all()
+    )
+    category_id = serializers.PrimaryKeyRelatedField(
+        source="category",
+        queryset=Category.objects.all(),
+        required=False,
+        allow_null=True,
+    )
+    currency_exponent = serializers.IntegerField(read_only=True)
+    planned_total_minor = serializers.IntegerField(read_only=True)
+    anchor_day = serializers.IntegerField(read_only=True)
+    base_version = serializers.IntegerField(min_value=1, write_only=True, required=False)
+    progress = serializers.SerializerMethodField()
+
+    class Meta:
+        model = InstallmentPlan
+        fields = (
+            "id",
+            "tracker_id",
+            "name",
+            "account_id",
+            "category_id",
+            "principal_minor",
+            "interest_minor",
+            "fees_minor",
+            "planned_total_minor",
+            "currency",
+            "currency_exponent",
+            "installment_count",
+            "planned_installment_minor",
+            "cadence",
+            "time_zone",
+            "starts_on",
+            "anchor_day",
+            "state",
+            "revision_number",
+            "paid_off_at",
+            "cancelled_at",
+            "archived_at",
+            "progress",
+            "version",
+            "base_version",
+            "created_at",
+            "updated_at",
+            "deleted_at",
+        )
+        read_only_fields = (
+            "id",
+            "planned_total_minor",
+            "currency_exponent",
+            "anchor_day",
+            "state",
+            "revision_number",
+            "paid_off_at",
+            "cancelled_at",
+            "archived_at",
+            "progress",
+            "version",
+            "created_at",
+            "updated_at",
+            "deleted_at",
+        )
+
+    def get_progress(self, obj: InstallmentPlan) -> dict[str, Any]:
+        return installment_progress(obj).as_dict()
+
+    def validate_currency(self, value: str) -> str:
+        return normalize_currency(value)
+
+    def validate_time_zone(self, value: str) -> str:
+        return normalize_time_zone(value)
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        attrs = super().validate(attrs)
+        instance = self.instance if isinstance(self.instance, InstallmentPlan) else None
+        tracker = attrs.get("tracker", getattr(instance, "tracker", None))
+        account = attrs.get("account", getattr(instance, "account", None))
+        category = attrs.get("category", getattr(instance, "category", None))
+        if tracker is None or account is None:
+            return attrs
+        if account.tracker_id != tracker.id or account.deleted_at or account.archived_at:
+            raise serializers.ValidationError(
+                {"account_id": "Choose an active account in the installment plan's tracker."}
+            )
+        category_changed = (
+            instance is None or category is None or category.id != instance.category_id
+        )
+        if category is not None and (
+            category.tracker_id != tracker.id
+            or category.kind != Category.Kind.EXPENSE
+            or (
+                category_changed
+                and (category.deleted_at is not None or category.archived_at is not None)
+            )
+        ):
+            raise serializers.ValidationError(
+                {"category_id": "Choose an active expense category in this tracker."}
+            )
+
+        currency = attrs.get("currency", getattr(instance, "currency", None))
+        if currency is None:
+            raise serializers.ValidationError({"currency": "A currency is required."})
+        attrs["currency_exponent"] = currency_exponent(currency)
+        starts_on = attrs.get("starts_on", getattr(instance, "starts_on", None))
+        if starts_on is None:
+            return attrs
+        attrs["anchor_day"] = starts_on.day
+        principal = int(attrs.get("principal_minor", getattr(instance, "principal_minor", 0)))
+        interest = int(attrs.get("interest_minor", getattr(instance, "interest_minor", 0)))
+        fees = int(attrs.get("fees_minor", getattr(instance, "fees_minor", 0)))
+        try:
+            attrs["planned_total_minor"] = planned_total_minor(principal, interest, fees)
+            build_schedule(
+                principal_minor=principal,
+                interest_minor=interest,
+                fees_minor=fees,
+                installment_count=int(
+                    attrs.get("installment_count", getattr(instance, "installment_count", 0))
+                ),
+                planned_installment_minor=attrs.get(
+                    "planned_installment_minor",
+                    getattr(instance, "planned_installment_minor", None),
+                ),
+                cadence=str(attrs.get("cadence", getattr(instance, "cadence", ""))),
+                starts_on=starts_on,
+                anchor_day=starts_on.day,
+            )
+        except ValueError as exc:
+            raise serializers.ValidationError({"schedule": str(exc)}) from exc
+        return attrs
+
+    def create(self, validated_data: dict[str, Any]) -> InstallmentPlan:
+        validated_data.pop("base_version", None)
+        plan = InstallmentPlan.objects.create(**validated_data)
+        create_schedule_items(plan)
+        return plan
+
+    def update(self, instance: InstallmentPlan, validated_data: dict[str, Any]) -> InstallmentPlan:
+        validated_data.pop("base_version", None)
+        schedule_fields = {
+            "principal_minor",
+            "interest_minor",
+            "fees_minor",
+            "planned_total_minor",
+            "installment_count",
+            "planned_installment_minor",
+            "cadence",
+            "starts_on",
+            "anchor_day",
+            "currency",
+            "currency_exponent",
+        }
+        schedule_changed = any(
+            field in validated_data and validated_data[field] != getattr(instance, field)
+            for field in schedule_fields
+        )
+        revision_fields = schedule_fields | {
+            "name",
+            "account",
+            "category",
+            "time_zone",
+        }
+        revision_changed = any(
+            field in validated_data and validated_data[field] != getattr(instance, field)
+            for field in revision_fields
+        )
+        editor = self.context.get("editor")
+        if revision_changed:
+            if not isinstance(editor, User):
+                raise AssertionError("Installment plan updates require an editor context.")
+            if schedule_changed:
+                revise_future_schedule(instance, editor=editor, reason="edit_terms")
+            else:
+                snapshot_installment_plan(instance, editor=editor, reason="edit_metadata")
+                instance.revision_number += 1
+        for field, value in validated_data.items():
+            setattr(instance, field, value)
+        instance.save()
+        if schedule_changed:
+            create_schedule_items(instance)
+        return instance
+
+
+class InstallmentScheduleItemSerializer(StrictModelSerializer):
+    tracker_id = serializers.UUIDField(read_only=True)
+    plan_id = serializers.UUIDField(read_only=True)
+
+    class Meta:
+        model = InstallmentScheduleItem
+        fields = (
+            "id",
+            "tracker_id",
+            "plan_id",
+            "revision_number",
+            "sequence",
+            "original_due_on",
+            "due_on",
+            "planned_principal_minor",
+            "planned_interest_minor",
+            "planned_fees_minor",
+            "planned_total_minor",
+            "paid_minor",
+            "state",
+            "skipped_at",
+            "superseded_at",
+            "version",
+            "created_at",
+            "updated_at",
+            "deleted_at",
+        )
+        read_only_fields = fields
+
+
+class InstallmentPaymentSerializer(StrictModelSerializer):
+    tracker_id = serializers.UUIDField(read_only=True)
+    plan_id = serializers.UUIDField(read_only=True)
+    schedule_item_id = serializers.UUIDField(read_only=True, allow_null=True)
+    transaction_id = serializers.UUIDField(read_only=True)
+    created_by_id = serializers.UUIDField(read_only=True)
+
+    class Meta:
+        model = InstallmentPayment
+        fields = (
+            "id",
+            "tracker_id",
+            "plan_id",
+            "schedule_item_id",
+            "transaction_id",
+            "amount_minor",
+            "applied_amount_minor",
+            "overpayment_minor",
+            "extra_payment",
+            "applied_at",
+            "created_by_id",
+            "version",
+            "created_at",
+            "updated_at",
+            "deleted_at",
+        )
+        read_only_fields = fields
+
+
+class InstallmentPlanRevisionSerializer(StrictModelSerializer):
+    account_id = serializers.UUIDField(read_only=True)
+    category_id = serializers.UUIDField(read_only=True, allow_null=True)
+    editor_id = serializers.UUIDField(read_only=True)
+
+    class Meta:
+        model = InstallmentPlanRevision
+        fields = (
+            "id",
+            "revision_number",
+            "recorded_plan_version",
+            "reason",
+            "name",
+            "account_id",
+            "category_id",
+            "principal_minor",
+            "interest_minor",
+            "fees_minor",
+            "planned_total_minor",
+            "currency",
+            "currency_exponent",
+            "installment_count",
+            "planned_installment_minor",
+            "cadence",
+            "time_zone",
+            "starts_on",
+            "anchor_day",
+            "remaining_minor",
+            "editor_id",
+            "created_at",
+        )
+        read_only_fields = fields
+
+
+class InstallmentScheduleItemRevisionSerializer(StrictModelSerializer):
+    schedule_item_id = serializers.UUIDField(read_only=True)
+    editor_id = serializers.UUIDField(read_only=True)
+
+    class Meta:
+        model = InstallmentScheduleItemRevision
+        fields = (
+            "id",
+            "schedule_item_id",
+            "plan_revision_number",
+            "reason",
+            "due_on",
+            "state",
+            "paid_minor",
+            "skipped_at",
+            "editor_id",
+            "created_at",
+        )
+        read_only_fields = fields
+
+
+class InstallmentRevisionHistorySerializer(StrictSerializer):
+    plans = InstallmentPlanRevisionSerializer(many=True)
+    schedule_items = InstallmentScheduleItemRevisionSerializer(many=True)
+
+
+class InstallmentPaymentCreateSerializer(StrictSerializer):
+    base_version = serializers.IntegerField(min_value=1)
+    payment_id = serializers.UUIDField()
+    transaction_id = serializers.UUIDField()
+    schedule_item_id = serializers.UUIDField(required=False, allow_null=True)
+    amount_minor = serializers.IntegerField(min_value=1)
+    occurred_at = serializers.DateTimeField()
+    extra_payment = serializers.BooleanField(default=False)
+    confirm_overpayment = serializers.BooleanField(default=False)
+    account_amount_minor = serializers.IntegerField(min_value=1, required=False)
+    base_amount_minor = serializers.IntegerField(min_value=1, required=False)
+    base_currency = serializers.CharField(min_length=3, max_length=3, required=False)
+    rate_snapshot = serializers.DecimalField(
+        max_digits=28,
+        decimal_places=12,
+        min_value=Decimal("0.000000000001"),
+        required=False,
+    )
+    rate_source = serializers.CharField(max_length=80, required=False, default="")
+    rate_effective_at = serializers.DateTimeField(required=False)
+
+    def validate_base_currency(self, value: str) -> str:
+        return normalize_currency(value)
+
+
+class InstallmentPayoffSerializer(StrictSerializer):
+    base_version = serializers.IntegerField(min_value=1)
+    payment_id = serializers.UUIDField()
+    transaction_id = serializers.UUIDField()
+    amount_minor = serializers.IntegerField(min_value=1, required=False)
+    occurred_at = serializers.DateTimeField()
+    confirm_overpayment = serializers.BooleanField(default=False)
+    account_amount_minor = serializers.IntegerField(min_value=1, required=False)
+    base_amount_minor = serializers.IntegerField(min_value=1, required=False)
+    base_currency = serializers.CharField(min_length=3, max_length=3, required=False)
+    rate_snapshot = serializers.DecimalField(
+        max_digits=28,
+        decimal_places=12,
+        min_value=Decimal("0.000000000001"),
+        required=False,
+    )
+    rate_source = serializers.CharField(max_length=80, required=False, default="")
+    rate_effective_at = serializers.DateTimeField(required=False)
+
+    def validate_base_currency(self, value: str) -> str:
+        return normalize_currency(value)
+
+
+class InstallmentScheduleActionSerializer(StrictSerializer):
+    base_version = serializers.IntegerField(min_value=1)
+    schedule_item_id = serializers.UUIDField()
+
+
+class InstallmentRescheduleSerializer(InstallmentScheduleActionSerializer):
+    due_on = serializers.DateField()

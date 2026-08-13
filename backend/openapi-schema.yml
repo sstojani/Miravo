@@ -809,6 +809,492 @@ paths:
                 type: object
                 additionalProperties: {}
           description: ''
+  /api/v1/installment-payments/:
+    get:
+      operationId: installment_payments_list
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      tags:
+      - installment-payments
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedInstallmentPaymentList'
+          description: ''
+  /api/v1/installment-payments/{id}/:
+    get:
+      operationId: installment_payments_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this installment payment.
+        required: true
+      tags:
+      - installment-payments
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InstallmentPayment'
+          description: ''
+  /api/v1/installment-plans/:
+    get:
+      operationId: installment_plans_list
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      tags:
+      - installment-plans
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedInstallmentPlanList'
+          description: ''
+    post:
+      operationId: installment_plans_create
+      tags:
+      - installment-plans
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InstallmentPlanRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/InstallmentPlanRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/InstallmentPlanRequest'
+        required: true
+      security:
+      - accessToken: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InstallmentPlan'
+          description: ''
+  /api/v1/installment-plans/{id}/:
+    get:
+      operationId: installment_plans_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this installment plan.
+        required: true
+      tags:
+      - installment-plans
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InstallmentPlan'
+          description: ''
+    put:
+      operationId: installment_plans_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this installment plan.
+        required: true
+      tags:
+      - installment-plans
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InstallmentPlanRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/InstallmentPlanRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/InstallmentPlanRequest'
+        required: true
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InstallmentPlan'
+          description: ''
+    delete:
+      operationId: installment_plans_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this installment plan.
+        required: true
+      tags:
+      - installment-plans
+      security:
+      - accessToken: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/installment-plans/{id}/archive/:
+    post:
+      operationId: installment_plans_archive_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this installment plan.
+        required: true
+      tags:
+      - installment-plans
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BaseVersionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/BaseVersionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/BaseVersionRequest'
+        required: true
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InstallmentPlan'
+          description: ''
+  /api/v1/installment-plans/{id}/cancel/:
+    post:
+      operationId: installment_plans_cancel_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this installment plan.
+        required: true
+      tags:
+      - installment-plans
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BaseVersionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/BaseVersionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/BaseVersionRequest'
+        required: true
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InstallmentPlan'
+          description: ''
+  /api/v1/installment-plans/{id}/payments/:
+    post:
+      operationId: installment_plans_payments_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this installment plan.
+        required: true
+      tags:
+      - installment-plans
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InstallmentPaymentCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/InstallmentPaymentCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/InstallmentPaymentCreateRequest'
+        required: true
+      security:
+      - accessToken: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InstallmentPayment'
+          description: ''
+  /api/v1/installment-plans/{id}/payoff/:
+    post:
+      operationId: installment_plans_payoff_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this installment plan.
+        required: true
+      tags:
+      - installment-plans
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InstallmentPayoffRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/InstallmentPayoffRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/InstallmentPayoffRequest'
+        required: true
+      security:
+      - accessToken: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InstallmentPayment'
+          description: ''
+  /api/v1/installment-plans/{id}/progress/:
+    get:
+      operationId: installment_plans_progress_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this installment plan.
+        required: true
+      tags:
+      - installment-plans
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InstallmentProgress'
+          description: ''
+  /api/v1/installment-plans/{id}/reschedule-payment/:
+    post:
+      operationId: installment_plans_reschedule_payment_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this installment plan.
+        required: true
+      tags:
+      - installment-plans
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InstallmentRescheduleRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/InstallmentRescheduleRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/InstallmentRescheduleRequest'
+        required: true
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InstallmentScheduleItem'
+          description: ''
+  /api/v1/installment-plans/{id}/restore/:
+    post:
+      operationId: installment_plans_restore_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this installment plan.
+        required: true
+      tags:
+      - installment-plans
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BaseVersionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/BaseVersionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/BaseVersionRequest'
+        required: true
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InstallmentPlan'
+          description: ''
+  /api/v1/installment-plans/{id}/revisions/:
+    get:
+      operationId: installment_plans_revisions_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this installment plan.
+        required: true
+      tags:
+      - installment-plans
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InstallmentRevisionHistory'
+          description: ''
+  /api/v1/installment-plans/{id}/skip-payment/:
+    post:
+      operationId: installment_plans_skip_payment_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this installment plan.
+        required: true
+      tags:
+      - installment-plans
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InstallmentScheduleActionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/InstallmentScheduleActionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/InstallmentScheduleActionRequest'
+        required: true
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InstallmentScheduleItem'
+          description: ''
+  /api/v1/installment-schedule-items/:
+    get:
+      operationId: installment_schedule_items_list
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      tags:
+      - installment-schedule-items
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedInstallmentScheduleItemList'
+          description: ''
+  /api/v1/installment-schedule-items/{id}/:
+    get:
+      operationId: installment_schedule_items_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this installment schedule item.
+        required: true
+      tags:
+      - installment-schedule-items
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InstallmentScheduleItem'
+          description: ''
   /api/v1/merchants/:
     get:
       operationId: merchants_list
@@ -3137,20 +3623,6 @@ components:
       - starts_on
       - time_zone
       - tracker_id
-    CadenceEnum:
-      enum:
-      - daily
-      - weekly
-      - monthly
-      - yearly
-      - custom
-      type: string
-      description: |-
-        * `daily` - Daily
-        * `weekly` - Weekly
-        * `monthly` - Monthly
-        * `yearly` - Yearly
-        * `custom` - Custom interval
     Category:
       type: object
       description: Model serializer with strict input-field handling.
@@ -3326,6 +3798,11 @@ components:
       - resume
       - end
       - skip_next
+      - cancel
+      - record_payment
+      - payoff
+      - skip_payment
+      - reschedule_payment
       type: string
       description: |-
         * `create` - create
@@ -3337,6 +3814,11 @@ components:
         * `resume` - resume
         * `end` - end
         * `skip_next` - skip_next
+        * `cancel` - cancel
+        * `record_payment` - record_payment
+        * `payoff` - payoff
+        * `skip_payment` - skip_payment
+        * `reschedule_payment` - reschedule_payment
     CustomIntervalUnitEnum:
       enum:
       - day
@@ -3357,6 +3839,7 @@ components:
       - tag
       - budget
       - recurring_rule
+      - installment_plan
       - transaction
       type: string
       description: |-
@@ -3366,7 +3849,742 @@ components:
         * `tag` - tag
         * `budget` - budget
         * `recurring_rule` - recurring_rule
+        * `installment_plan` - installment_plan
         * `transaction` - transaction
+    InstallmentPayment:
+      type: object
+      description: Model serializer with strict input-field handling.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        tracker_id:
+          type: string
+          format: uuid
+          readOnly: true
+        plan_id:
+          type: string
+          format: uuid
+          readOnly: true
+        schedule_item_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        transaction_id:
+          type: string
+          format: uuid
+          readOnly: true
+        amount_minor:
+          type: integer
+          readOnly: true
+        applied_amount_minor:
+          type: integer
+          readOnly: true
+        overpayment_minor:
+          type: integer
+          readOnly: true
+        extra_payment:
+          type: boolean
+          readOnly: true
+        applied_at:
+          type: string
+          format: date-time
+          readOnly: true
+        created_by_id:
+          type: string
+          format: uuid
+          readOnly: true
+        version:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        deleted_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+      required:
+      - amount_minor
+      - applied_amount_minor
+      - applied_at
+      - created_at
+      - created_by_id
+      - deleted_at
+      - extra_payment
+      - id
+      - overpayment_minor
+      - plan_id
+      - schedule_item_id
+      - tracker_id
+      - transaction_id
+      - updated_at
+      - version
+    InstallmentPaymentCreateRequest:
+      type: object
+      description: Serializer that rejects misspelled or unsupported request fields.
+      properties:
+        base_version:
+          type: integer
+          minimum: 1
+        payment_id:
+          type: string
+          format: uuid
+        transaction_id:
+          type: string
+          format: uuid
+        schedule_item_id:
+          type: string
+          format: uuid
+          nullable: true
+        amount_minor:
+          type: integer
+          minimum: 1
+        occurred_at:
+          type: string
+          format: date-time
+        extra_payment:
+          type: boolean
+          default: false
+        confirm_overpayment:
+          type: boolean
+          default: false
+        account_amount_minor:
+          type: integer
+          minimum: 1
+        base_amount_minor:
+          type: integer
+          minimum: 1
+        base_currency:
+          type: string
+          minLength: 3
+          maxLength: 3
+        rate_snapshot:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,16}(?:\.\d{0,12})?$
+        rate_source:
+          type: string
+          minLength: 1
+          default: ''
+          maxLength: 80
+        rate_effective_at:
+          type: string
+          format: date-time
+      required:
+      - amount_minor
+      - base_version
+      - occurred_at
+      - payment_id
+      - transaction_id
+    InstallmentPayoffRequest:
+      type: object
+      description: Serializer that rejects misspelled or unsupported request fields.
+      properties:
+        base_version:
+          type: integer
+          minimum: 1
+        payment_id:
+          type: string
+          format: uuid
+        transaction_id:
+          type: string
+          format: uuid
+        amount_minor:
+          type: integer
+          minimum: 1
+        occurred_at:
+          type: string
+          format: date-time
+        confirm_overpayment:
+          type: boolean
+          default: false
+        account_amount_minor:
+          type: integer
+          minimum: 1
+        base_amount_minor:
+          type: integer
+          minimum: 1
+        base_currency:
+          type: string
+          minLength: 3
+          maxLength: 3
+        rate_snapshot:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,16}(?:\.\d{0,12})?$
+        rate_source:
+          type: string
+          minLength: 1
+          default: ''
+          maxLength: 80
+        rate_effective_at:
+          type: string
+          format: date-time
+      required:
+      - base_version
+      - occurred_at
+      - payment_id
+      - transaction_id
+    InstallmentPlan:
+      type: object
+      description: Model serializer with strict input-field handling.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        tracker_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          maxLength: 120
+        account_id:
+          type: string
+          format: uuid
+        category_id:
+          type: string
+          format: uuid
+          nullable: true
+        principal_minor:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        interest_minor:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        fees_minor:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        planned_total_minor:
+          type: integer
+          readOnly: true
+        currency:
+          type: string
+          maxLength: 3
+        currency_exponent:
+          type: integer
+          readOnly: true
+        installment_count:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        planned_installment_minor:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
+        cadence:
+          $ref: '#/components/schemas/InstallmentPlanCadenceEnum'
+        time_zone:
+          type: string
+          maxLength: 64
+        starts_on:
+          type: string
+          format: date
+        anchor_day:
+          type: integer
+          readOnly: true
+        state:
+          allOf:
+          - $ref: '#/components/schemas/InstallmentPlanStateEnum'
+          readOnly: true
+        revision_number:
+          type: integer
+          readOnly: true
+        paid_off_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        cancelled_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        archived_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        progress:
+          type: object
+          additionalProperties: {}
+          readOnly: true
+        version:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        deleted_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+      required:
+      - account_id
+      - anchor_day
+      - archived_at
+      - cadence
+      - cancelled_at
+      - created_at
+      - currency
+      - currency_exponent
+      - deleted_at
+      - id
+      - installment_count
+      - name
+      - paid_off_at
+      - planned_total_minor
+      - principal_minor
+      - progress
+      - revision_number
+      - starts_on
+      - state
+      - time_zone
+      - tracker_id
+      - updated_at
+      - version
+    InstallmentPlanCadenceEnum:
+      enum:
+      - weekly
+      - monthly
+      type: string
+      description: |-
+        * `weekly` - Weekly
+        * `monthly` - Monthly
+    InstallmentPlanRequest:
+      type: object
+      description: Model serializer with strict input-field handling.
+      properties:
+        tracker_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        account_id:
+          type: string
+          format: uuid
+        category_id:
+          type: string
+          format: uuid
+          nullable: true
+        principal_minor:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        interest_minor:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        fees_minor:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        currency:
+          type: string
+          minLength: 1
+          maxLength: 3
+        installment_count:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        planned_installment_minor:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
+        cadence:
+          $ref: '#/components/schemas/InstallmentPlanCadenceEnum'
+        time_zone:
+          type: string
+          minLength: 1
+          maxLength: 64
+        starts_on:
+          type: string
+          format: date
+        base_version:
+          type: integer
+          minimum: 1
+          writeOnly: true
+      required:
+      - account_id
+      - cadence
+      - currency
+      - installment_count
+      - name
+      - principal_minor
+      - starts_on
+      - time_zone
+      - tracker_id
+    InstallmentPlanRevision:
+      type: object
+      description: Model serializer with strict input-field handling.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        revision_number:
+          type: integer
+          readOnly: true
+        recorded_plan_version:
+          type: integer
+          readOnly: true
+        reason:
+          type: string
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+        account_id:
+          type: string
+          format: uuid
+          readOnly: true
+        category_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        principal_minor:
+          type: integer
+          readOnly: true
+        interest_minor:
+          type: integer
+          readOnly: true
+        fees_minor:
+          type: integer
+          readOnly: true
+        planned_total_minor:
+          type: integer
+          readOnly: true
+        currency:
+          type: string
+          readOnly: true
+        currency_exponent:
+          type: integer
+          readOnly: true
+        installment_count:
+          type: integer
+          readOnly: true
+        planned_installment_minor:
+          type: integer
+          readOnly: true
+          nullable: true
+        cadence:
+          type: string
+          readOnly: true
+        time_zone:
+          type: string
+          readOnly: true
+        starts_on:
+          type: string
+          format: date
+          readOnly: true
+        anchor_day:
+          type: integer
+          readOnly: true
+        remaining_minor:
+          type: integer
+          readOnly: true
+        editor_id:
+          type: string
+          format: uuid
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - account_id
+      - anchor_day
+      - cadence
+      - category_id
+      - created_at
+      - currency
+      - currency_exponent
+      - editor_id
+      - fees_minor
+      - id
+      - installment_count
+      - interest_minor
+      - name
+      - planned_installment_minor
+      - planned_total_minor
+      - principal_minor
+      - reason
+      - recorded_plan_version
+      - remaining_minor
+      - revision_number
+      - starts_on
+      - time_zone
+    InstallmentPlanStateEnum:
+      enum:
+      - active
+      - paid_off
+      - cancelled
+      type: string
+      description: |-
+        * `active` - Active
+        * `paid_off` - Paid off
+        * `cancelled` - Cancelled
+    InstallmentProgress:
+      type: object
+      description: Serializer that rejects misspelled or unsupported request fields.
+      properties:
+        planned_total_minor:
+          type: integer
+        paid_minor:
+          type: integer
+        remaining_minor:
+          type: integer
+        next_due_on:
+          type: string
+          format: date
+          nullable: true
+        estimated_payoff_on:
+          type: string
+          format: date
+          nullable: true
+      required:
+      - estimated_payoff_on
+      - next_due_on
+      - paid_minor
+      - planned_total_minor
+      - remaining_minor
+    InstallmentRescheduleRequest:
+      type: object
+      description: Serializer that rejects misspelled or unsupported request fields.
+      properties:
+        base_version:
+          type: integer
+          minimum: 1
+        schedule_item_id:
+          type: string
+          format: uuid
+        due_on:
+          type: string
+          format: date
+      required:
+      - base_version
+      - due_on
+      - schedule_item_id
+    InstallmentRevisionHistory:
+      type: object
+      description: Serializer that rejects misspelled or unsupported request fields.
+      properties:
+        plans:
+          type: array
+          items:
+            $ref: '#/components/schemas/InstallmentPlanRevision'
+        schedule_items:
+          type: array
+          items:
+            $ref: '#/components/schemas/InstallmentScheduleItemRevision'
+      required:
+      - plans
+      - schedule_items
+    InstallmentScheduleActionRequest:
+      type: object
+      description: Serializer that rejects misspelled or unsupported request fields.
+      properties:
+        base_version:
+          type: integer
+          minimum: 1
+        schedule_item_id:
+          type: string
+          format: uuid
+      required:
+      - base_version
+      - schedule_item_id
+    InstallmentScheduleItem:
+      type: object
+      description: Model serializer with strict input-field handling.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        tracker_id:
+          type: string
+          format: uuid
+          readOnly: true
+        plan_id:
+          type: string
+          format: uuid
+          readOnly: true
+        revision_number:
+          type: integer
+          readOnly: true
+        sequence:
+          type: integer
+          readOnly: true
+        original_due_on:
+          type: string
+          format: date
+          readOnly: true
+        due_on:
+          type: string
+          format: date
+          readOnly: true
+        planned_principal_minor:
+          type: integer
+          readOnly: true
+        planned_interest_minor:
+          type: integer
+          readOnly: true
+        planned_fees_minor:
+          type: integer
+          readOnly: true
+        planned_total_minor:
+          type: integer
+          readOnly: true
+        paid_minor:
+          type: integer
+          readOnly: true
+        state:
+          allOf:
+          - $ref: '#/components/schemas/InstallmentScheduleItemStateEnum'
+          readOnly: true
+        skipped_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        superseded_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        version:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        deleted_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+      required:
+      - created_at
+      - deleted_at
+      - due_on
+      - id
+      - original_due_on
+      - paid_minor
+      - plan_id
+      - planned_fees_minor
+      - planned_interest_minor
+      - planned_principal_minor
+      - planned_total_minor
+      - revision_number
+      - sequence
+      - skipped_at
+      - state
+      - superseded_at
+      - tracker_id
+      - updated_at
+      - version
+    InstallmentScheduleItemRevision:
+      type: object
+      description: Model serializer with strict input-field handling.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        schedule_item_id:
+          type: string
+          format: uuid
+          readOnly: true
+        plan_revision_number:
+          type: integer
+          readOnly: true
+        reason:
+          type: string
+          readOnly: true
+        due_on:
+          type: string
+          format: date
+          readOnly: true
+        state:
+          type: string
+          readOnly: true
+        paid_minor:
+          type: integer
+          readOnly: true
+        skipped_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        editor_id:
+          type: string
+          format: uuid
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - due_on
+      - editor_id
+      - id
+      - paid_minor
+      - plan_revision_number
+      - reason
+      - schedule_item_id
+      - skipped_at
+      - state
+    InstallmentScheduleItemStateEnum:
+      enum:
+      - planned
+      - partially_paid
+      - paid
+      - skipped
+      type: string
+      description: |-
+        * `planned` - Planned
+        * `partially_paid` - Partially paid
+        * `paid` - Paid
+        * `skipped` - Skipped
     Invite:
       type: object
       description: Model serializer with strict input-field handling.
@@ -3823,6 +5041,63 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/CategoryRevision'
+    PaginatedInstallmentPaymentList:
+      type: object
+      required:
+      - results
+      properties:
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cD00ODY%3D"
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/InstallmentPayment'
+    PaginatedInstallmentPlanList:
+      type: object
+      required:
+      - results
+      properties:
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cD00ODY%3D"
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/InstallmentPlan'
+    PaginatedInstallmentScheduleItemList:
+      type: object
+      required:
+      - results
+      properties:
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cD00ODY%3D"
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/InstallmentScheduleItem'
     PaginatedInviteList:
       type: object
       required:
@@ -4319,7 +5594,7 @@ components:
           type: string
           format: date-time
         cadence:
-          $ref: '#/components/schemas/CadenceEnum'
+          $ref: '#/components/schemas/RecurringRuleCadenceEnum'
         custom_interval_unit:
           oneOf:
           - $ref: '#/components/schemas/CustomIntervalUnitEnum'
@@ -4424,6 +5699,20 @@ components:
       - tracker_id
       - updated_at
       - version
+    RecurringRuleCadenceEnum:
+      enum:
+      - daily
+      - weekly
+      - monthly
+      - yearly
+      - custom
+      type: string
+      description: |-
+        * `daily` - Daily
+        * `weekly` - Weekly
+        * `monthly` - Monthly
+        * `yearly` - Yearly
+        * `custom` - Custom interval
     RecurringRuleRequest:
       type: object
       description: Model serializer with strict input-field handling.
@@ -4483,7 +5772,7 @@ components:
           type: string
           format: date-time
         cadence:
-          $ref: '#/components/schemas/CadenceEnum'
+          $ref: '#/components/schemas/RecurringRuleCadenceEnum'
         custom_interval_unit:
           oneOf:
           - $ref: '#/components/schemas/CustomIntervalUnitEnum'

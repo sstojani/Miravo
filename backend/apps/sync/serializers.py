@@ -9,8 +9,9 @@ from rest_framework import serializers
 from apps.common.serializers import StrictSerializer
 from apps.ledger.currency import currency_exponent, normalize_currency
 from apps.ledger.models import Account, Category, Transaction
-from apps.planning.models import Budget, RecurringRule
+from apps.planning.models import Budget, InstallmentPlan, RecurringRule
 from apps.planning.serializers import normalize_time_zone
+from apps.planning.services.installments import build_schedule, planned_total_minor
 from apps.sync.models import SyncChange
 
 SYNC_OPERATION_RESULT_STATUSES = (
@@ -233,6 +234,101 @@ class RecurringRuleMutationPayloadSerializer(StrictSerializer):
         return attrs
 
 
+class InstallmentPlanMutationPayloadSerializer(StrictSerializer):
+    client_payload_version = serializers.IntegerField(min_value=1, max_value=1)
+    id = serializers.UUIDField()
+    tracker_id = serializers.UUIDField()
+    name = serializers.CharField(max_length=120)
+    account_id = serializers.UUIDField()
+    category_id = serializers.UUIDField(required=False, allow_null=True)
+    principal_minor = serializers.IntegerField(min_value=1)
+    interest_minor = serializers.IntegerField(min_value=0)
+    fees_minor = serializers.IntegerField(min_value=0)
+    planned_total_minor = serializers.IntegerField(min_value=1)
+    currency = serializers.CharField(min_length=3, max_length=3)
+    currency_exponent = serializers.IntegerField(min_value=0, max_value=6)
+    installment_count = serializers.IntegerField(min_value=1, max_value=600)
+    planned_installment_minor = serializers.IntegerField(
+        min_value=1, required=False, allow_null=True
+    )
+    cadence = serializers.ChoiceField(choices=InstallmentPlan.Cadence.choices)
+    time_zone = serializers.CharField(max_length=64)
+    starts_on = serializers.DateField()
+    anchor_day = serializers.IntegerField(min_value=1, max_value=31)
+    archived_at = serializers.DateTimeField(required=False, allow_null=True)
+    deleted_at = serializers.DateTimeField(required=False, allow_null=True)
+
+    payment_id = serializers.UUIDField(required=False)
+    transaction_id = serializers.UUIDField(required=False)
+    schedule_item_id = serializers.UUIDField(required=False, allow_null=True)
+    payment_amount_minor = serializers.IntegerField(min_value=1, required=False)
+    occurred_at = serializers.DateTimeField(required=False)
+    extra_payment = serializers.BooleanField(required=False, default=False)
+    confirm_overpayment = serializers.BooleanField(required=False, default=False)
+    account_amount_minor = serializers.IntegerField(min_value=1, required=False)
+    base_amount_minor = serializers.IntegerField(min_value=1, required=False)
+    base_currency = serializers.CharField(min_length=3, max_length=3, required=False)
+    rate_snapshot = serializers.DecimalField(
+        max_digits=28,
+        decimal_places=12,
+        min_value=Decimal("0.000000000001"),
+        required=False,
+    )
+    rate_source = serializers.CharField(max_length=80, required=False, default="")
+    rate_effective_at = serializers.DateTimeField(required=False)
+    rescheduled_due_on = serializers.DateField(required=False)
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        attrs = super().validate(attrs)
+        code = normalize_currency(attrs["currency"])
+        attrs["currency"] = code
+        if attrs["currency_exponent"] != currency_exponent(code):
+            raise serializers.ValidationError(
+                {"currency_exponent": "Does not match the currency's minor-unit exponent."}
+            )
+        attrs["time_zone"] = normalize_time_zone(attrs["time_zone"])
+        if attrs["anchor_day"] != attrs["starts_on"].day:
+            raise serializers.ValidationError(
+                {"anchor_day": "Must match the installment plan start day."}
+            )
+        expected_total = planned_total_minor(
+            attrs["principal_minor"], attrs["interest_minor"], attrs["fees_minor"]
+        )
+        if attrs["planned_total_minor"] != expected_total:
+            raise serializers.ValidationError(
+                {"planned_total_minor": "Must equal principal, interest, and fees."}
+            )
+        try:
+            build_schedule(
+                principal_minor=attrs["principal_minor"],
+                interest_minor=attrs["interest_minor"],
+                fees_minor=attrs["fees_minor"],
+                installment_count=attrs["installment_count"],
+                planned_installment_minor=attrs.get("planned_installment_minor"),
+                cadence=attrs["cadence"],
+                starts_on=attrs["starts_on"],
+                anchor_day=attrs["anchor_day"],
+            )
+        except ValueError as exc:
+            raise serializers.ValidationError({"schedule": str(exc)}) from exc
+        conversion_fields = (
+            "base_amount_minor",
+            "base_currency",
+            "rate_snapshot",
+            "rate_source",
+            "rate_effective_at",
+        )
+        supplied = [field for field in conversion_fields if attrs.get(field) not in (None, "")]
+        if supplied and len(supplied) != len(conversion_fields):
+            missing = [field for field in conversion_fields if field not in supplied]
+            raise serializers.ValidationError(
+                dict.fromkeys(missing, "Payment conversion fields must be supplied together.")
+            )
+        if "base_currency" in attrs:
+            attrs["base_currency"] = normalize_currency(attrs["base_currency"])
+        return attrs
+
+
 class TransactionMutationPayloadSerializer(StrictSerializer):
     client_payload_version = serializers.IntegerField(min_value=1, max_value=1)
     id = serializers.UUIDField()
@@ -309,6 +405,7 @@ PAYLOAD_SERIALIZERS: dict[str, type[StrictSerializer]] = {
     SyncChange.EntityType.TAG: TagMutationPayloadSerializer,
     SyncChange.EntityType.BUDGET: BudgetMutationPayloadSerializer,
     SyncChange.EntityType.RECURRING_RULE: RecurringRuleMutationPayloadSerializer,
+    SyncChange.EntityType.INSTALLMENT_PLAN: InstallmentPlanMutationPayloadSerializer,
     SyncChange.EntityType.TRANSACTION: TransactionMutationPayloadSerializer,
 }
 
@@ -329,6 +426,11 @@ class SyncOperationSerializer(StrictSerializer):
             "resume",
             "end",
             "skip_next",
+            "cancel",
+            "record_payment",
+            "payoff",
+            "skip_payment",
+            "reschedule_payment",
         )
     )
     base_server_version = serializers.IntegerField(min_value=1, required=False, allow_null=True)
@@ -371,8 +473,67 @@ class SyncOperationSerializer(StrictSerializer):
             raise serializers.ValidationError(
                 {"command": "This command is available only for recurring rules."}
             )
+        installment_commands = {
+            "cancel",
+            "record_payment",
+            "payoff",
+            "skip_payment",
+            "reschedule_payment",
+        }
+        if (
+            attrs["command"] in installment_commands
+            and attrs["entity_type"] != SyncChange.EntityType.INSTALLMENT_PLAN
+        ):
+            raise serializers.ValidationError(
+                {"command": "This command is available only for installment plans."}
+            )
+        if attrs["entity_type"] == SyncChange.EntityType.INSTALLMENT_PLAN:
+            allowed = {
+                "create",
+                "update",
+                "archive",
+                "restore",
+                "delete",
+                *installment_commands,
+            }
+            if attrs["command"] not in allowed:
+                raise serializers.ValidationError(
+                    {"command": "This command is unavailable for installment plans."}
+                )
+            self._validate_installment_command(attrs["command"], payload)
         attrs["payload"] = payload
         return attrs
+
+    @staticmethod
+    def _validate_installment_command(command: str, payload: dict[str, Any]) -> None:
+        if command in {"record_payment", "payoff"}:
+            required = ("payment_id", "transaction_id", "occurred_at")
+            missing = [field for field in required if payload.get(field) is None]
+            if command == "record_payment" and payload.get("payment_amount_minor") is None:
+                missing.append("payment_amount_minor")
+            if missing:
+                raise serializers.ValidationError(
+                    {"payload": dict.fromkeys(missing, "Required for this payment command.")}
+                )
+            if (
+                command == "record_payment"
+                and not payload.get("extra_payment")
+                and payload.get("schedule_item_id") is None
+            ):
+                raise serializers.ValidationError(
+                    {"payload": {"schedule_item_id": "A regular payment requires an item."}}
+                )
+        if (
+            command in {"skip_payment", "reschedule_payment"}
+            and payload.get("schedule_item_id") is None
+        ):
+            raise serializers.ValidationError(
+                {"payload": {"schedule_item_id": "Required for this schedule command."}}
+            )
+        if command == "reschedule_payment" and payload.get("rescheduled_due_on") is None:
+            raise serializers.ValidationError(
+                {"payload": {"rescheduled_due_on": "Required when rescheduling."}}
+            )
 
 
 class SyncPushSerializer(StrictSerializer):

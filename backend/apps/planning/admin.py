@@ -4,6 +4,11 @@ from apps.planning.models import (
     Budget,
     BudgetCategory,
     BudgetThreshold,
+    InstallmentPayment,
+    InstallmentPlan,
+    InstallmentPlanRevision,
+    InstallmentScheduleItem,
+    InstallmentScheduleItemRevision,
     RecurringOccurrence,
     RecurringRule,
     RecurringRuleRevision,
@@ -19,6 +24,35 @@ class BudgetCategoryInline(admin.TabularInline):  # type: ignore[type-arg]
 class BudgetThresholdInline(admin.TabularInline):  # type: ignore[type-arg]
     model = BudgetThreshold
     extra = 0
+
+
+class InstallmentScheduleItemInline(admin.TabularInline):  # type: ignore[type-arg]
+    model = InstallmentScheduleItem
+    extra = 0
+    fields = (
+        "sequence",
+        "due_on",
+        "planned_total_minor",
+        "paid_minor",
+        "state",
+        "revision_number",
+        "superseded_at",
+    )
+    readonly_fields = fields
+
+
+class InstallmentPaymentInline(admin.TabularInline):  # type: ignore[type-arg]
+    model = InstallmentPayment
+    extra = 0
+    fields = (
+        "applied_at",
+        "amount_minor",
+        "applied_amount_minor",
+        "overpayment_minor",
+        "extra_payment",
+        "transaction",
+    )
+    readonly_fields = fields
 
 
 @admin.register(Budget)
@@ -74,3 +108,47 @@ class RecurringOccurrenceAdmin(admin.ModelAdmin):  # type: ignore[type-arg]
 class RecurringRuleRevisionAdmin(admin.ModelAdmin):  # type: ignore[type-arg]
     list_display = ("rule", "recorded_version", "reason", "editor", "created_at")
     readonly_fields = tuple(field.name for field in RecurringRuleRevision._meta.fields)
+
+
+@admin.register(InstallmentPlan)
+class InstallmentPlanAdmin(admin.ModelAdmin):  # type: ignore[type-arg]
+    list_display = (
+        "name",
+        "tracker",
+        "planned_total_minor",
+        "currency",
+        "state",
+        "starts_on",
+        "revision_number",
+    )
+    list_filter = ("state", "cadence", "currency")
+    search_fields = ("name", "tracker__name", "account__name")
+    readonly_fields = (
+        "planned_total_minor",
+        "currency_exponent",
+        "anchor_day",
+        "revision_number",
+        "version",
+        "created_at",
+        "updated_at",
+        "deleted_at",
+    )
+    inlines = (InstallmentScheduleItemInline, InstallmentPaymentInline)
+
+
+@admin.register(InstallmentPlanRevision)
+class InstallmentPlanRevisionAdmin(admin.ModelAdmin):  # type: ignore[type-arg]
+    list_display = ("plan", "revision_number", "reason", "editor", "created_at")
+    readonly_fields = tuple(field.name for field in InstallmentPlanRevision._meta.fields)
+
+
+@admin.register(InstallmentScheduleItemRevision)
+class InstallmentScheduleItemRevisionAdmin(admin.ModelAdmin):  # type: ignore[type-arg]
+    list_display = (
+        "schedule_item",
+        "plan_revision_number",
+        "reason",
+        "editor",
+        "created_at",
+    )
+    readonly_fields = tuple(field.name for field in InstallmentScheduleItemRevision._meta.fields)

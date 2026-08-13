@@ -74,7 +74,7 @@ The write representation accepts account IDs and exact category allocations; it 
 | `GET /sync/bootstrap?bootstrap_cursor=…&limit=…` | Active access JWT | Bounded current authorized snapshot page, fixed normal pull cursor, signed next bootstrap cursor, and `has_more` |
 | `WSS /sync/events` | Active access JWT/device session in `Authorization` header | Optional foreground sequence invalidation; client then uses normal pull |
 
-Push currently accepts six locally implemented aggregate roots: tracker, account, category, tag, transaction, and budget. Each operation contains `operation_id`, positive ascending `local_sequence`, `entity_type`, client `entity_id`, command, nullable `base_server_version`, and a strict versioned payload. The server preserves client UUIDs. Creates omit a base version; later updates/archive/restore/delete require one. The full batch is structurally validated, then each operation commits or rolls back independently.
+Push currently accepts eight locally implemented aggregate roots: tracker, account, category, tag, transaction, budget, recurring rule, and installment plan. Each operation contains `operation_id`, positive ascending `local_sequence`, `entity_type`, client `entity_id`, command, nullable `base_server_version`, and a strict versioned payload. The server preserves client UUIDs. Creates omit a base version; later commands require one. The full batch is structurally validated, then each operation commits or rolls back independently.
 
 Receipts are scoped to the user rather than a transient login session. Exact replay returns `duplicate` without another domain write. Reusing an operation UUID for a different normalized fingerprint returns `idempotency_fingerprint_mismatch`. Stale edits return `conflict` with base version, current server representation, and the proposed payload; unrelated operations continue.
 
@@ -110,12 +110,31 @@ Rules support daily, weekly, monthly, yearly, and constrained custom day/week/mo
 
 Recurring rules are client-mutable sync roots; pause/resume/end/skip-next are explicit idempotent sync commands. Occurrences are server-produced, read-only sync entities and bootstrap after their linked transactions.
 
+### Installment plans
+
+| Method/path | Minimum tracker role | Purpose |
+|---|---|---|
+| `GET/POST /installment-plans/` | viewer / editor | List visible plans or create terms and an exact deterministic schedule |
+| `GET/PUT/DELETE /installment-plans/{id}/` | viewer / editor | Read, fully replace eligible terms, or cancel/tombstone a plan with `base_version` |
+| `POST /installment-plans/{id}/archive/`, `/restore/`, `/cancel/` | editor | Version-checked lifecycle commands |
+| `POST /installment-plans/{id}/payments/` | editor | Record a regular or extra payment and linked authoritative expense |
+| `POST /installment-plans/{id}/payoff/` | editor | Apply the remaining balance, or a confirmed explicit overpayment |
+| `POST /installment-plans/{id}/skip-payment/`, `/reschedule-payment/` | editor | Preserve and revise one unpaid schedule item |
+| `GET /installment-plans/{id}/progress/` | viewer | Return exact paid/remaining/next-due/estimated-payoff values |
+| `GET /installment-plans/{id}/revisions/` | admin | Return prior plan and schedule-item states |
+| `GET /installment-schedule-items/` and `/installment-payments/` | viewer | Read-only server-authored schedule and payment resources |
+
+Terms store positive principal plus nonnegative interest and fees in integer minor units. The server verifies the exact total and ISO exponent, accepts weekly or monthly schedules up to 600 rows, clamps monthly dates from the original start-day anchor, and assigns every minor unit deterministically across rows and components. A supplied regular installment amount must leave a positive final row no larger than the regular amount. Full financial/schedule terms can be replaced only before a payment exists; original rows are superseded and retained. Name/account/category/time-zone edits still create a plan revision.
+
+A payment command requires client-generated payment and transaction UUIDs. It creates one posted `source=installment` ledger expense, so account movements, category snapshots, tracker-base conversion validation, audit, and balance derivation use the ordinary financial service. A regular payment requires an active item and cannot exceed that row; an extra payment allocates earliest active rows. A payoff defaults to the remaining plan amount. If tender exceeds the plan balance, `confirm_overpayment=true` is mandatory: the payment exposes actual, applied, and overpayment minor units separately while the ledger records the full actual amount. Replaying an identical payment UUID returns the existing record; conflicting reuse is rejected.
+
+Installment plans are offline client command roots. Sync adds `cancel`, `record_payment`, `payoff`, `skip_payment`, and `reschedule_payment` commands to the common lifecycle set. Plan conflicts carry the current representation and local proposal. Schedule items and payments are server-produced read-only sync entities; bootstrap orders plan, schedule, transaction, then payment data. Operation receipts make retries safe and separate change rows invalidate every affected client.
+
 ## Planned resource surface
 
 - Profile and configured recovery.
 - Attachments and receipt upload/download.
 - Participants, splits, simplified balances, settlements.
-- Installments/schedule/payments.
 - Currency rates, analytics, audit history, export jobs/expiring downloads.
 
 Collection endpoints use bounded cursor pagination, explicit filters/order, and stable error codes. Authorization returns 404 where revealing object existence would be inappropriate.

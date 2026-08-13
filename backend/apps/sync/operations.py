@@ -33,8 +33,24 @@ from apps.ledger.services.transactions import (
     restore_transaction,
     tombstone_transaction,
 )
-from apps.planning.models import Budget, RecurringOccurrence, RecurringRule
-from apps.planning.serializers import BudgetSerializer, RecurringRuleSerializer
+from apps.planning.models import (
+    Budget,
+    InstallmentPlan,
+    InstallmentScheduleItem,
+    RecurringOccurrence,
+    RecurringRule,
+)
+from apps.planning.serializers import (
+    BudgetSerializer,
+    InstallmentPlanSerializer,
+    RecurringRuleSerializer,
+)
+from apps.planning.services.installments import (
+    record_installment_payment,
+    remaining_total_minor,
+    reschedule_installment_item,
+    skip_installment_item,
+)
 from apps.planning.services.recurrence import (
     advance_rule_after_due,
     occurrence_key,
@@ -194,6 +210,27 @@ def _recurring_rule_values(payload: dict[str, Any]) -> dict[str, Any]:
             "trial_ends_on",
             "cancellation_url",
             "subscription_note",
+        )
+    }
+
+
+def _installment_plan_values(payload: dict[str, Any]) -> dict[str, Any]:
+    return {
+        field: payload.get(field)
+        for field in (
+            "tracker_id",
+            "name",
+            "account_id",
+            "category_id",
+            "principal_minor",
+            "interest_minor",
+            "fees_minor",
+            "currency",
+            "installment_count",
+            "planned_installment_minor",
+            "cadence",
+            "time_zone",
+            "starts_on",
         )
     }
 
@@ -795,6 +832,216 @@ def _apply_recurring_rule(operation: dict[str, Any], actor: User, request: Any) 
     return result
 
 
+def _create_installment_plan(
+    entity_id: UUID, payload: dict[str, Any], actor: User, request: Any
+) -> InstallmentPlan:
+    _ensure_available(InstallmentPlan, entity_id)
+    tracker = Tracker.objects.get(id=payload["tracker_id"], deleted_at__isnull=True)
+    require_tracker_role(actor, tracker, TrackerMembership.Role.EDITOR)
+    serializer = InstallmentPlanSerializer(
+        data=_installment_plan_values(payload), context={"editor": actor}
+    )
+    serializer.is_valid(raise_exception=True)
+    plan = cast(
+        InstallmentPlan,
+        serializer.save(
+            id=entity_id,
+            created_by=actor,
+            last_editor=actor,
+            archived_at=timezone.now() if payload.get("archived_at") else None,
+        ),
+    )
+    _audit(actor=actor, instance=plan, action="installment.plan_created", request=request)
+    return plan
+
+
+def _update_installment_plan(
+    plan: InstallmentPlan, payload: dict[str, Any], actor: User, request: Any
+) -> InstallmentPlan:
+    if plan.state != InstallmentPlan.State.ACTIVE:
+        raise serializers.ValidationError({"state": "Only an active plan can be edited."})
+    serializer = InstallmentPlanSerializer(
+        plan,
+        data=_installment_plan_values(payload),
+        context={"editor": actor},
+    )
+    serializer.is_valid(raise_exception=True)
+    updated = cast(
+        InstallmentPlan,
+        serializer.save(version=plan.version + 1, last_editor=actor),
+    )
+    _audit(actor=actor, instance=updated, action="installment.plan_updated", request=request)
+    return updated
+
+
+def _archive_installment_plan(plan: InstallmentPlan, actor: User, request: Any) -> InstallmentPlan:
+    if plan.archived_at is None:
+        plan.archived_at = timezone.now()
+        plan.version += 1
+        plan.last_editor = actor
+        plan.save(update_fields=("archived_at", "version", "last_editor", "updated_at"))
+        _audit(actor=actor, instance=plan, action="installment.plan_archived", request=request)
+    return plan
+
+
+def _restore_installment_plan(plan: InstallmentPlan, actor: User, request: Any) -> InstallmentPlan:
+    update_fields: list[str] = []
+    if plan.archived_at is not None:
+        plan.archived_at = None
+        update_fields.append("archived_at")
+    if plan.deleted_at is not None:
+        plan.deleted_at = None
+        update_fields.append("deleted_at")
+    if plan.state == InstallmentPlan.State.CANCELLED:
+        plan.cancelled_at = None
+        if remaining_total_minor(plan) == 0:
+            plan.state = InstallmentPlan.State.PAID_OFF
+            plan.paid_off_at = plan.paid_off_at or timezone.now()
+        else:
+            plan.state = InstallmentPlan.State.ACTIVE
+            plan.paid_off_at = None
+        update_fields.extend(("state", "cancelled_at", "paid_off_at"))
+    if update_fields:
+        plan.version += 1
+        plan.last_editor = actor
+        plan.save(update_fields=(*update_fields, "version", "last_editor", "updated_at"))
+        _audit(actor=actor, instance=plan, action="installment.plan_restored", request=request)
+    return plan
+
+
+def _cancel_installment_plan(
+    plan: InstallmentPlan, actor: User, request: Any, *, deleted: bool
+) -> InstallmentPlan:
+    if plan.state != InstallmentPlan.State.ACTIVE and plan.deleted_at is None:
+        raise serializers.ValidationError({"state": "Only an active plan can be cancelled."})
+    if plan.state == InstallmentPlan.State.CANCELLED and (not deleted or plan.deleted_at):
+        return plan
+    now = timezone.now()
+    plan.state = InstallmentPlan.State.CANCELLED
+    plan.cancelled_at = now
+    plan.paid_off_at = None
+    if deleted:
+        plan.deleted_at = now
+        plan.archived_at = now
+    plan.version += 1
+    plan.last_editor = actor
+    plan.save()
+    _audit(
+        actor=actor,
+        instance=plan,
+        action="installment.plan_deleted" if deleted else "installment.plan_cancelled",
+        request=request,
+    )
+    return plan
+
+
+def _installment_schedule_item(plan: InstallmentPlan, payload: dict[str, Any]) -> Any:
+    item_id = payload.get("schedule_item_id")
+    if item_id is None:
+        return None
+    return InstallmentScheduleItem.objects.get(
+        id=item_id,
+        plan=plan,
+        deleted_at__isnull=True,
+    )
+
+
+def _record_installment_command(
+    plan: InstallmentPlan,
+    operation: dict[str, Any],
+    actor: User,
+    request: Any,
+    *,
+    payoff: bool,
+) -> InstallmentPlan:
+    payload = operation["payload"]
+    amount = payload.get("payment_amount_minor")
+    if payoff and amount is None:
+        amount = remaining_total_minor(plan)
+    record_installment_payment(
+        plan=plan,
+        actor=actor,
+        amount_minor=int(amount),
+        occurred_at=payload["occurred_at"],
+        schedule_item=None if payoff else _installment_schedule_item(plan, payload),
+        extra_payment=True if payoff else bool(payload.get("extra_payment")),
+        confirm_overpayment=bool(payload.get("confirm_overpayment")),
+        base_version=operation["base_server_version"],
+        account_amount_minor=payload.get("account_amount_minor"),
+        base_amount_minor=payload.get("base_amount_minor"),
+        base_currency=payload.get("base_currency"),
+        rate_snapshot=payload.get("rate_snapshot"),
+        rate_source=str(payload.get("rate_source", "")),
+        rate_effective_at=payload.get("rate_effective_at"),
+        payment_id=payload["payment_id"],
+        transaction_id=payload["transaction_id"],
+        request=request,
+    )
+    return InstallmentPlan.objects.get(id=plan.id)
+
+
+def _apply_installment_plan(  # noqa: PLR0911
+    operation: dict[str, Any], actor: User, request: Any
+) -> InstallmentPlan:
+    entity_id = operation["entity_id"]
+    payload = operation["payload"]
+    command = operation["command"]
+    if command == "create":
+        return _create_installment_plan(entity_id, payload, actor, request)
+    plan = (
+        InstallmentPlan.objects.select_related("tracker", "account", "category")
+        .select_for_update()
+        .get(id=entity_id)
+    )
+    require_tracker_role(actor, plan.tracker, TrackerMembership.Role.EDITOR)
+    _require_version(
+        instance=plan,
+        expected=operation["base_server_version"],
+        entity_type=SyncChange.EntityType.INSTALLMENT_PLAN,
+        actor=actor,
+        proposed=payload,
+    )
+    if payload["tracker_id"] != plan.tracker_id:
+        raise serializers.ValidationError(
+            {"tracker_id": "An installment plan cannot change tracker."}
+        )
+    if command == "update":
+        return _update_installment_plan(plan, payload, actor, request)
+    if command == "archive":
+        return _archive_installment_plan(plan, actor, request)
+    if command == "restore":
+        return _restore_installment_plan(plan, actor, request)
+    if command == "cancel":
+        return _cancel_installment_plan(plan, actor, request, deleted=False)
+    if command == "delete":
+        return _cancel_installment_plan(plan, actor, request, deleted=True)
+    if command == "record_payment":
+        return _record_installment_command(plan, operation, actor, request, payoff=False)
+    if command == "payoff":
+        return _record_installment_command(plan, operation, actor, request, payoff=True)
+    item = _installment_schedule_item(plan, payload)
+    if item is None:
+        raise serializers.ValidationError({"schedule_item_id": "A schedule item is required."})
+    if command == "skip_payment":
+        skip_installment_item(
+            plan=plan,
+            item=item,
+            base_version=operation["base_server_version"],
+            actor=actor,
+            request=request,
+        )
+    else:
+        reschedule_installment_item(
+            plan=plan,
+            item=item,
+            due_on=payload["rescheduled_due_on"],
+            base_version=operation["base_server_version"],
+            actor=actor,
+            request=request,
+        )
+    return InstallmentPlan.objects.get(id=plan.id)
+
+
 def apply_operation(operation: dict[str, Any], actor: User, request: Any) -> Any:
     handler = {
         SyncChange.EntityType.TRACKER: _apply_tracker,
@@ -803,6 +1050,7 @@ def apply_operation(operation: dict[str, Any], actor: User, request: Any) -> Any
         SyncChange.EntityType.TAG: _apply_tag,
         SyncChange.EntityType.BUDGET: _apply_budget,
         SyncChange.EntityType.RECURRING_RULE: _apply_recurring_rule,
+        SyncChange.EntityType.INSTALLMENT_PLAN: _apply_installment_plan,
         SyncChange.EntityType.TRANSACTION: _apply_transaction,
     }[operation["entity_type"]]
     return handler(operation, actor, request)
