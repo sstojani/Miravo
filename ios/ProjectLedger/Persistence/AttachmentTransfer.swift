@@ -17,9 +17,11 @@ final class AttachmentTransfer {
     var scopeKey: String
     var transactionID: UUID
     var localRelativePath: String
+    var originalFilename: String = "attachment"
     var contentType: String
     var byteCount: Int64
     var checksumSHA256: String
+    var originalRetained: Bool = true
     var stateRaw: String
     var attemptCount: Int
     var nextAttemptAt: Date?
@@ -33,18 +35,22 @@ final class AttachmentTransfer {
         scopeKey: String,
         transactionID: UUID,
         localRelativePath: String,
+        originalFilename: String,
         contentType: String,
         byteCount: Int64,
         checksumSHA256: String,
+        originalRetained: Bool = true,
         createdAt: Date = .now
     ) {
         self.attachmentID = attachmentID
         self.scopeKey = scopeKey
         self.transactionID = transactionID
         self.localRelativePath = localRelativePath
+        self.originalFilename = originalFilename
         self.contentType = contentType
         self.byteCount = byteCount
         self.checksumSHA256 = checksumSHA256
+        self.originalRetained = originalRetained
         stateRaw = AttachmentTransferState.pending.rawValue
         attemptCount = 0
         self.createdAt = createdAt

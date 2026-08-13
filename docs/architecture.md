@@ -36,9 +36,10 @@ The app’s SwiftData store is the immediate UI source. Django is the durable mu
 - `apps.audit`: append-only safe security/administrative audit events.
 - `apps.ledger`: trackers/memberships, accounts/taxonomy, authoritative transactions, registered/guest participants, parent-owned split rows, deterministic debt balances, bounded settlements, relational revisions, and audit integration.
 - `sync`: transactional reference change log, strict offline command transport, signed cursors, per-user operation receipts, bootstrap, acknowledgement, retention cleanup, and sequence-only Channels fan-out.
+- `apps.attachments`: transaction-scoped metadata reservation, content verification, randomized private/quarantine storage, authenticated download, audit, and sync representations.
 - `apps.shortcut`: independently keyed scoped credentials, narrow lookup/capture endpoints, user-scoped idempotency receipts, and scheduled receipt expiry.
 - `apps.planning`: budget aggregate; civil-calendar recurring/subscription rules, revisions, deterministic occurrences and bounded Celery catch-up; and installment terms, exact component schedules, immutable revisions, ledger-backed payments and payoff. The boundary owns permissions, audit, REST, and sync representations.
-- Later apps: attachments and analytics/exports. Native collaboration source is present; macOS and two-device execution remain verification work.
+- Later apps: analytics/exports. Native collaboration and private-receipt source are present; macOS and multi-device execution remain verification work.
 
 Core financial changes are performed by domain services inside database transactions. REST serializers validate transport shapes; models/constraints protect persistence invariants; views coordinate permissions and service calls.
 
@@ -46,11 +47,11 @@ Core financial changes are performed by domain services inside database transact
 
 - **App/UI:** SwiftUI feature views, navigation, accessibility, localized presentation.
 - **Domain:** money/currency types, commands, calculations, validation, conflict decisions.
-- **Persistence:** SwiftData models, atomic local writes/outbox, cursor/bootstrap staging, conflicts, and a durable attachment-transfer queue boundary.
+- **Persistence:** SwiftData models, atomic local writes/outbox, cursor/bootstrap staging, conflicts, protected receipt files, and a durable attachment-transfer queue.
 - **Networking:** URLSession DTOs, Keychain-backed session refresh, reachability hint, retry policy.
 - **Shortcut management:** normal access-JWT client for safe credential metadata and create/revoke; one-time raw create response remains memory-only and an explicit pasteboard copy expires locally.
 - **Synchronization actor:** one serialized coordinator per local store; push then pull; independent conflicts.
-- **Platform services:** Vision OCR, camera/files, LocalAuthentication, best-effort BackgroundTasks.
+- **Platform services:** Vision OCR with explicit field review, camera/photo/files, PDF/image rendering, LocalAuthentication, best-effort BackgroundTasks.
 
 No view binds directly to a remote response. WebSockets carry invalidation hints only; they never contain authoritative financial payloads.
 

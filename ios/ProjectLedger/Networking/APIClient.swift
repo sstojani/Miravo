@@ -364,6 +364,120 @@ actor APIClient: SyncTransport {
         )
     }
 
+    func reserveAttachment(
+        _ request: AttachmentReservationRequest,
+        accessToken: String
+    ) async throws -> AttachmentSnapshot {
+        try await send(
+            AttachmentSnapshot.self,
+            path: "api/v1/attachments/",
+            method: "POST",
+            accessToken: accessToken,
+            body: encoder.encode(request)
+        )
+    }
+
+    func uploadAttachmentContent(
+        id: UUID,
+        fileURL: URL,
+        contentType: String,
+        accessToken: String
+    ) async throws -> AttachmentSnapshot {
+        var request = URLRequest(
+            url: endpoint("api/v1/attachments/\(id.uuidString.lowercased())/content/")
+        )
+        request.httpMethod = "PUT"
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue(contentType, forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        request.setValue(UUID().uuidString.lowercased(), forHTTPHeaderField: "X-Request-ID")
+        let (data, response) = try await session.upload(for: request, fromFile: fileURL)
+        return try decode(
+            AttachmentSnapshot.self,
+            from: data,
+            response: response,
+            maximumResponseBytes: 1_048_576
+        )
+    }
+
+    func downloadAttachmentContent(
+        id: UUID,
+        expectedContentType: String,
+        maximumByteCount: Int64,
+        accessToken: String
+    ) async throws -> Data {
+        guard AttachmentContentType(rawValue: expectedContentType) != nil,
+              maximumByteCount > 0,
+              maximumByteCount <= AttachmentTransferQueuePolicy.defaultMaximumByteCount
+        else {
+            throw APIClientError(
+                code: "invalid_request",
+                message: String(localized: "The request could not be completed."),
+                requestID: nil,
+                statusCode: nil
+            )
+        }
+        var request = URLRequest(
+            url: endpoint("api/v1/attachments/\(id.uuidString.lowercased())/content/")
+        )
+        request.httpMethod = "GET"
+        request.setValue(expectedContentType, forHTTPHeaderField: "Accept")
+        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        request.setValue(UUID().uuidString.lowercased(), forHTTPHeaderField: "X-Request-ID")
+        let (temporaryURL, response) = try await session.download(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            throw APIClientError(
+                code: "invalid_response",
+                message: String(localized: "The server returned an invalid response."),
+                requestID: nil,
+                statusCode: nil
+            )
+        }
+        guard isSameOrigin(http.url) else {
+            throw invalidOriginError(response: http)
+        }
+        let values = try temporaryURL.resourceValues(forKeys: [.fileSizeKey, .isRegularFileKey])
+        guard values.isRegularFile == true, let fileSize = values.fileSize else {
+            throw APIClientError(
+                code: "invalid_response",
+                message: String(localized: "The server returned an invalid response."),
+                requestID: http.value(forHTTPHeaderField: "X-Request-ID"),
+                statusCode: http.statusCode
+            )
+        }
+        let responseLimit: Int64 = (200 ..< 300).contains(http.statusCode)
+            ? maximumByteCount
+            : 1_048_576
+        guard fileSize > 0, Int64(fileSize) <= responseLimit else {
+            throw APIClientError(
+                code: "response_too_large",
+                message: String(localized: "The server response was unexpectedly large."),
+                requestID: http.value(forHTTPHeaderField: "X-Request-ID"),
+                statusCode: http.statusCode
+            )
+        }
+        let data = try Data(contentsOf: temporaryURL, options: [.mappedIfSafe])
+        guard (200 ..< 300).contains(http.statusCode) else {
+            throw decodeError(from: data, response: http)
+        }
+        let responseType = http.value(forHTTPHeaderField: "Content-Type").map { value in
+            let mediaType = value.split(separator: ";", maxSplits: 1).first
+                .map(String.init) ?? ""
+            return mediaType
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .lowercased()
+        }
+        guard responseType == expectedContentType else {
+            throw APIClientError(
+                code: "invalid_response_content_type",
+                message: String(localized: "The server returned an invalid response."),
+                requestID: http.value(forHTTPHeaderField: "X-Request-ID"),
+                statusCode: http.statusCode
+            )
+        }
+        return data
+    }
+
     private func endpoint(_ path: String) -> URL {
         let resolved = path.split(separator: "/").reduce(baseURL) { partial, component in
             partial.appending(path: String(component))
@@ -525,3 +639,5 @@ actor APIClient: SyncTransport {
 
 extension APIClient: ShortcutCredentialTransport {}
 extension APIClient: CollaborationTransport {}
+extension APIClient: AttachmentTransport {}
+extension APIClient: AttachmentDownloadTransport {}

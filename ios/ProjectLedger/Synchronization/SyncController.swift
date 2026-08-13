@@ -20,6 +20,7 @@ final class SyncController: ObservableObject {
     @Published var message: String?
 
     private let engine: LedgerSyncActor
+    private let attachmentWorker: AttachmentTransferWorker
     private let realtimeClient = SyncInvalidationClient()
     private let connectivityMonitor = ConnectivitySyncMonitor()
     private var rerunRequested = false
@@ -27,6 +28,7 @@ final class SyncController: ObservableObject {
 
     init(modelContainer: ModelContainer) {
         engine = LedgerSyncActor(modelContainer: modelContainer)
+        attachmentWorker = AttachmentTransferWorker(modelContainer: modelContainer)
     }
 
     @discardableResult
@@ -81,6 +83,25 @@ final class SyncController: ObservableObject {
                 return false
             }
             _ = try await engine.synchronize(authentication: authentication)
+            do {
+                let transfers = try await attachmentWorker.process(authentication: authentication)
+                if transfers.uploadedCount > 0 || transfers.quarantinedCount > 0 {
+                    rerunRequested = true
+                }
+                if transfers.quarantinedCount > 0 {
+                    message = String(
+                        localized: "A receipt was quarantined by the server and needs review."
+                    )
+                } else if transfers.failedCount > 0 {
+                    message = String(
+                        localized: "A receipt upload could not be completed. It remains stored on this iPhone."
+                    )
+                }
+            } catch {
+                message = String(
+                    localized: "Receipt uploads could not be processed. Local receipt files remain safe."
+                )
+            }
             diagnostics = try await engine.diagnostics(scopeKey: authentication.scopeKey)
             return true
         } catch let error as APIClientError {
@@ -138,6 +159,7 @@ final class SyncController: ObservableObject {
     func retryFailed(scopeKey: String, session: SessionController) async {
         do {
             try await engine.retryFailed(scopeKey: scopeKey)
+            try await attachmentWorker.retryFailed(scopeKey: scopeKey)
         } catch {
             message = String(localized: "Failed operations could not be prepared for retry.")
             return

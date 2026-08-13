@@ -23,7 +23,7 @@ Miravo stores sensitive financial and identity data. Report suspected vulnerabil
 - Native guest merge requires a clean outbox/conflict state, a fresh synchronization, and authoritative versions for both identities before the server performs the audited irreversible rewrite.
 - Financial values are integer minor units; exchange rates use decimal arithmetic and immutable historical snapshots.
 - Request bodies and sensitive fields are excluded from logs. Safe errors include request IDs.
-- Attachments and exports use private random storage keys and authenticated/expiring delivery, never raw public media URLs.
+- Attachments use private random storage keys, streaming byte/digest/signature validation, an optional quarantine scanner hook, authenticated `no-store` delivery, and no raw public media URL. Native files use app-container-relative paths, iOS Data Protection, and checksum verification before upload or preview; server storage keys never enter SwiftData or the API. Server-side decoder-level image/PDF complexity validation remains a production-hardening item in addition to the current byte/signature controls.
 - Production uses `DEBUG=false`, strict hosts/origins, CSRF for browser sessions, rate/body/file/decompression limits, secure proxy headers, and non-root containers where practical.
 - PostgreSQL, Redis, admin, metrics, debug, backups, and raw media are excluded from public Funnel exposure.
 - Backups must be encrypted offsite and proven restorable in isolation.

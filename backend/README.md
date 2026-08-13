@@ -35,6 +35,7 @@ Useful endpoints:
 - `POST /api/v1/shortcut/transactions` and `/transactions/batch` for duplicate-safe capture
 - `/api/v1/budgets/` plus archive, restore, tombstone, and deterministic `/progress/?as_of=YYYY-MM-DD`
 - `/api/v1/recurring-rules/`, `/subscriptions/`, and read-only `/recurring-occurrences/` with versioned pause/resume/skip/end and revision actions
+- `GET/POST /api/v1/attachments/`, metadata `GET/DELETE`, and authenticated `GET/PUT /api/v1/attachments/{id}/content/`
 
 The OpenAPI source is generated at `backend/openapi-schema.yml`. The schema endpoint and Django Admin are intentionally denied by the public reverse proxy.
 
@@ -59,3 +60,5 @@ Clients submit transaction commands with a tracker/account, positive integer min
 Budget progress is derived rather than client-authored. It uses the budget's stored IANA time zone and civil dates, posted expenses only, exact category allocations, and existing historical conversion snapshots. Missing rates produce explicit partial results; signed rollover is bounded by `PROJECT_LEDGER_BUDGET_MAX_ROLLOVER_PERIODS`.
 
 Celery Beat invokes recurring materialization every five minutes. Each rule uses civil calendar anchors and a stored IANA zone, locks before catch-up, derives stable occurrence/transaction identities, and advances only after a successful post or explicit skip. Per-rule/per-run limits are configured by `PROJECT_LEDGER_RECURRING_MAX_OCCURRENCES_PER_RULE_RUN` and `PROJECT_LEDGER_RECURRING_MAX_RULES_PER_RUN`. A failed dependency remains visible and retryable; it does not silently skip money.
+
+Receipt content is not stored in PostgreSQL and is never exposed through a raw media route. An editor first reserves exact transaction-scoped metadata and then streams bytes to the content action. The backend enforces `PROJECT_LEDGER_ATTACHMENT_MAX_BYTES`, SHA-256, file-signature/MIME agreement, private `0600` storage, current tracker authorization, and an optional `PROJECT_LEDGER_ATTACHMENT_SCANNER` Python callable returning `clean` or `blocked`. A missing scanner is recorded as `not_configured`; scanner failure quarantines rather than serves the file. Public proxy limits must stay aligned with the backend limit. Server-side decoder-level image dimension/PDF page inspection is still a documented production-hardening task.

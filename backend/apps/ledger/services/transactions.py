@@ -646,10 +646,38 @@ def tombstone_transaction(
     )
     if locked.deleted_at is None:
         snapshot_transaction(locked, editor=actor, reason="delete")
-        locked.deleted_at = timezone.now()
+        deleted_at = timezone.now()
+        locked.deleted_at = deleted_at
         locked.version += 1
         locked.last_editor = actor
         locked.save(update_fields=("deleted_at", "version", "last_editor", "updated_at"))
+        from apps.attachments.models import Attachment  # noqa: PLC0415
+
+        for attachment in Attachment.objects.select_for_update().filter(
+            transaction=locked,
+            deleted_at__isnull=True,
+        ):
+            attachment.deleted_at = deleted_at
+            attachment.deleted_with_transaction = True
+            attachment.last_editor = actor
+            attachment.version += 1
+            attachment.save(
+                update_fields=(
+                    "deleted_at",
+                    "deleted_with_transaction",
+                    "last_editor",
+                    "version",
+                    "updated_at",
+                )
+            )
+            record_audit_event(
+                actor=actor,
+                tracker_id=locked.tracker_id,
+                action="attachment.deleted_with_transaction",
+                target_type="attachment",
+                target_id=attachment.id,
+                request_id=request_id(request),
+            )
         record_audit_event(
             actor=actor,
             tracker_id=locked.tracker_id,
@@ -684,6 +712,33 @@ def restore_transaction(
         locked.version += 1
         locked.last_editor = actor
         locked.save(update_fields=("deleted_at", "version", "last_editor", "updated_at"))
+        from apps.attachments.models import Attachment  # noqa: PLC0415
+
+        for attachment in Attachment.objects.select_for_update().filter(
+            transaction=locked,
+            deleted_with_transaction=True,
+        ):
+            attachment.deleted_at = None
+            attachment.deleted_with_transaction = False
+            attachment.last_editor = actor
+            attachment.version += 1
+            attachment.save(
+                update_fields=(
+                    "deleted_at",
+                    "deleted_with_transaction",
+                    "last_editor",
+                    "version",
+                    "updated_at",
+                )
+            )
+            record_audit_event(
+                actor=actor,
+                tracker_id=locked.tracker_id,
+                action="attachment.restored_with_transaction",
+                target_type="attachment",
+                target_id=attachment.id,
+                request_id=request_id(request),
+            )
         record_audit_event(
             actor=actor,
             tracker_id=locked.tracker_id,

@@ -51,6 +51,7 @@ actor LedgerSyncActor {
         case installmentScheduleItem(InstallmentScheduleItemSnapshot)
         case installmentPayment(InstallmentPaymentSnapshot)
         case transaction(TransactionSnapshot)
+        case attachment(AttachmentSnapshot)
         case settlement(SettlementSnapshot)
         case tombstone(entityType: String, entityID: UUID, changedAt: Date, version: Int64)
         case ignored
@@ -753,6 +754,7 @@ actor LedgerSyncActor {
             "installment_plans": "installment_plan",
             "installment_schedule_items": "installment_schedule_item",
             "transactions": "transaction",
+            "attachments": "attachment",
             "settlements": "settlement",
             "recurring_occurrences": "recurring_occurrence",
             "installment_payments": "installment_payment",
@@ -836,10 +838,11 @@ actor LedgerSyncActor {
             "installment_plan": 8,
             "installment_schedule_item": 9,
             "transaction": 10,
-            "settlement": 11,
-            "recurring_occurrence": 12,
-            "installment_payment": 13,
-            "merchant": 14,
+            "attachment": 11,
+            "settlement": 12,
+            "recurring_occurrence": 13,
+            "installment_payment": 14,
+            "merchant": 15,
         ]
         for (row, remote) in decoded.sorted(by: {
             (bootstrapPriority[$0.0.entityType] ?? 100) <
@@ -851,6 +854,8 @@ actor LedgerSyncActor {
             switch remote {
             case let .installmentScheduleItem(snapshot):
                 parentKey = "installment_plan|\(snapshot.planID.uuidString)"
+            case let .attachment(snapshot):
+                parentKey = "transaction|\(snapshot.transactionID.uuidString)"
             case let .settlement(snapshot):
                 parentKey = snapshot.transactionID.map {
                     "transaction|\($0.uuidString)"
@@ -1030,6 +1035,12 @@ actor LedgerSyncActor {
                 else {
                     throw SyncEngineError.invalidServerResponse
                 }
+            case let .attachment(snapshot):
+                guard trackerIDs.contains(snapshot.trackerID),
+                      transactionTrackers[snapshot.transactionID] == snapshot.trackerID
+                else {
+                    throw SyncEngineError.invalidServerResponse
+                }
             case let .settlement(snapshot):
                 guard trackerIDs.contains(snapshot.trackerID),
                       snapshot.fromParticipantID != snapshot.toParticipantID,
@@ -1140,6 +1151,8 @@ actor LedgerSyncActor {
             )
         case "transaction":
             .transaction(try SyncSnapshotDecoder.decode(TransactionSnapshot.self, from: data))
+        case "attachment":
+            .attachment(try SyncSnapshotDecoder.decode(AttachmentSnapshot.self, from: data))
         case "settlement":
             .settlement(try SyncSnapshotDecoder.decode(SettlementSnapshot.self, from: data))
         default:
@@ -1166,6 +1179,7 @@ actor LedgerSyncActor {
         case let .installmentPayment(snapshot):
             try upsertInstallmentPayment(snapshot, scopeKey: scopeKey)
         case let .transaction(snapshot): try upsertTransaction(snapshot, scopeKey: scopeKey)
+        case let .attachment(snapshot): try upsertAttachment(snapshot, scopeKey: scopeKey)
         case let .settlement(snapshot): try upsertSettlement(snapshot, scopeKey: scopeKey)
         case let .tombstone(entityType, entityID, changedAt, version):
             try applyTombstone(
@@ -2381,6 +2395,95 @@ actor LedgerSyncActor {
         try replaceChildren(snapshot, scopeKey: scopeKey)
     }
 
+    private func upsertAttachment(
+        _ snapshot: AttachmentSnapshot,
+        scopeKey: String
+    ) throws {
+        guard AttachmentContentType(rawValue: snapshot.contentType) != nil,
+              LocalAttachmentUploadState(rawValue: snapshot.uploadState) != nil,
+              LocalAttachmentScanStatus(rawValue: snapshot.scanStatus) != nil,
+              snapshot.byteCount > 0,
+              snapshot.checksumSHA256.count == 64,
+              snapshot.checksumSHA256.unicodeScalars.allSatisfy({
+                  CharacterSet(charactersIn: "0123456789abcdef").contains($0)
+              }),
+              !snapshot.originalFilename.isEmpty,
+              snapshot.originalFilename.count <= 180,
+              let tracker = try modelContext.fetch(
+                  FetchDescriptor<LocalTracker>(
+                      predicate: #Predicate {
+                          $0.scopeKey == scopeKey && $0.id == snapshot.trackerID
+                      }
+                  )
+              ).first,
+              tracker.deletedAt == nil,
+              let financialTransaction = try modelContext.fetch(
+                  FetchDescriptor<LedgerTransaction>(
+                      predicate: #Predicate {
+                          $0.scopeKey == scopeKey && $0.id == snapshot.transactionID
+                      }
+                  )
+              ).first,
+              financialTransaction.trackerID == snapshot.trackerID,
+              let createdAt = try? parseTimestamp(snapshot.createdAt),
+              let updatedAt = try? parseTimestamp(snapshot.updatedAt)
+        else {
+            throw SyncEngineError.invalidServerResponse
+        }
+        let uploadedAt = try parseOptionalTimestamp(snapshot.uploadedAt)
+        let deletedAt = try parseOptionalTimestamp(snapshot.deletedAt)
+        let snapshotID = snapshot.id
+        let existing = try modelContext.fetch(
+            FetchDescriptor<LocalAttachment>(
+                predicate: #Predicate { $0.scopeKey == scopeKey && $0.id == snapshotID }
+            )
+        ).first
+        if let version = existing?.serverVersion, version > snapshot.version { return }
+        if let existing, existing.serverVersion == nil {
+            guard existing.trackerID == snapshot.trackerID,
+                  existing.transactionID == snapshot.transactionID,
+                  existing.originalFilename == snapshot.originalFilename,
+                  existing.contentType == snapshot.contentType,
+                  existing.byteCount == snapshot.byteCount,
+                  existing.checksumSHA256 == snapshot.checksumSHA256,
+                  existing.originalRetained == snapshot.originalRetained
+            else {
+                throw SyncEngineError.invalidServerResponse
+            }
+        }
+        let attachment = existing ?? LocalAttachment(
+            id: snapshot.id,
+            scopeKey: scopeKey,
+            trackerID: snapshot.trackerID,
+            transactionID: snapshot.transactionID,
+            originalFilename: snapshot.originalFilename,
+            contentType: snapshot.contentType,
+            byteCount: snapshot.byteCount,
+            checksumSHA256: snapshot.checksumSHA256,
+            uploadState: LocalAttachmentUploadState(rawValue: snapshot.uploadState) ?? .pending,
+            scanStatus: LocalAttachmentScanStatus(rawValue: snapshot.scanStatus) ?? .error,
+            originalRetained: snapshot.originalRetained,
+            createdAt: createdAt
+        )
+        if existing == nil { modelContext.insert(attachment) }
+        attachment.trackerID = snapshot.trackerID
+        attachment.transactionID = snapshot.transactionID
+        attachment.createdByID = snapshot.createdByID
+        attachment.lastEditorID = snapshot.lastEditorID
+        attachment.originalFilename = snapshot.originalFilename
+        attachment.contentType = snapshot.contentType
+        attachment.byteCount = snapshot.byteCount
+        attachment.checksumSHA256 = snapshot.checksumSHA256
+        attachment.uploadStateRaw = snapshot.uploadState
+        attachment.scanStatusRaw = snapshot.scanStatus
+        attachment.originalRetained = snapshot.originalRetained
+        attachment.uploadedAt = uploadedAt
+        attachment.serverVersion = snapshot.version
+        attachment.createdAt = createdAt
+        attachment.updatedAt = updatedAt
+        attachment.deletedAt = deletedAt
+    }
+
     private func upsertSettlement(
         _ snapshot: SettlementSnapshot,
         scopeKey: String
@@ -2909,6 +3012,15 @@ actor LedgerSyncActor {
                 value.serverVersion = version
                 value.syncStateRaw = LocalSyncState.synced.rawValue
             }
+        case "attachment":
+            if let value = try modelContext.fetch(
+                FetchDescriptor<LocalAttachment>(
+                    predicate: #Predicate { $0.scopeKey == scopeKey && $0.id == entityID }
+                )
+            ).first {
+                value.deletedAt = changedAt
+                value.serverVersion = version
+            }
         case "settlement":
             if let value = try modelContext.fetch(
                 FetchDescriptor<LocalSettlement>(
@@ -2958,6 +3070,13 @@ actor LedgerSyncActor {
             )
         ) where !(remoteIDs["settlement"] ?? []).contains(value.id) &&
             !pendingKeys.contains("settlement|\(value.id.uuidString)") {
+            modelContext.delete(value)
+        }
+        for value in try modelContext.fetch(
+            FetchDescriptor<LocalAttachment>(
+                predicate: #Predicate { $0.scopeKey == scopeKey && $0.serverVersion != nil }
+            )
+        ) where !(remoteIDs["attachment"] ?? []).contains(value.id) {
             modelContext.delete(value)
         }
         for value in try modelContext.fetch(

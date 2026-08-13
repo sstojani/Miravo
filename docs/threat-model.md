@@ -20,7 +20,7 @@ Primary assets are financial records, identity/session data, tracker membership,
 | Malicious split/settlement claim | Same-tracker active participant resolution, exact paid/owed totals, deterministic rounding, zero-sum derived balances, bounded live-debt settlements, root locks/versions, and protected linked movements | Multi-device timing can still produce an ordinary version/debt conflict; client must retain the proposal for review |
 | Stale or malicious guest merge | Admin authorization, same-tracker registered target, source version lock, transaction revisions/audit, native clean-outbox and fresh-sync preflight | Another client can still race after preflight; server version locking rejects stale source state and the user must retry/review |
 | Shortcut replay/duplicate | User-scoped event ID and idempotency key/fingerprint; transactional create; token rotation preserves the user scope | The initial 120-day retention must exceed the expected queue/retry window; a genuinely new event needs a new UUID |
-| Malicious receipt upload | Content sniffing, allow-list, size/decompression/page limits, random private key, quarantine/AV hook, never execute | AV cannot prove safety; downloads use safe disposition |
+| Malicious receipt upload | Streaming byte limit and digest, signature/MIME allow-list, native 40-megapixel/100-page preparation limits, randomized private/quarantine key, optional trusted scanner hook, never execute, safe disposition | Scanner absence is visible as `not_configured`; server-side decoder-level image dimension/PDF page validation remains hardening work before production and AV cannot prove safety |
 | Compromised server account | SSH keys, no root password login, least privilege, updates, audit, disk encryption, secret separation | Root compromise exposes live data; rotate all secrets and restore trusted build |
 | Stolen disk/backup | LUKS recommendation; age-encrypted offsite archives; separate key; restricted paths | Mounted running disk is readable to privileged compromise |
 | Accidental public DB/cache/admin/media | No host data ports, internal Docker network, loopback proxy, deny paths, external probe | Docker/firewall/operator changes can regress; re-test every deployment |
@@ -35,6 +35,7 @@ Primary assets are financial records, identity/session data, tracker membership,
 - No client-provided balance, role, ownership, server version, or conversion result is trusted without validation.
 - Financial mutation idempotency and audit commit with the change.
 - Receipt/export download never resolves a public raw storage path.
+- Receipt metadata never exposes a private storage key; native upload/download refuses redirects, bounds bytes, and verifies the synchronized SHA-256 before preview.
 - `DEBUG`, wildcard hosts/origins/CORS, and cleartext public URLs are rejected in production.
 - PostgreSQL/Redis credentials, refresh/Shortcut digests, and encryption keys never appear in mobile configuration.
 

@@ -292,6 +292,7 @@ struct LocalBudgetTests {
             LocalSplitPayment.self,
             LocalSplitShare.self,
             LocalSettlement.self,
+            LocalAttachment.self,
             OutboxMutation.self,
             AttachmentTransfer.self,
             SyncCursor.self,

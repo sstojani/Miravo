@@ -1106,6 +1106,87 @@ struct LedgerSyncActorTests {
         )
     }
 
+    @Test func attachmentMetadataPullNeverRequiresOrStoresServerStorageKey() async throws {
+        let container = try makeContainer()
+        let tracker = LocalTracker(
+            scopeKey: scope,
+            name: "Receipts",
+            baseCurrencyCode: "ALL",
+            baseCurrencyExponent: 2,
+            syncState: .synced
+        )
+        tracker.serverVersion = 1
+        let account = LocalAccount(
+            scopeKey: scope,
+            trackerID: tracker.id,
+            name: "Cash",
+            type: .cash,
+            currencyCode: "ALL",
+            currencyExponent: 2,
+            syncState: .synced
+        )
+        account.serverVersion = 1
+        let transaction = LedgerTransaction(
+            scopeKey: scope,
+            trackerID: tracker.id,
+            accountID: account.id,
+            kind: .expense,
+            money: try Money(minorUnits: 1_250, currencyCode: "ALL", exponent: 2),
+            syncState: .synced
+        )
+        transaction.serverVersion = 1
+        let cursor = SyncCursor(scopeKey: scope)
+        cursor.cursor = "before-attachment"
+        cursor.bootstrapRequired = false
+        container.mainContext.insert(tracker)
+        container.mainContext.insert(account)
+        container.mainContext.insert(transaction)
+        container.mainContext.insert(cursor)
+        try container.mainContext.save()
+        let attachmentID = UUID()
+        let change = SyncChangeResponse(
+            sequence: 1,
+            entityType: "attachment",
+            entityID: attachmentID,
+            trackerID: tracker.id,
+            operation: "upsert",
+            version: 2,
+            changedAt: timestamp,
+            data: attachmentRepresentation(
+                id: attachmentID,
+                trackerID: tracker.id,
+                transactionID: transaction.id
+            )
+        )
+        let transport = ScriptedSyncTransport(
+            pushResponses: [],
+            pullResponses: [
+                SyncPullResponse(
+                    protocolVersion: 1,
+                    cursor: "after-attachment",
+                    hasMore: false,
+                    changes: [change]
+                ),
+            ],
+            bootstrapResponses: [],
+            ackResponses: [ack(cursor: "after-attachment")]
+        )
+
+        let summary = try await LedgerSyncActor(modelContainer: container).synchronize(
+            authentication: try authentication(),
+            transport: transport
+        )
+
+        let attachment = try #require(
+            ModelContext(container).fetch(FetchDescriptor<LocalAttachment>()).first
+        )
+        #expect(summary.pulledCount == 1)
+        #expect(attachment.id == attachmentID)
+        #expect(attachment.transactionID == transaction.id)
+        #expect(attachment.uploadState == .ready)
+        #expect(attachment.serverVersion == 2)
+    }
+
     @Test func authorizationFailureRotatesKeychainTokensOnceThenRetries() async throws {
         let container = try makeContainer()
         let cursor = SyncCursor(scopeKey: scope)
@@ -1656,6 +1737,32 @@ struct LedgerSyncActorTests {
         ])
     }
 
+    private func attachmentRepresentation(
+        id: UUID,
+        trackerID: UUID,
+        transactionID: UUID
+    ) -> JSONValue {
+        .object([
+            "id": .string(id.uuidString.lowercased()),
+            "tracker_id": .string(trackerID.uuidString.lowercased()),
+            "transaction_id": .string(transactionID.uuidString.lowercased()),
+            "created_by_id": .string("10000000-0000-0000-0000-000000000001"),
+            "last_editor_id": .string("10000000-0000-0000-0000-000000000001"),
+            "original_filename": .string("receipt.png"),
+            "content_type": .string("image/png"),
+            "byte_count": .integer(28),
+            "checksum_sha256": .string(String(repeating: "a", count: 64)),
+            "upload_state": .string("ready"),
+            "scan_status": .string("not_configured"),
+            "original_retained": .bool(true),
+            "uploaded_at": .string(timestamp),
+            "version": .integer(2),
+            "created_at": .string(timestamp),
+            "updated_at": .string(timestamp),
+            "deleted_at": .null,
+        ])
+    }
+
     private func bootstrapData(
         trackers: [JSONValue] = [],
         memberships: [JSONValue] = [],
@@ -1667,6 +1774,7 @@ struct LedgerSyncActorTests {
         installmentPlans: [JSONValue] = [],
         installmentScheduleItems: [JSONValue] = [],
         transactions: [JSONValue] = [],
+        attachments: [JSONValue] = [],
         settlements: [JSONValue] = [],
         recurringOccurrences: [JSONValue] = [],
         installmentPayments: [JSONValue] = []
@@ -1684,6 +1792,7 @@ struct LedgerSyncActorTests {
             "installment_plans": .array(installmentPlans),
             "installment_schedule_items": .array(installmentScheduleItems),
             "transactions": .array(transactions),
+            "attachments": .array(attachments),
             "settlements": .array(settlements),
             "recurring_occurrences": .array(recurringOccurrences),
             "installment_payments": .array(installmentPayments),
@@ -1731,6 +1840,7 @@ struct LedgerSyncActorTests {
             LocalSplitPayment.self,
             LocalSplitShare.self,
             LocalSettlement.self,
+            LocalAttachment.self,
             OutboxMutation.self,
             AttachmentTransfer.self,
             SyncCursor.self,

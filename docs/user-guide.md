@@ -12,7 +12,9 @@ Open Quick Add, choose expense, income, or transfer, and enter the amount. Track
 
 Save commits the transaction, derived account movements, optional category allocation, conversion snapshot, and ordered outbox mutation locally without a network request. The confirmation bar offers Undo for eight seconds; Undo records a normal recoverable deletion and never waits for synchronization.
 
-Open an expense's detail screen to record a linked full or partial refund. A refund adds money back to the selected account while keeping its relationship to the historical expense. Tags can be created in Local Data, selected during entry/editing, searched, and filtered. Archiving a tag prevents new assignment while retaining it on historical transactions. Receipt capture remains scheduled for Milestone 9.
+Open an expense's detail screen to record a linked full or partial refund or add a receipt. A refund adds money back to the selected account while keeping its relationship to the historical expense. Tags can be created in Local Data, selected during entry/editing, searched, and filtered. Archiving a tag prevents new assignment while retaining it on historical transactions.
+
+For a receipt, choose Camera, Photos, or an image/PDF in Files. Miravo prepares a smaller privacy-safe copy and thumbnail on the iPhone before any network request. Vision may suggest merchant, total, currency, date, and tax; review and edit every value, then use the toggles to choose what may update the transaction. You can attach even when OCR finds nothing. Converted or split expenses keep their existing financial fields until edited with the full transaction editor. The receipt remains available locally while its separate upload retries; a pending/failed upload can be cancelled from the receipt row's context menu without deleting that local copy, and a failed/cancelled item can be resumed explicitly. Tapping a synchronized receipt opens a checksum-verified local copy or, when needed, downloads it through the authenticated server API.
 
 For a shared expense, open its detail and choose Add/Edit split. Select one or more payers, then divide what is owed equally, by exact minor-unit amounts, or by percentages with at most two decimal places. Paid and owed totals must each equal the expense exactly. The complete split and transaction update commit locally as one outbox command. Plans → Split balances derives who owes whom per currency from local posted expenses and settlements. An editor can record a partial/full settlement offline, with an optional same-currency account movement; linked settlement movements can be deleted/restored only through the settlement action.
 
@@ -22,7 +24,7 @@ Transaction search covers merchant/payee, note, tracker, source or destination a
 
 ## Sync status
 
-Pending means stored locally and durably queued. Foreground synchronization pushes stable operations, pulls bounded pages, and resumes a staged full download when a cursor is too old. Settings shows pending/failed/conflict counts, last success, safe status codes, manual synchronization/retry, and a field-by-field conflict review with “keep server” or “keep mine” decisions. Device-session management and attachment transfer remain later screens.
+Pending means stored locally and durably queued. Foreground synchronization pushes stable operations, pulls bounded pages, and resumes a staged full download when a cursor is too old. Settings shows pending/failed/conflict counts, last success, safe status codes, manual synchronization/retry, and a field-by-field conflict review with “keep server” or “keep mine” decisions. Receipt rows separately show pending upload, uploading, failed, cancelled, private, or quarantined state.
 
 ## Budgets
 

@@ -74,6 +74,41 @@ struct LocalLedgerRepositoryTests {
         #expect(mutations.map(\.command) == ["create", "update", "delete", "restore"])
     }
 
+    @Test func receiptReviewUpdatesOnlyConfirmedMetadataAndPreservesMoney() throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let repository = LocalLedgerRepository(context: context)
+        let tracker = try repository.bootstrapDefaults(scopeKey: scope)
+        let account = try #require(context.fetch(FetchDescriptor<LocalAccount>()).first)
+        let originalDate = Date(timeIntervalSince1970: 1_786_276_200)
+        let reviewedDate = originalDate.addingTimeInterval(3_600)
+        let transaction = try repository.createTransaction(
+            scopeKey: scope,
+            tracker: tracker,
+            account: account,
+            category: nil,
+            kind: .expense,
+            money: Money(minorUnits: 1_250, currencyCode: "ALL", exponent: 2),
+            merchant: "Original",
+            occurredAt: originalDate
+        )
+        let mutationCount = try context.fetch(FetchDescriptor<OutboxMutation>()).count
+
+        try repository.applyReceiptReview(
+            transaction,
+            merchant: "Reviewed Merchant",
+            occurredAt: reviewedDate
+        )
+
+        #expect(transaction.merchant == "Reviewed Merchant")
+        #expect(transaction.occurredAt == reviewedDate)
+        #expect(transaction.amountMinor == 1_250)
+        #expect(transaction.baseAmountMinor == 1_250)
+        #expect(transaction.rateSnapshot == "1")
+        #expect(transaction.rateEffectiveAt == reviewedDate)
+        #expect(try context.fetch(FetchDescriptor<OutboxMutation>()).count == mutationCount + 1)
+    }
+
     @Test func transactionPayloadUsesIntegerMinorUnitsAndStableIdentifiers() throws {
         let container = try makeContainer()
         let context = container.mainContext
@@ -549,6 +584,7 @@ struct LocalLedgerRepositoryTests {
             LocalSplitPayment.self,
             LocalSplitShare.self,
             LocalSettlement.self,
+            LocalAttachment.self,
             OutboxMutation.self,
             AttachmentTransfer.self,
             SyncCursor.self,

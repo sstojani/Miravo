@@ -19,9 +19,12 @@ struct TransactionDetailView: View {
     @Query private var splitPayments: [LocalSplitPayment]
     @Query private var splitShares: [LocalSplitShare]
     @Query private var settlements: [LocalSettlement]
+    @Query private var attachments: [LocalAttachment]
+    @Query private var attachmentTransfers: [AttachmentTransfer]
     @State private var showingEditor = false
     @State private var showingRefund = false
     @State private var showingSplitEditor = false
+    @State private var showingReceiptCapture = false
     @State private var safeError: String?
 
     init(scopeKey: String, transaction: LedgerTransaction) {
@@ -41,6 +44,8 @@ struct TransactionDetailView: View {
         _splitPayments = Query(filter: #Predicate { $0.scopeKey == scopeKey })
         _splitShares = Query(filter: #Predicate { $0.scopeKey == scopeKey })
         _settlements = Query(filter: #Predicate { $0.scopeKey == scopeKey })
+        _attachments = Query(filter: #Predicate { $0.scopeKey == scopeKey })
+        _attachmentTransfers = Query(filter: #Predicate { $0.scopeKey == scopeKey })
     }
 
     private var tracker: LocalTracker? {
@@ -104,6 +109,18 @@ struct TransactionDetailView: View {
         settlements.first { $0.transactionID == transaction.id }
     }
 
+    private var transactionAttachments: [LocalAttachment] {
+        attachments
+            .filter { $0.transactionID == transaction.id && $0.deletedAt == nil }
+            .sorted { $0.createdAt > $1.createdAt }
+    }
+
+    private var hasIdentityReportingCurrency: Bool {
+        transaction.currencyCode == transaction.baseCurrencyCode &&
+            transaction.rateSnapshot == "1" &&
+            transaction.rateSource == "identity"
+    }
+
     var body: some View {
         List {
             Section {
@@ -164,6 +181,25 @@ struct TransactionDetailView: View {
 
             if !transaction.note.isEmpty {
                 Section("Note") { Text(transaction.note) }
+            }
+
+            if !transactionAttachments.isEmpty ||
+                (canEdit && transaction.kind == .expense && transaction.deletedAt == nil) {
+                Section("Receipts") {
+                    ForEach(transactionAttachments) { attachment in
+                        ReceiptAttachmentRow(
+                            attachment: attachment,
+                            transfer: attachmentTransfers.first {
+                                $0.attachmentID == attachment.id
+                            }
+                        )
+                    }
+                    if canEdit, transaction.kind == .expense, transaction.deletedAt == nil {
+                        Button("Add receipt", systemImage: "doc.viewfinder") {
+                            showingReceiptCapture = true
+                        }
+                    }
+                }
             }
 
             if !transactionSplitPayments.isEmpty || !transactionSplitShares.isEmpty {
@@ -281,6 +317,17 @@ struct TransactionDetailView: View {
                 )
             }
         }
+        .sheet(isPresented: $showingReceiptCapture) {
+            ReceiptCaptureView(
+                scopeKey: scopeKey,
+                transaction: transaction,
+                canApplyDate: hasIdentityReportingCurrency,
+                canApplyAmount: hasIdentityReportingCurrency &&
+                    transactionSplitShares.isEmpty &&
+                    transactionSplitPayments.isEmpty,
+                onApplyReview: applyReceiptReview
+            )
+        }
         .alert("Could not save", isPresented: Binding(
             get: { safeError != nil },
             set: { if !$0 { safeError = nil } }
@@ -313,6 +360,48 @@ struct TransactionDetailView: View {
         } catch {
             safeError = String(localized: "The local change could not be saved.")
         }
+    }
+
+    private func applyReceiptReview(_ review: ReceiptReviewSelection) throws {
+        let repository = LocalLedgerRepository(context: modelContext)
+        guard let currentMoney = transaction.money else {
+            throw MoneyError.invalidAmount
+        }
+        guard let reviewedMoney = review.money, reviewedMoney != currentMoney else {
+            try repository.applyReceiptReview(
+                transaction,
+                merchant: review.merchant,
+                occurredAt: review.occurredAt
+            )
+            return
+        }
+        guard hasIdentityReportingCurrency,
+              transactionSplitShares.isEmpty,
+              transactionSplitPayments.isEmpty,
+              let tracker,
+              let account = accounts.first(where: { $0.id == transaction.accountID })
+        else {
+            throw LocalLedgerError.invalidReference
+        }
+        let category = transaction.categoryID.flatMap { categoryID in
+            categories.first { $0.id == categoryID }
+        }
+        let linkedTagIDs = Set(
+            transactionTags
+                .filter { $0.transactionID == transaction.id }
+                .map(\.tagID)
+        )
+        try repository.updateTransaction(
+            transaction,
+            tracker: tracker,
+            account: account,
+            category: category,
+            money: reviewedMoney,
+            merchant: review.merchant ?? transaction.merchant,
+            note: transaction.note,
+            occurredAt: review.occurredAt ?? transaction.occurredAt,
+            tags: tags.filter { linkedTagIDs.contains($0.id) }
+        )
     }
 
     private func participantName(_ id: UUID) -> String {

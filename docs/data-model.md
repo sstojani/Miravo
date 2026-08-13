@@ -57,7 +57,7 @@ The native transaction cache additionally retains source/destination account IDs
 | InstallmentPayment | Plan/tracker/optional schedule item, one linked posted `source=installment` transaction, actual/applied/overpayment minor units, regular/extra marker, application instant, creator/version |
 | InstallmentPlanRevision | Prior terms/account/category/currency/schedule anchors and remaining amount, keyed by plan revision and editor |
 | InstallmentScheduleItemRevision | Prior due/state/applied/skip fields for an explicit skip or reschedule decision |
-| Attachment | Owner/tracker/transaction, type/size/checksum/private key/upload state |
+| Attachment | Tracker/transaction, creator/editor, original filename, allow-listed type, size/SHA-256, randomized private key, pending/ready/quarantined and scanner state, original-retention flag, upload/tombstone/version timestamps |
 | CurrencyRate | Base/quote decimal rate, source, effective/fetched-or-entered timestamps |
 | ShortcutCredential | User/optional tracker scope, name, public prefix, HMAC digest, explicit scope bitmask, expiry/use/revocation; raw token is never stored |
 | ShortcutIdempotencyRecord | User-scoped UUID key, credential reference, canonical request fingerprint, existing transaction, 120-day expiry |
@@ -80,6 +80,8 @@ Every installment payment creates an ordinary posted expense through the authori
 
 The native cache mirrors plan, schedule, and payment records under compound `(scopeKey, UUID)` identity. Plan/schedule state is updated optimistically, and a queued payment creates its linked local expense/movement/allocation in the same save. It deliberately creates no `LocalInstallmentPayment`; downloaded payment rows remain the authority. Progress uses the greater of authoritative applied payments and the active schedule's paid projection so a pending payment is visible without double-counting after partial pull ordering.
 
+Attachment bytes are deliberately separate from synchronized metadata. A client reserves one UUID/transaction/filename/type/byte-count/SHA-256/original-retention fingerprint; exact replay returns that attachment and a changed fingerprint conflicts. The server stores only a randomized relative private key, never a public URL, and every read reauthorizes current tracker membership. Direct attachment deletion is a versioned tombstone; transaction deletion/restoration marks and restores only attachments whose lifecycle was caused by that transaction. Native `LocalAttachment` stores safe server metadata plus optional app-container-relative content/thumbnail paths; it never stores the server storage key. `AttachmentTransfer` owns retry/cancel metadata and retains the normalized local file for offline preview after upload.
+
 ## Required constraints
 
 - Valid ISO currency and amount/exponent combinations; positive display amounts.
@@ -93,5 +95,6 @@ The native cache mirrors plan, schedule, and payment records under compound `(sc
 - Refresh expiry follows creation; consumed/revoked credential cannot rotate successfully.
 - Positive budget amount, valid start/end/custom combinations, same-tracker expense-category scope, unique selected categories/thresholds, and threshold bounds.
 - Positive installment principal/total/count; exact plan and schedule component sums; applied schedule amount at or below its total; valid state/timestamp shapes; unique plan/revision/sequence and revision history; actual payment equals applied plus explicit overpayment; regular payments reference a schedule item.
+- Positive bounded attachment byte count, lowercase SHA-256, allow-listed media type, same-tracker transaction ownership, unique nonblank private storage key, and valid upload/scanner state transitions.
 
 Cross-row totals and ownership are enforced in locked domain services plus deferred PostgreSQL triggers/constraint mechanisms where safely expressible. A serializer-only invariant is insufficient.

@@ -8,6 +8,8 @@ from uuid import UUID
 from django.db.models import Max, Q, QuerySet
 from rest_framework.renderers import JSONRenderer
 
+from apps.attachments.models import Attachment
+from apps.attachments.serializers import AttachmentSerializer
 from apps.ledger.models import (
     Account,
     Category,
@@ -62,6 +64,7 @@ BOOTSTRAP_ENTITY_ORDER = (
     ("installment_plans", SyncChange.EntityType.INSTALLMENT_PLAN),
     ("installment_schedule_items", SyncChange.EntityType.INSTALLMENT_SCHEDULE_ITEM),
     ("transactions", SyncChange.EntityType.TRANSACTION),
+    ("attachments", SyncChange.EntityType.ATTACHMENT),
     ("settlements", SyncChange.EntityType.SETTLEMENT),
     ("recurring_occurrences", SyncChange.EntityType.RECURRING_OCCURRENCE),
     ("installment_payments", SyncChange.EntityType.INSTALLMENT_PAYMENT),
@@ -177,6 +180,12 @@ def _load_instance(  # noqa: PLR0911, PLR0912
             .filter(id=entity_id)
             .first()
         )
+    if entity_type == SyncChange.EntityType.ATTACHMENT:
+        return (
+            Attachment.objects.select_related("tracker", "transaction", "created_by", "last_editor")
+            .filter(id=entity_id)
+            .first()
+        )
     if entity_type == SyncChange.EntityType.SETTLEMENT:
         return (
             Settlement.objects.select_related(
@@ -252,6 +261,8 @@ def _serialize_loaded_instance(  # noqa: PLR0912
         data = dict(InstallmentScheduleItemSerializer(instance).data)
     elif entity_type == SyncChange.EntityType.TRANSACTION:
         data = dict(TransactionReadSerializer(instance).data)
+    elif entity_type == SyncChange.EntityType.ATTACHMENT:
+        data = dict(AttachmentSerializer(instance).data)
     elif entity_type == SyncChange.EntityType.SETTLEMENT:
         data = dict(SettlementSerializer(instance).data)
     elif entity_type == SyncChange.EntityType.RECURRING_OCCURRENCE:
@@ -393,6 +404,12 @@ def _bootstrap_queryset(  # noqa: PLR0911, PLR0912
                 "split_payments__participant",
                 "split_shares__participant",
             )
+            .order_by("id")
+        )
+    if entity_type == SyncChange.EntityType.ATTACHMENT:
+        return (
+            Attachment.objects.filter(tracker_id__in=tracker_ids, deleted_at__isnull=True)
+            .select_related("tracker", "transaction", "created_by", "last_editor")
             .order_by("id")
         )
     if entity_type == SyncChange.EntityType.SETTLEMENT:

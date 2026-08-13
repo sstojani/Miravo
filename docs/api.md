@@ -149,10 +149,24 @@ Guests and settlements are versioned sync roots; payer/share children travel ins
 
 The native app uses ordinary sync for guest lifecycle, complete transaction splits, and settlement roots. Invite creation/revocation/acceptance, member role/removal, and guest merge call these narrow REST actions with the current short-lived app access token because membership authority and an irreversible identity rewrite cannot be queued speculatively offline. Invitation codes are decoded into a redacted one-time memory object, copied only with an expiring local-only pasteboard entry, and never persisted. Guest merge requires a successful clean sync plus authoritative participant versions before the request.
 
+## Implemented in Milestone 9 (private attachments)
+
+| Method/path | Minimum tracker role | Purpose |
+|---|---|---|
+| `GET/POST /attachments/` | viewer list / editor reserve | List authorized metadata or idempotently reserve a client UUID and exact file fingerprint |
+| `GET/DELETE /attachments/{id}/` | viewer / editor with `base_version` | Read safe metadata or create a versioned tombstone |
+| `GET /attachments/{id}/content/` | viewer | Stream ready private bytes through an authorization check and safe download disposition |
+| `PUT /attachments/{id}/content/` | editor | Stream and verify bytes for the reserved metadata; exact ready replay is harmless |
+
+Reservation accepts version 1, `id`, tracker/transaction UUIDs, a safe filename, an allow-listed MIME type, positive configured byte count, lowercase SHA-256, and an original-retention flag. The transaction must be live and in the tracker. Reusing the UUID with identical metadata returns the existing reservation; different metadata or a tombstone returns `409 attachment_metadata_conflict`.
+
+Upload requires the reserved `Content-Type` and, when present, exact `Content-Length`. The server streams into a private staging file, enforces the configured size limit, computes the digest, sniffs JPEG/PNG/HEIC/HEIF/WebP/PDF signatures, and then runs the optional trusted scanner hook. Clean or unconfigured scanning produces `ready`; blocked or scanner-error content moves to quarantine and is never downloadable. Private storage keys are randomized and excluded from every serializer, OpenAPI representation, audit field, and sync payload. Download is `private, no-store`, `nosniff`, authenticated on every request, and audited without recording file contents.
+
+Attachment metadata and tombstones are emitted through ordinary sync after their owning transaction. Full bootstrap orders transactions before attachments and rejects cross-tracker links. Binary content never appears in sync JSON, WebSocket events, or logs. The default limit is 12 MiB and is reported by `/config/public` as `attachment_max_bytes`; a proxy limit must be kept at least as restrictive when operators change it.
+
 ## Planned resource surface
 
 - Profile and configured recovery.
-- Attachments and receipt upload/download.
 - Currency rates, analytics, audit history, export jobs/expiring downloads.
 
 Collection endpoints use bounded cursor pagination, explicit filters/order, and stable error codes. Authorization returns 404 where revealing object existence would be inappropriate.

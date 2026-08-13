@@ -71,6 +71,7 @@ class PublicConfigView(APIView):
                 "supported_locales": settings.SUPPORTED_LOCALES,
                 "default_currency": settings.DEFAULT_CURRENCY,
                 "supported_currencies": settings.SUPPORTED_CURRENCIES,
+                "attachment_max_bytes": settings.ATTACHMENT_MAX_BYTES,
                 "api_version": "v1",
             }
         )

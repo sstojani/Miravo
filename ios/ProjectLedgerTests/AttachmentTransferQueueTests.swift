@@ -26,6 +26,13 @@ struct AttachmentTransferQueueTests {
         #expect(items.count == 1)
         #expect(items.first?.state == .pending)
         #expect(items.first?.localRelativePath == "receipts/2026/receipt.jpg")
+        let attachments = try fixture.container.mainContext.fetch(
+            FetchDescriptor<LocalAttachment>()
+        )
+        #expect(attachments.count == 1)
+        #expect(attachments.first?.originalFilename == "receipt.pdf")
+        #expect(attachments.first?.contentRelativePath == "receipts/2026/receipt.jpg")
+        #expect(attachments.first?.thumbnailRelativePath == "thumbnails/receipt.jpg")
     }
 
     @Test func rejectsUnsafePathInvalidDigestAndCrossScopeTransaction() async throws {
@@ -94,11 +101,48 @@ struct AttachmentTransferQueueTests {
         #expect(item.lastSafeErrorCode == "upload_interrupted")
     }
 
+    @Test func pendingUploadCanBeCancelledWithoutDeletingLocalReceipt() async throws {
+        let fixture = try makeFixture()
+        let queue = AttachmentTransferQueue(modelContainer: fixture.container)
+        let request = makeRequest(
+            scopeKey: fixture.scopeKey,
+            transactionID: fixture.transactionID
+        )
+        try await queue.enqueue(request)
+
+        try await queue.cancel(
+            scopeKey: fixture.scopeKey,
+            attachmentID: request.attachmentID
+        )
+
+        #expect(try await queue.readyBatch(scopeKey: fixture.scopeKey).isEmpty)
+        let transfer = try #require(
+            fixture.container.mainContext.fetch(FetchDescriptor<AttachmentTransfer>()).first
+        )
+        #expect(transfer.state == .cancelled)
+        #expect(try fixture.container.mainContext.fetch(FetchDescriptor<LocalAttachment>()).count == 1)
+
+        try await queue.retry(
+            scopeKey: fixture.scopeKey,
+            attachmentID: request.attachmentID
+        )
+        #expect(try await queue.readyBatch(scopeKey: fixture.scopeKey).count == 1)
+        #expect(transfer.state == .pending)
+
+        await #expect(throws: AttachmentTransferQueueError.invalidStateTransition) {
+            try await queue.retry(
+                scopeKey: fixture.scopeKey,
+                attachmentID: request.attachmentID
+            )
+        }
+    }
+
     private func makeRequest(
         attachmentID: UUID = UUID(),
         scopeKey: String,
         transactionID: UUID,
         path: String = "receipts/receipt.pdf",
+        originalFilename: String = "receipt.pdf",
         contentType: String = "application/pdf",
         byteCount: Int64 = 2_048,
         checksum: String = String(repeating: "b", count: 64)
@@ -108,9 +152,12 @@ struct AttachmentTransferQueueTests {
             scopeKey: scopeKey,
             transactionID: transactionID,
             localRelativePath: path,
+            originalFilename: originalFilename,
             contentType: contentType,
             byteCount: byteCount,
-            checksumSHA256: checksum
+            checksumSHA256: checksum,
+            originalRetained: true,
+            thumbnailRelativePath: "thumbnails/receipt.jpg"
         )
     }
 
@@ -142,6 +189,7 @@ struct AttachmentTransferQueueTests {
             LocalSplitPayment.self,
             LocalSplitShare.self,
             LocalSettlement.self,
+            LocalAttachment.self,
             OutboxMutation.self,
             AttachmentTransfer.self,
             SyncCursor.self,
@@ -174,6 +222,7 @@ struct AttachmentTransferQueueTests {
             money: try Money(minorUnits: 1_000, currencyCode: "ALL", exponent: 2),
             syncState: .synced
         )
+        transaction.serverVersion = 1
         container.mainContext.insert(tracker)
         container.mainContext.insert(account)
         container.mainContext.insert(transaction)

@@ -14,6 +14,7 @@ Status: source-audited on Linux through 2026-08-13; simulator Accessibility Insp
 | Sync/conflicts | Overview text/icon badge distinguishes never-synced, syncing, offline, pending, failed, conflict, and synced states; diagnostics adds counts/error codes, manual retry, field-by-field current/proposed values, and explicit keep-server/keep-mine actions | Focus behavior after resolution and long localized payload values |
 | Wallet Shortcut | Native labeled tracker/default/scope controls, text-plus-symbol credential states, explicit rotation/revocation actions, inline offline/errors, and a raw-token value whose accessibility label does not speak the secret; the Copy action remains labeled | VoiceOver focus after issuance/revocation, Dynamic Type token wrapping, pasteboard confirmation, and screenshot/task-switcher privacy on device |
 | Plans | Native tracker/budget/recurrence/installment pickers and forms; text plus symbols for budget/installment progress, due/overdue, subscription, occurrence, schedule/payment, archive, and sync states; reminder permission/count/denial are textual and the Settings route is labeled; icon-only add/options controls have explicit labels; viewer controls are omitted while records remain readable | Large monetary/cost values, installment action wrapping, VoiceOver card/schedule order and context-menu discoverability, notification-permission prompt/focus, sheet focus, date/time/time-zone controls, and Albanian accessibility-size layout |
+| Receipts | Camera/photo/file choices are labeled native controls; processing/saving has combined progress text; OCR fields are editable and independently toggled; the preview image has a text label; upload/quarantine status uses text plus a symbol; private rows expose an opening hint and PDF/image preview has a labeled close action | Camera/Photos/file permission focus, VoiceOver OCR-review order, cancelled-upload context-menu discoverability, PDF navigation, large filename/amount layout, and quarantine/error focus on device |
 | Appearance | Semantic system fonts, Dynamic Type styles, system materials, SF Symbols, light/dark-aware theme tokens, no custom motion dependency | High-contrast screenshots, Reduce Motion audit, color-blind simulation |
 
 ## Automated/source evidence
@@ -26,7 +27,7 @@ Status: source-audited on Linux through 2026-08-13; simulator Accessibility Insp
 ## Required macOS/device closure
 
 1. Run unit/UI tests on the pinned hosted macOS/Xcode image and retain the xcresult.
-2. Test the largest accessibility Dynamic Type sizes in English and Albanian on Quick Add, transaction list/detail/split editor, Plans/split balances, Local Data, Collaboration, conflict review, and Wallet Shortcut management.
+2. Test the largest accessibility Dynamic Type sizes in English and Albanian on Quick Add, transaction list/detail/split editor/receipt review, Plans/split balances, Local Data, Collaboration, conflict review, and Wallet Shortcut management.
 3. Use Accessibility Inspector and VoiceOver to confirm labels, values, order, and modal focus.
 4. Enable Increase Contrast, Differentiate Without Color, Reduce Motion, and light/dark appearance.
 5. Run the 50,000-record test on the representative simulator profile and profile SwiftData fetch/render separately from the pure filtering ceiling.

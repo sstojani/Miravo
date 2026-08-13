@@ -246,6 +246,101 @@ def main() -> int:
         if application.count(model) != 2:
             fail(f"Both persistent and fallback SwiftData schemas must register {model}.")
 
+    if application.count("LocalAttachment.self") != 2:
+        fail("Both persistent and fallback SwiftData schemas must register LocalAttachment.")
+
+    attachment_queue = (
+        IOS_ROOT / "ProjectLedger/Synchronization/AttachmentTransferQueue.swift"
+    ).read_text(encoding="utf-8")
+    attachment_worker = (
+        IOS_ROOT / "ProjectLedger/Synchronization/AttachmentTransferWorker.swift"
+    ).read_text(encoding="utf-8")
+    attachment_store = (
+        IOS_ROOT / "ProjectLedger/Synchronization/AttachmentFileStore.swift"
+    ).read_text(encoding="utf-8")
+    attachment_model = (
+        IOS_ROOT / "ProjectLedger/Persistence/LocalAttachment.swift"
+    ).read_text(encoding="utf-8")
+    for fragment in (
+        "static let defaultMaximumByteCount: Int64 = 12 * 1_024 * 1_024",
+        "recordServerSnapshot",
+        "retryAt == nil",
+        '"image/webp"',
+    ):
+        if fragment not in attachment_queue:
+            fail(f"Attachment queue contract drift: {fragment}")
+    for fragment in (
+        "fileStore.verify",
+        "reserveAttachment",
+        "uploadAttachmentContent",
+        "attachment_quarantined",
+    ):
+        if fragment not in attachment_worker:
+            fail(f"Attachment worker contract drift: {fragment}")
+    for fragment in (
+        "FileHandle(forReadingFrom: fileURL)",
+        "digest.update(data: data)",
+        "resolvingSymlinksInPath",
+        "FileProtectionType.completeUntilFirstUserAuthentication",
+    ):
+        if fragment not in attachment_store:
+            fail(f"Private local attachment storage contract drift: {fragment}")
+    if "storageKey" in attachment_model or "storage_key" in attachment_model:
+        fail("Server private storage keys must never enter the native local attachment model.")
+    if "session.upload(for: request, fromFile: fileURL)" not in api_client:
+        fail("Receipt binary transport must stream from a protected local file URL.")
+    for fragment in (
+        "session.download(for: request)",
+        "maximumByteCount <= AttachmentTransferQueuePolicy.defaultMaximumByteCount",
+        'responseType == expectedContentType',
+    ):
+        if fragment not in api_client:
+            fail(f"Private receipt download contract drift: {fragment}")
+
+    receipt_capture = (
+        IOS_ROOT / "ProjectLedger/Features/Transactions/ReceiptCaptureView.swift"
+    ).read_text(encoding="utf-8")
+    receipt_preparation = (
+        IOS_ROOT / "ProjectLedger/Synchronization/ReceiptPreparationService.swift"
+    ).read_text(encoding="utf-8")
+    receipt_ocr = (
+        IOS_ROOT / "ProjectLedger/Domain/ReceiptOCR.swift"
+    ).read_text(encoding="utf-8")
+    for fragment in (
+        "PhotosPicker",
+        ".fileImporter(",
+        "UIImagePickerController",
+        'Section("Review suggestions")',
+        'Section("Apply to transaction")',
+        "fileStore.store",
+        "AttachmentTransferQueue(modelContainer:",
+        "onApplyReview",
+        "authenticatedDownload",
+        "storeDownloaded",
+        "expectedChecksumSHA256: attachment.checksumSHA256",
+    ):
+        if fragment not in receipt_capture:
+            fail(f"Local receipt capture/review contract drift: {fragment}")
+    for fragment in (
+        "maximumInputBytes = 25 * 1_024 * 1_024",
+        "maximumOutputBytes = 12 * 1_024 * 1_024",
+        "maximumImagePixels: Int64 = 40_000_000",
+        "maximumPDFPages = 100",
+        "document.documentAttributes = [:]",
+        "originalRetained: false",
+    ):
+        if fragment not in receipt_preparation:
+            fail(f"Receipt preparation/privacy contract drift: {fragment}")
+    for fragment in (
+        "VNRecognizeTextRequest",
+        "ReceiptOCRProposal",
+        "ReceiptOCRExtractor.proposal(lines: lines)",
+    ):
+        if fragment not in receipt_ocr:
+            fail(f"On-device receipt OCR contract drift: {fragment}")
+    if "var rawText" in receipt_ocr or "rawOCR" in receipt_ocr:
+        fail("Raw OCR text must not be persisted in a receipt proposal.")
+
     collaboration_model = (
         IOS_ROOT / "ProjectLedger/Persistence/LocalSplitting.swift"
     ).read_text(encoding="utf-8")

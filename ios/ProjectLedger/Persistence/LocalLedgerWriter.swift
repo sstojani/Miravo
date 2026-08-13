@@ -1766,6 +1766,47 @@ struct LocalLedgerRepository {
         }
     }
 
+    func applyReceiptReview(
+        _ transaction: LedgerTransaction,
+        merchant: String?,
+        occurredAt: Date?
+    ) throws {
+        try ensureTransactionIsNotSettlementProjection(transaction)
+        try validateTrackerAccess(id: transaction.trackerID, scopeKey: transaction.scopeKey)
+        guard transaction.kind == .expense, transaction.deletedAt == nil else {
+            throw LocalLedgerError.invalidTransactionKind
+        }
+        let cleanMerchant = try merchant.map {
+            try validatedOptionalText($0, maximumLength: 160)
+        }
+        if occurredAt != nil {
+            guard transaction.currencyCode == transaction.baseCurrencyCode,
+                  transaction.rateSnapshot == "1",
+                  transaction.rateSource == "identity"
+            else {
+                throw MoneyError.conversionRequired
+            }
+        }
+        guard cleanMerchant != nil || occurredAt != nil else { return }
+        let merchantUnchanged = cleanMerchant == nil || cleanMerchant == transaction.merchant
+        let dateUnchanged = occurredAt == nil || occurredAt == transaction.occurredAt
+        if merchantUnchanged, dateUnchanged {
+            return
+        }
+        try commit {
+            if let cleanMerchant {
+                transaction.merchant = cleanMerchant
+            }
+            if let occurredAt {
+                transaction.occurredAt = occurredAt
+                transaction.rateEffectiveAt = occurredAt
+            }
+            transaction.updatedAt = .now
+            transaction.syncStateRaw = LocalSyncState.pending.rawValue
+            try enqueue(transaction, command: .update)
+        }
+    }
+
     func setTransactionDeleted(_ transaction: LedgerTransaction, deleted: Bool) throws {
         try ensureTransactionIsNotSettlementProjection(transaction)
         try validateTrackerAccess(id: transaction.trackerID, scopeKey: transaction.scopeKey)

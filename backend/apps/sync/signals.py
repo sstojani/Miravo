@@ -6,6 +6,7 @@ from uuid import UUID
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 
+from apps.attachments.models import Attachment
 from apps.ledger.models import (
     Account,
     Category,
@@ -68,6 +69,7 @@ def _record_change(sender: type[Any], instance: Any, raw: bool, **kwargs: Any) -
         Participant: SyncChange.EntityType.PARTICIPANT,
         Settlement: SyncChange.EntityType.SETTLEMENT,
         Transaction: SyncChange.EntityType.TRANSACTION,
+        Attachment: SyncChange.EntityType.ATTACHMENT,
     }[sender]
     tracker_id, audience_user_id = _scope(instance)
     change = SyncChange.objects.create(
@@ -101,6 +103,7 @@ for _sender in (
     Participant,
     Settlement,
     Transaction,
+    Attachment,
 ):
     receiver(
         post_save,

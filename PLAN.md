@@ -2,7 +2,7 @@
 
 Last updated: 2026-08-13. A checked item is complete; its verification tier is recorded in `IMPLEMENT.md`. Items are not checked merely because scaffolding exists.
 
-Current focus: **Milestone 8 — native verification and two-device collaboration**. Miravo is the final product name and the owner supplied `https://github.com/sstojani/Miravo.git`; publishing is paused because this workspace lacks an authenticated GitHub CLI/credential. The server and iPhone source now cover explicit participants, atomic payer/share splits, deterministic balances, offline settlements, guest lifecycle, direct authenticated invite/role/member management, and a guarded guest-to-member merge. Linux contracts/localization and backend tests pass; Swift compilation, simulator tests, two-device execution, Docker, hosted CI, Wallet automation, and notification delivery remain explicit external checks.
+Current focus: **Milestone 9 — analytics and exports after the private-receipt slice**. Miravo is the final product name and the owner supplied `https://github.com/sstojani/Miravo.git`; publishing remains paused because this workspace lacks an authenticated GitHub CLI/credential. The attachment API, isolated storage, sync metadata, native protected-file queue, camera/photo/file capture, metadata-stripped image/PDF preparation, on-device OCR review, and authenticated checksum-verified preview/download are implemented at the local/source tier. Xcode execution and physical camera/OCR testing remain external.
 
 ## Milestone 0 — Discovery and durable project plan
 
@@ -54,17 +54,17 @@ Acceptance: a clean clone starts the development stack, creates an owner, authen
 - [x] iOS bounded bootstrap staging/reconciliation that preserves unsent mutations and pulls changes after the fixed bootstrap cursor.
 - [x] iOS atomic outbox, stable ordered batching, token refresh, retry/backoff, atomic pull paging, and diagnostics.
 - [x] Structured conflicts and keep-server/keep-mine/field-review flows.
-- [x] Separate bounded checksum/idempotency attachment upload queue scaffold with restart recovery and safe diagnostics; binary transport remains Milestone 9.
+- [x] Separate bounded checksum/idempotency attachment upload queue with restart recovery, explicit cancel/resume, authenticated file-backed upload/download, and safe diagnostics.
 - [x] Authenticated foreground WebSocket sequence invalidation with access-token expiry, reconnect/backoff, and polling fallback.
 - [x] Active connectivity-return hint and best-effort `BGAppRefreshTask` scheduling without correctness dependence.
 
-Current acceptance: an authenticated device can push an ordered offline tracker/account/category/transaction batch; retrying the same operation never creates another financial record; changing a reused operation fingerprint conflicts; one rejected operation does not roll back accepted siblings; pulls and bootstrap are bounded and authorization-filtered; membership removal reaches the removed user and hides cached tracker data; tombstones/current representations carry versions; an expired cursor resumes a staged bootstrap without replacing the prior store or pending outbox; and acknowledgements are bound to the authenticated device session. The ASGI socket authenticates the same active device session and emits sequence hints only. Backend behavior is passing locally. Native behavior and attachment-queue state-machine tests are authored but remain uncompiled until macOS CI; no binary attachment endpoint is claimed.
+Current acceptance: an authenticated device can push an ordered offline tracker/account/category/transaction batch; retrying the same operation never creates another financial record; changing a reused operation fingerprint conflicts; one rejected operation does not roll back accepted siblings; pulls and bootstrap are bounded and authorization-filtered; membership removal reaches the removed user and hides cached tracker data; tombstones/current representations carry versions; an expired cursor resumes a staged bootstrap without replacing the prior store or pending outbox; and acknowledgements are bound to the authenticated device session. The ASGI socket authenticates the same active device session and emits sequence hints only. Backend behavior is passing locally. Native sync and attachment state-machine tests are authored but remain uncompiled until macOS CI; the private binary endpoints and native transfer source are now implemented under Milestone 9.
 
 ## Milestone 5 — Complete core app experience
 
 - [x] Overview, fast amount-first quick add, transaction detail/list/filter/search, transfers, refunds, and undo (source implemented; macOS/device verification pending).
 - [x] Tracker/account/category/tag settings, synchronized offline collaborator roster, role-aware local states, owner/admin tracker presentation/default/reordering, and connected invite/member management (source implemented; macOS verification is pending).
-- [x] Complete implemented-screen English/Albanian strings, source accessibility/state audit, explicit empty/offline/error/permission/conflict presentation, and authored 50k-record performance check (661 literal UI keys and static checks pass locally; simulator/device audit and timing remain unverified).
+- [x] Complete implemented-screen English/Albanian strings, source accessibility/state audit, explicit empty/offline/error/permission/conflict presentation, and authored 50k-record performance check (725 literal UI keys and static checks pass locally; simulator/device audit and timing remain unverified).
 
 ## Milestone 6 — Shortcut automation
 
@@ -89,9 +89,9 @@ Current acceptance: an authenticated device can push an ordered offline tracker/
 
 ## Milestone 9 — Receipts, OCR, analytics, and exports
 
-- [ ] Local receipt capture/files/PDF, metadata stripping, derivatives, checksum queue, cancellation, and restart survival.
-- [ ] On-device Vision OCR proposal and mandatory review.
-- [ ] Authenticated private upload/download, quarantine hook, limits, and authorization tests.
+- [x] Local receipt capture/files/PDF, metadata stripping, display/thumbnail derivatives, checksum queue, pending cancellation/resume, and restart survival (source/tests authored; Xcode/device execution pending).
+- [x] On-device Vision OCR proposal and mandatory editable review (source/extractor tests authored; Vision/device accuracy pending).
+- [x] Authenticated private upload/download, quarantine hook, bounded streaming, tombstone sync, and authorization tests (backend passing locally; native source uncompiled).
 - [ ] Offline-consistent charts/analytics and accessible summaries.
 - [ ] Expiring, audited CSV/PDF/portable exports whose totals match source data.
 

@@ -23,6 +23,7 @@ class SyncChange(models.Model):
         PARTICIPANT = "participant", "Participant"
         SETTLEMENT = "settlement", "Settlement"
         TRANSACTION = "transaction", "Transaction"
+        ATTACHMENT = "attachment", "Attachment"
 
     class Operation(models.TextChoices):
         UPSERT = "upsert", "Upsert"

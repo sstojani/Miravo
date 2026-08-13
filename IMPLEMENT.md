@@ -795,3 +795,47 @@ Commit the completed native-installment/Miravo checkpoint locally. Continue Mile
 - Backend domain/sync behavior and the generated schema are **verified locally on Linux/SQLite**. Native source structure, privacy/localization contracts, and non-macro syntax are **verified locally on Linux**.
 - Swift 6/XcodeGen compilation, SwiftData migrations/runtime, XCTest/XCUITest, simulator accessibility/performance, two-account invite/split/settlement/merge, no-WebSocket fallback, and physical-device behavior are **not yet verified**. PostgreSQL/Redis/Docker and hosted CI are also still open.
 - Commit this verified checkpoint on `agent/milestone-8-native-collaboration`. Publishing requires the owner to install the connected GitHub app for `sstojani/Miravo` or authenticate Git/`gh` in the workspace; no token belongs in source. Continue locally into Milestone 9 with the private attachment/upload protocol before camera/OCR UI.
+
+## 2026-08-13 — Milestone 9 private receipt, OCR, and verified transfer checkpoint
+
+### Acceptance checkpoint
+
+- An attachment is a transaction-scoped versioned resource. A client UUID plus exact safe metadata is reservation-idempotent, while changed reuse conflicts. Metadata and tombstones synchronize normally; binary content never enters sync JSON, WebSocket frames, or logs.
+- Every server list/retrieve/download/upload/delete path rechecks current tracker membership and the required role. Content is never served through a public media path or storage key. Upload is bounded and streamed, SHA-256 and signature checked, privately stored with restrictive modes, optionally scanned, quarantined on blocked/scanner error, and safely audited.
+- Native camera/photo/file/PDF input is prepared entirely on-device before a queue write or network call. Images are transformed and recompressed without source metadata, PDFs shed document attributes, image pixels/PDF pages/input/output bytes are bounded, a thumbnail is created, and the default does not retain the original.
+- Vision may propose merchant, total, currency, date, and tax, but raw recognized lines are ephemeral. Every proposal appears in an editable review with explicit per-field application choices; OCR failure still permits attachment. Split or converted money is not silently rewritten.
+- The protected normalized file, thumbnail metadata, and durable transfer row exist before upload. Parent transaction synchronization gates reservation; exact local size/digest is rechecked before file-URL streaming; retries back off; interruption recovers; permanent/quarantine failures stop; pending/failed upload can be cancelled without deleting the local receipt, and failed/cancelled upload can be explicitly resumed.
+- Local preview rechecks size/SHA-256. Another device downloads only with the normal app access token, refuses redirects/cross-origin responses, bounds the temporary file, requires the synchronized MIME type, verifies its digest, and protects the local copy before rendering.
+
+### Material work
+
+- Added the `attachments` Django app, model/admin/migrations, strict reservation and safe read serializers, role-filtered REST view set, streaming staging/private-storage service, configurable 12 MiB default, random private/quarantine keys, trusted scanner hook, audit actions, and OpenAPI routes.
+- Added attachment sync choices/signals/presentation/bootstrap ordering and transaction-delete lifecycle handling. Direct deletion uses a version tombstone; transaction restore revives only attachments marked as deleted by that transaction. Private storage keys are absent from all wire representations.
+- Added five backend attachment tests for idempotent reserve/upload/download/tombstone/sync, bad fingerprint/signature/size/digest, viewer/editor/cross-tracker authorization, scanner quarantine, and exact transaction cascade behavior.
+- Added native attachment DTOs, safe SwiftData metadata, protected file store, retry/cancel/resume transfer queue, file-URL upload worker, sync-controller integration, attachment pull/bootstrap/tombstones, authenticated bounded download, checksum-verified local/cross-device preview, and safe status presentation in transaction detail.
+- Added camera, PhotosPicker, Files/PDF import, ImageIO/PDFKit preparation, Vision OCR extraction, editable review, conservative transaction update, and English/Albanian receipt UI. The source never defines a raw OCR persistence field.
+- Added native tests for OCR extraction in English/Albanian, no invented values, image/PDF preparation, protected-path traversal/checksum behavior, downloaded-file verification, queue idempotency/restart/cancel, upload success/transient failure/changed-file refusal, metadata bootstrap, and reviewed transaction-field preservation.
+- Extended the Linux iOS contract to lock down upload/download file APIs, limits, metadata stripping, review presence, OCR framework use, storage-key exclusion, Data Protection, and digest verification. Updated architecture, API, data, sync, threat, security, accessibility, user, troubleshooting, backend/iOS, test, plan, and status documentation; recorded D-036.
+
+### Commands and outcomes
+
+- `make schema && make check`: **passed locally** — 90 tests. The final checkpoint rerun reports 81.54% branch-aware coverage, with Ruff format/lint, Django checks, strict mypy over 105 source files, and valid byte-current OpenAPI all passing.
+- `PROJECT_LEDGER_ENV=test PROJECT_LEDGER_DATABASE_URL=sqlite:///:memory: .venv/bin/python backend/manage.py makemigrations --check --dry-run`: **no changes detected**.
+- `./ios/check-localizations.sh`: **passed locally** — 725 literal UI keys, identical English/Albanian sets, and compatible placeholders.
+- `python3 ios/check-project-contract.py`: **passed locally**, including receipt preparation, OCR-review, protected storage, file upload/download, collaboration, privacy, and product identity contracts.
+- `tree-sitter-swift` 0.7.1 parsed all 103 Swift app/unit/UI-test files with the established preprocessor/`#Unique` compatibility filter: **no syntax-tree errors or missing nodes**.
+- `git diff --check`: **passed locally**.
+- The same production-secret-pattern scan used by iOS CI returned no matches in Swift/plist source. A final attempt to recreate the ephemeral npm Swift syntax-parser environment was blocked by this workspace's package-tool usage limit; the earlier complete 103-file parser pass remains the latest parser result, and no compiler result is inferred from it.
+- Official Apple documentation was rechecked for SwiftData `ModelContext.container`, PhotosUI's system picker/privacy model, Vision text recognition, and async file-backed `URLSession` upload/download. These references support the selected APIs but do not substitute for Xcode execution.
+
+### Verification boundary
+
+- Backend attachment persistence, authorization, streamed validation, quarantine behavior, tombstones, sync representations, audit, OpenAPI, migration drift, and the full Django/SQLite regression suite are **verified locally on Linux**.
+- Native localization/privacy/source contracts and independent Swift syntax-tree structure are **verified locally on Linux**. The Swift tests are authored but **not executed**: this environment has no Swift, Xcode, SwiftFormat, or XcodeGen runtime.
+- Swift 6 type/concurrency checking, automatic SwiftData migration, Photos/camera/file permission behavior, Vision recognition quality, PDF/image preview, actual URLSession progress/cancellation timing, simulator accessibility, cross-device transfer, and physical-iPhone behavior remain **unverified until GitHub macOS/device execution**.
+- Server-side decoder-level image dimension and PDF page/complexity validation is still required production hardening beyond the current byte, checksum, signature, native-preparation, and optional scanner controls. Docker/PostgreSQL/Redis, real Funnel/server, backup restore, signing, and IPA behavior also remain unverified. No production system was contacted.
+- Publishing to `https://github.com/sstojani/Miravo.git` remains authorized but blocked by absent GitHub authentication in this workspace; no credential is committed or requested in source.
+
+### Next exact action
+
+Create a clean local receipt checkpoint after one final regression/secret scan. Then implement the Milestone 9 analytics vertical slice with a shared, deterministic reporting definition: offline native category/trend/cash-flow/account/budget/subscription/installment/split/merchant/source summaries first, matching authorized server aggregates and golden-data tests second. Publishing resumes immediately when a connected GitHub app or authenticated Git/`gh` session becomes available.

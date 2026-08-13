@@ -3,6 +3,7 @@ import SwiftData
 
 enum AttachmentTransferQueueError: Error, Equatable, Sendable {
     case invalidRelativePath
+    case invalidFilename
     case invalidContentType
     case invalidByteCount
     case fileTooLarge
@@ -10,6 +11,7 @@ enum AttachmentTransferQueueError: Error, Equatable, Sendable {
     case invalidTransaction
     case duplicateAttachment
     case invalidStateTransition
+    case invalidServerResponse
 }
 
 struct AttachmentTransferRequest: Equatable, Sendable {
@@ -17,23 +19,53 @@ struct AttachmentTransferRequest: Equatable, Sendable {
     let scopeKey: String
     let transactionID: UUID
     let localRelativePath: String
+    let originalFilename: String
     let contentType: String
     let byteCount: Int64
     let checksumSHA256: String
+    let originalRetained: Bool
+    let thumbnailRelativePath: String?
+
+    init(
+        attachmentID: UUID,
+        scopeKey: String,
+        transactionID: UUID,
+        localRelativePath: String,
+        originalFilename: String,
+        contentType: String,
+        byteCount: Int64,
+        checksumSHA256: String,
+        originalRetained: Bool,
+        thumbnailRelativePath: String? = nil
+    ) {
+        self.attachmentID = attachmentID
+        self.scopeKey = scopeKey
+        self.transactionID = transactionID
+        self.localRelativePath = localRelativePath
+        self.originalFilename = originalFilename
+        self.contentType = contentType
+        self.byteCount = byteCount
+        self.checksumSHA256 = checksumSHA256
+        self.originalRetained = originalRetained
+        self.thumbnailRelativePath = thumbnailRelativePath
+    }
 }
 
 struct PendingAttachmentTransfer: Equatable, Sendable {
     let attachmentID: UUID
+    let trackerID: UUID
     let transactionID: UUID
     let localRelativePath: String
+    let originalFilename: String
     let contentType: String
     let byteCount: Int64
     let checksumSHA256: String
+    let originalRetained: Bool
     let attemptCount: Int
 }
 
 enum AttachmentTransferQueuePolicy {
-    static let defaultMaximumByteCount: Int64 = 20 * 1_024 * 1_024
+    static let defaultMaximumByteCount: Int64 = 12 * 1_024 * 1_024
     static let maximumBatchSize = 10
 }
 
@@ -44,7 +76,7 @@ actor AttachmentTransferQueue {
         maximumByteCount: Int64 = AttachmentTransferQueuePolicy.defaultMaximumByteCount
     ) throws {
         try validate(request, maximumByteCount: maximumByteCount)
-        guard try transactionExists(
+        guard let transaction = try transaction(
             scopeKey: request.scopeKey,
             transactionID: request.transactionID
         ) else {
@@ -57,12 +89,16 @@ actor AttachmentTransferQueue {
         ) {
             guard existing.transactionID == request.transactionID,
                   existing.localRelativePath == request.localRelativePath,
+                  existing.originalFilename == request.originalFilename,
                   existing.contentType == request.contentType,
                   existing.byteCount == request.byteCount,
-                  existing.checksumSHA256 == request.checksumSHA256
+                  existing.checksumSHA256 == request.checksumSHA256,
+                  existing.originalRetained == request.originalRetained
             else {
                 throw AttachmentTransferQueueError.duplicateAttachment
             }
+            try ensureLocalAttachment(request, trackerID: transaction.trackerID)
+            try saveOrRollback()
             return
         }
 
@@ -72,11 +108,14 @@ actor AttachmentTransferQueue {
                 scopeKey: request.scopeKey,
                 transactionID: request.transactionID,
                 localRelativePath: request.localRelativePath,
+                originalFilename: request.originalFilename,
                 contentType: request.contentType,
                 byteCount: request.byteCount,
-                checksumSHA256: request.checksumSHA256
+                checksumSHA256: request.checksumSHA256,
+                originalRetained: request.originalRetained
             )
         )
+        try ensureLocalAttachment(request, trackerID: transaction.trackerID)
         try saveOrRollback()
     }
 
@@ -89,23 +128,31 @@ actor AttachmentTransferQueue {
             predicate: #Predicate { $0.scopeKey == scopeKey },
             sortBy: [SortDescriptor(\AttachmentTransfer.createdAt)]
         )
-        return try modelContext.fetch(descriptor)
-            .lazy
-            .filter {
-                $0.state == .pending && ($0.nextAttemptAt == nil || $0.nextAttemptAt! <= now)
-            }
-            .prefix(min(max(limit, 1), AttachmentTransferQueuePolicy.maximumBatchSize))
-            .map {
+        let maximum = min(max(limit, 1), AttachmentTransferQueuePolicy.maximumBatchSize)
+        var ready: [PendingAttachmentTransfer] = []
+        for item in try modelContext.fetch(descriptor) where
+            item.state == .pending && (item.nextAttemptAt == nil || item.nextAttemptAt! <= now) {
+            guard let transaction = try transaction(
+                scopeKey: scopeKey,
+                transactionID: item.transactionID
+            ), transaction.serverVersion != nil else { continue }
+            ready.append(
                 PendingAttachmentTransfer(
-                    attachmentID: $0.attachmentID,
-                    transactionID: $0.transactionID,
-                    localRelativePath: $0.localRelativePath,
-                    contentType: $0.contentType,
-                    byteCount: $0.byteCount,
-                    checksumSHA256: $0.checksumSHA256,
-                    attemptCount: $0.attemptCount
+                    attachmentID: item.attachmentID,
+                    trackerID: transaction.trackerID,
+                    transactionID: item.transactionID,
+                    localRelativePath: item.localRelativePath,
+                    originalFilename: item.originalFilename,
+                    contentType: item.contentType,
+                    byteCount: item.byteCount,
+                    checksumSHA256: item.checksumSHA256,
+                    originalRetained: item.originalRetained,
+                    attemptCount: item.attemptCount
                 )
-            }
+            )
+            if ready.count == maximum { break }
+        }
+        return ready
     }
 
     func markUploading(scopeKey: String, attachmentID: UUID) throws {
@@ -122,7 +169,47 @@ actor AttachmentTransferQueue {
         try saveOrRollback()
     }
 
-    func markUploaded(scopeKey: String, attachmentID: UUID, at date: Date = .now) throws {
+    func recordServerSnapshot(scopeKey: String, snapshot: AttachmentSnapshot) throws {
+        guard let item = try transfer(scopeKey: scopeKey, attachmentID: snapshot.id),
+              let local = try localAttachment(scopeKey: scopeKey, attachmentID: snapshot.id),
+              item.transactionID == snapshot.transactionID,
+              local.trackerID == snapshot.trackerID,
+              item.originalFilename == snapshot.originalFilename,
+              item.contentType == snapshot.contentType,
+              item.byteCount == snapshot.byteCount,
+              item.checksumSHA256 == snapshot.checksumSHA256,
+              item.originalRetained == snapshot.originalRetained,
+              let uploadState = LocalAttachmentUploadState(rawValue: snapshot.uploadState),
+              let scanStatus = LocalAttachmentScanStatus(rawValue: snapshot.scanStatus),
+              let createdAt = parseServerTimestamp(snapshot.createdAt),
+              let updatedAt = parseServerTimestamp(snapshot.updatedAt),
+              let uploadedAt = tryParseOptionalTimestamp(snapshot.uploadedAt),
+              let deletedAt = tryParseOptionalTimestamp(snapshot.deletedAt)
+        else {
+            throw AttachmentTransferQueueError.invalidServerResponse
+        }
+        local.createdByID = snapshot.createdByID
+        local.lastEditorID = snapshot.lastEditorID
+        local.uploadStateRaw = uploadState.rawValue
+        local.scanStatusRaw = scanStatus.rawValue
+        local.uploadedAt = uploadedAt
+        local.serverVersion = snapshot.version
+        local.createdAt = createdAt
+        local.updatedAt = updatedAt
+        local.deletedAt = deletedAt
+        try saveOrRollback()
+    }
+
+    func markUploaded(
+        scopeKey: String,
+        snapshot: AttachmentSnapshot,
+        at date: Date = .now
+    ) throws {
+        try recordServerSnapshot(scopeKey: scopeKey, snapshot: snapshot)
+        guard snapshot.uploadState == LocalAttachmentUploadState.ready.rawValue else {
+            throw AttachmentTransferQueueError.invalidServerResponse
+        }
+        let attachmentID = snapshot.id
         guard let item = try transfer(scopeKey: scopeKey, attachmentID: attachmentID),
               item.state == .uploading
         else {
@@ -147,7 +234,9 @@ actor AttachmentTransferQueue {
         else {
             throw AttachmentTransferQueueError.invalidStateTransition
         }
-        item.stateRaw = AttachmentTransferState.failed.rawValue
+        item.stateRaw = retryAt == nil
+            ? AttachmentTransferState.failed.rawValue
+            : AttachmentTransferState.pending.rawValue
         item.nextAttemptAt = retryAt
         item.lastSafeErrorCode = sanitizedSafeErrorCode(safeErrorCode)
         item.updatedAt = .now
@@ -167,10 +256,22 @@ actor AttachmentTransferQueue {
         try saveOrRollback()
     }
 
+    func retry(scopeKey: String, attachmentID: UUID) throws {
+        guard let item = try transfer(scopeKey: scopeKey, attachmentID: attachmentID),
+              item.state == .failed || item.state == .cancelled
+        else {
+            throw AttachmentTransferQueueError.invalidStateTransition
+        }
+        item.stateRaw = AttachmentTransferState.pending.rawValue
+        item.nextAttemptAt = nil
+        item.lastSafeErrorCode = nil
+        item.updatedAt = .now
+        try saveOrRollback()
+    }
+
     func cancel(scopeKey: String, attachmentID: UUID) throws {
         guard let item = try transfer(scopeKey: scopeKey, attachmentID: attachmentID),
-              item.state != .uploaded,
-              item.state != .cancelled
+              item.state == .pending || item.state == .failed
         else {
             throw AttachmentTransferQueueError.invalidStateTransition
         }
@@ -199,12 +300,11 @@ actor AttachmentTransferQueue {
         maximumByteCount: Int64
     ) throws {
         let path = request.localRelativePath
-        let pathParts = path.split(separator: "/", omittingEmptySubsequences: false)
-        guard !path.isEmpty,
-              !path.hasPrefix("/"),
-              !path.contains("\\"),
-              pathParts.allSatisfy({ !$0.isEmpty && $0 != "." && $0 != ".." })
-        else {
+        guard isValidRelativePath(path) else {
+            throw AttachmentTransferQueueError.invalidRelativePath
+        }
+        if let thumbnailRelativePath = request.thumbnailRelativePath,
+           !isValidRelativePath(thumbnailRelativePath) {
             throw AttachmentTransferQueueError.invalidRelativePath
         }
         let contentType = request.contentType.lowercased()
@@ -214,11 +314,21 @@ actor AttachmentTransferQueue {
             "image/heif",
             "image/jpeg",
             "image/png",
+            "image/webp",
         ]
         guard request.contentType == contentType,
               allowedContentTypes.contains(contentType)
         else {
             throw AttachmentTransferQueueError.invalidContentType
+        }
+        let filename = request.originalFilename
+        guard !filename.isEmpty,
+              filename.count <= 180,
+              !filename.contains("/"),
+              !filename.contains("\\"),
+              filename.unicodeScalars.allSatisfy({ $0.value >= 32 && $0.value != 127 })
+        else {
+            throw AttachmentTransferQueueError.invalidFilename
         }
         guard request.byteCount > 0 else {
             throw AttachmentTransferQueueError.invalidByteCount
@@ -236,7 +346,10 @@ actor AttachmentTransferQueue {
         }
     }
 
-    private func transactionExists(scopeKey: String, transactionID: UUID) throws -> Bool {
+    private func transaction(
+        scopeKey: String,
+        transactionID: UUID
+    ) throws -> LedgerTransaction? {
         let descriptor = FetchDescriptor<LedgerTransaction>(
             predicate: #Predicate {
                 $0.scopeKey == scopeKey &&
@@ -244,7 +357,7 @@ actor AttachmentTransferQueue {
                     $0.deletedAt == nil
             }
         )
-        return try modelContext.fetchCount(descriptor) == 1
+        return try modelContext.fetch(descriptor).first
     }
 
     private func transfer(
@@ -257,6 +370,90 @@ actor AttachmentTransferQueue {
             }
         )
         return try modelContext.fetch(descriptor).first
+    }
+
+    private func localAttachment(
+        scopeKey: String,
+        attachmentID: UUID
+    ) throws -> LocalAttachment? {
+        let descriptor = FetchDescriptor<LocalAttachment>(
+            predicate: #Predicate {
+                $0.scopeKey == scopeKey && $0.id == attachmentID
+            }
+        )
+        return try modelContext.fetch(descriptor).first
+    }
+
+    private func ensureLocalAttachment(
+        _ request: AttachmentTransferRequest,
+        trackerID: UUID
+    ) throws {
+        if let existing = try localAttachment(
+            scopeKey: request.scopeKey,
+            attachmentID: request.attachmentID
+        ) {
+            guard existing.trackerID == trackerID,
+                  existing.transactionID == request.transactionID,
+                  existing.originalFilename == request.originalFilename,
+                  existing.contentType == request.contentType,
+                  existing.byteCount == request.byteCount,
+                  existing.checksumSHA256 == request.checksumSHA256,
+                  existing.originalRetained == request.originalRetained
+            else {
+                throw AttachmentTransferQueueError.duplicateAttachment
+            }
+            if let requestedThumbnail = request.thumbnailRelativePath {
+                guard existing.thumbnailRelativePath == nil ||
+                    existing.thumbnailRelativePath == requestedThumbnail
+                else {
+                    throw AttachmentTransferQueueError.duplicateAttachment
+                }
+                existing.thumbnailRelativePath = requestedThumbnail
+            }
+            guard existing.contentRelativePath == nil ||
+                existing.contentRelativePath == request.localRelativePath
+            else {
+                throw AttachmentTransferQueueError.duplicateAttachment
+            }
+            existing.contentRelativePath = request.localRelativePath
+            return
+        }
+        modelContext.insert(
+            LocalAttachment(
+                id: request.attachmentID,
+                scopeKey: request.scopeKey,
+                trackerID: trackerID,
+                transactionID: request.transactionID,
+                originalFilename: request.originalFilename,
+                contentType: request.contentType,
+                byteCount: request.byteCount,
+                checksumSHA256: request.checksumSHA256,
+                originalRetained: request.originalRetained,
+                contentRelativePath: request.localRelativePath,
+                thumbnailRelativePath: request.thumbnailRelativePath
+            )
+        )
+    }
+
+    private func isValidRelativePath(_ path: String) -> Bool {
+        let pathParts = path.split(separator: "/", omittingEmptySubsequences: false)
+        return !path.isEmpty &&
+            !path.hasPrefix("/") &&
+            !path.contains("\\") &&
+            pathParts.allSatisfy({ !$0.isEmpty && $0 != "." && $0 != ".." })
+    }
+
+    private func parseServerTimestamp(_ value: String) -> Date? {
+        let fractional = ISO8601DateFormatter()
+        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let parsed = fractional.date(from: value) { return parsed }
+        return ISO8601DateFormatter().date(from: value)
+    }
+
+    private func tryParseOptionalTimestamp(_ value: String?) -> Date?? {
+        guard let value else { return .some(nil) }
+        guard let parsed = parseServerTimestamp(value) else { return nil }
+        return .some(parsed)
     }
 
     private func sanitizedSafeErrorCode(_ value: String) -> String {
