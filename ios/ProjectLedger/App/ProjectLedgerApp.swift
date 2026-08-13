@@ -5,15 +5,24 @@ import SwiftUI
 @MainActor
 struct ProjectLedgerApp: App {
     @Environment(\.scenePhase) private var scenePhase
+    @StateObject private var recurringReminderController: RecurringReminderController
     @StateObject private var sessionController: SessionController
     @StateObject private var syncController: SyncController
     private let store: LocalStoreBootstrap
 
     init() {
         let store = LocalStoreBootstrap.make()
+        let recurringReminderController = RecurringReminderController(
+            modelContainer: store.container,
+            preferences: .standard,
+            scheduler: SystemRecurringNotificationScheduler()
+        )
         let sessionController = SessionController()
         let syncController = SyncController(modelContainer: store.container)
         self.store = store
+        _recurringReminderController = StateObject(
+            wrappedValue: recurringReminderController
+        )
         _sessionController = StateObject(wrappedValue: sessionController)
         _syncController = StateObject(wrappedValue: syncController)
         _ = BackgroundSyncScheduler.register(
@@ -25,6 +34,7 @@ struct ProjectLedgerApp: App {
     var body: some Scene {
         WindowGroup {
             RootView(storeUnavailable: store.persistentStoreUnavailable)
+                .environmentObject(recurringReminderController)
                 .environmentObject(sessionController)
                 .environmentObject(syncController)
                 .onChange(of: scenePhase) { _, newPhase in

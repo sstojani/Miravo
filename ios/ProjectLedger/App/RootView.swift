@@ -6,6 +6,7 @@ struct RootView: View {
 
     @Environment(\.modelContext) private var modelContext
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @EnvironmentObject private var reminders: RecurringReminderController
     @EnvironmentObject private var session: SessionController
     @EnvironmentObject private var sync: SyncController
 
@@ -22,6 +23,11 @@ struct RootView: View {
         .onChange(of: session.phase) { _, phase in
             if phase != .authenticated {
                 Task { await sync.stopForegroundTriggers() }
+            }
+        }
+        .onChange(of: session.scopeKey) { previous, current in
+            if previous != nil && current == nil {
+                Task { await reminders.deactivate() }
             }
         }
     }
@@ -88,6 +94,7 @@ private struct MainTabView: View {
 
     @EnvironmentObject private var session: SessionController
     @EnvironmentObject private var sync: SyncController
+    @EnvironmentObject private var reminders: RecurringReminderController
 
     var body: some View {
         TabView {
@@ -134,6 +141,7 @@ private struct MainTabView: View {
             }
         }
         .task(id: scopeKey) {
+            await reminders.configure(scopeKey: scopeKey)
             let clock = ContinuousClock()
             while !Task.isCancelled {
                 do {
@@ -143,6 +151,9 @@ private struct MainTabView: View {
                 }
                 await sync.synchronize(session: session)
             }
+        }
+        .onChange(of: sync.diagnostics.lastSuccessfulSyncAt) { _, _ in
+            Task { await reminders.refresh(scopeKey: scopeKey) }
         }
     }
 }

@@ -11,6 +11,8 @@ final class AppPreferences {
         static let deviceID = "device.identifier"
         static let hasAuthenticated = "session.hasAuthenticated"
         static let lastEmail = "session.lastEmail"
+        static let recurringReminderLeadHours = "planning.recurringReminderLeadHours."
+        static let recurringRemindersEnabled = "planning.recurringRemindersEnabled."
         static let serverURL = "server.baseURL"
         static let signedOut = "session.signedOut"
     }
@@ -56,6 +58,37 @@ final class AppPreferences {
         set { defaults.set(newValue, forKey: Key.appLockEnabled) }
     }
 
+    func recurringRemindersEnabled(scopeKey: String) -> Bool {
+        defaults.bool(forKey: scopedKey(Key.recurringRemindersEnabled, scopeKey: scopeKey))
+    }
+
+    func setRecurringRemindersEnabled(_ enabled: Bool, scopeKey: String) {
+        defaults.set(
+            enabled,
+            forKey: scopedKey(Key.recurringRemindersEnabled, scopeKey: scopeKey)
+        )
+    }
+
+    func recurringReminderLeadTime(scopeKey: String) -> RecurringReminderLeadTime {
+        let key = scopedKey(Key.recurringReminderLeadHours, scopeKey: scopeKey)
+        guard defaults.object(forKey: key) != nil,
+              let value = RecurringReminderLeadTime(rawValue: defaults.integer(forKey: key))
+        else {
+            return .oneDay
+        }
+        return value
+    }
+
+    func setRecurringReminderLeadTime(
+        _ leadTime: RecurringReminderLeadTime,
+        scopeKey: String
+    ) {
+        defaults.set(
+            leadTime.rawValue,
+            forKey: scopedKey(Key.recurringReminderLeadHours, scopeKey: scopeKey)
+        )
+    }
+
     var deviceID: String {
         if let existing = defaults.string(forKey: Key.deviceID), !existing.isEmpty {
             return existing
@@ -73,6 +106,10 @@ final class AppPreferences {
         isSignedOut = false
     }
 
+    private func scopedKey(_ prefix: String, scopeKey: String) -> String {
+        prefix + RecurringReminderPlanner.scopeDigest(scopeKey)
+    }
+
 #if DEBUG
     func resetForUITests() {
         for key in [
@@ -84,6 +121,11 @@ final class AppPreferences {
             Key.serverURL,
             Key.signedOut,
         ] {
+            defaults.removeObject(forKey: key)
+        }
+        for key in defaults.dictionaryRepresentation().keys where
+            key.hasPrefix(Key.recurringReminderLeadHours) ||
+            key.hasPrefix(Key.recurringRemindersEnabled) {
             defaults.removeObject(forKey: key)
         }
     }

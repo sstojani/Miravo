@@ -119,6 +119,38 @@ def main() -> int:
         if "rawToken" in source or "raw_token" in source or "OneTimeShortcutToken" in source:
             fail(f"Raw Shortcut credentials must not enter persistent storage: {relative_path}")
 
+    reminder_planner = (IOS_ROOT / "ProjectLedger/Domain/RecurringReminderPlanner.swift").read_text(
+        encoding="utf-8"
+    )
+    reminder_controller = (
+        IOS_ROOT / "ProjectLedger/Synchronization/RecurringReminderController.swift"
+    ).read_text(encoding="utf-8")
+    candidate_block = reminder_planner.split(
+        "struct RecurringReminderCandidate", maxsplit=1
+    )[1].split("struct RecurringReminderPlan", maxsplit=1)[0]
+    for forbidden_field in ("name:", "amount", "currency", "merchant", "note:", "provider"):
+        if forbidden_field in candidate_block:
+            fail(f"Reminder planning must not carry financial preview data: {forbidden_field}")
+    if "static let maximumScheduledCount = 50" not in reminder_planner:
+        fail("Recurring reminder planning must preserve capacity under the iOS pending limit.")
+    if reminder_planner.count("SHA256.hash") < 2:
+        fail("Reminder scope and request identifiers must remain opaque hashes.")
+    required_generic_copy = (
+        'String(localized: "Upcoming planned transaction")',
+        'localized: "A scheduled transaction is due soon. Open Project Ledger to review it."',
+    )
+    if not all(fragment in reminder_controller for fragment in required_generic_copy):
+        fail("Local reminder notification content must remain generic.")
+    for forbidden_reference in (
+        ".amountMinor",
+        ".currencyCode",
+        ".merchant",
+        ".note",
+        ".subscriptionProvider",
+    ):
+        if forbidden_reference in reminder_controller:
+            fail(f"Notification scheduling must not read private preview data: {forbidden_reference}")
+
     print("iOS transport, background-task, and privacy contract verified.")
     return 0
 

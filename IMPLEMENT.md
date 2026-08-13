@@ -562,3 +562,42 @@ Checkpoint the authoritative server scheduler, then add scoped SwiftData recurri
 ### Next exact action
 
 Commit this native recurrence checkpoint. Then add a testable, privacy-safe, explicitly opt-in local reminder planner/scheduler that refreshes after local changes and successful sync without becoming correctness-critical. After its Linux source gates, begin authoritative installment-plan terms, deterministic schedules, revisions, payments, extra-payment/payoff, and overpayment tests on the backend.
+
+## 2026-08-13 — Milestone 7 privacy-safe local recurrence reminder checkpoint
+
+### Acceptance checks established
+
+- Notification authorization is never requested at launch, login, synchronization, or rule creation. Only an explicit user toggle can request it, and recurrence remains correct when permission is absent, denied, revoked, or delivery never occurs.
+- Eligible reminders come only from active, nonarchived, nondeleted future rules in the current compound server/user scope. Planning is deterministic, chooses at most the earliest 50 rules, and offers due-time, one-day, three-day, or one-week lead choices with a safe near-due clamp.
+- Preference keys and pending-request identifiers do not contain the raw server URL, user scope, or rule UUID. Notification title/body copy is generic and cannot carry a rule name, amount, currency, merchant, note, or subscription provider.
+- Reconciliation runs after a local rule change and successful synchronization, coalesces overlapping refresh requests, removes obsolete current-scope requests, exposes authorization/count/error states, and removes the signed-out scope without canceling reminders merely because app lock activates.
+- English and Albanian cover the implemented UI, denial provides a labeled route to iOS notification settings, and planner/controller/privacy-contract tests make the intended behavior reviewable before device execution.
+
+### Material work
+
+- Added a pure `RecurringReminderPlanner` with four lead times, strict eligibility, deterministic ordering/tie-breaking, a 50-request ceiling, near-due clamping, and SHA-256-derived scope/request identifiers.
+- Added a main-actor notification adapter/controller around `UNUserNotificationCenter`. It performs explicit authorization, scoped preference loading, serialized/coalesced refresh, stale-operation invalidation, pending-request reconciliation, safe failure presentation, and sign-out cleanup without touching rule/occurrence state.
+- Wired one shared controller into app lifecycle, refresh after successful sync and local recurrence edits, direct awaited cleanup in the Settings sign-out path, and a role-independent Plans card showing opt-in, timing, permission, count, denial recovery, and the generic-content disclosure.
+- Added scoped UserDefaults preferences keyed only by a scope digest. App lock does not clear reminders; a true scope removal does. No special entitlement, APNs, extension, background execution, or embedded credential is used.
+- Authored planner, controller/fake-scheduler, and preference tests for filtering, timing, capacity, determinism, opaque identifiers, explicit-only permission request, generic content, rescheduling, disabling, denial/revocation, and cross-scope isolation.
+- Extended the Linux privacy source contract to reject reminder candidates that carry financial preview data, a changed capacity ceiling, nonopaque identifiers, missing generic copy, or scheduler reads of sensitive rule fields. Updated planning, status, threat, accessibility, user, iOS, decision, and test documentation.
+
+### Commands and outcomes
+
+- `make check`: **passed locally** — 74 backend tests, 82.66% branch-aware coverage, Ruff format/lint, Django system checks, strict mypy over 92 source files, OpenAPI validation, and schema freshness.
+- `PROJECT_LEDGER_ENV=test PROJECT_LEDGER_DATABASE_URL=sqlite:///:memory: .venv/bin/python backend/manage.py makemigrations --check --dry-run`: **no changes detected**.
+- `python3 -m compileall -q backend` and `python3 -m py_compile ios/check-project-contract.py ios/check-localization-coverage.py`: **passed locally**.
+- `./ios/check-localizations.sh`: **passed locally** — 473 literal UI keys, identical English/Albanian key sets, and compatible format placeholders.
+- `python3 ios/check-project-contract.py`: **passed locally**, including the new bounded/opaque/generic reminder source contract.
+- An ephemeral npm install of `tree-sitter` 0.22.4 plus `tree-sitter-swift` 0.7.1 parsed all 80 Swift application/test files after excluding conditional-directive lines and that parser version's unsupported iOS 18 `#Unique` line grammar: **no syntax-tree errors or missing nodes**.
+- The targeted iOS production-secret pattern scan returned no matches, and `git diff --check` passed.
+
+### Verification boundary
+
+- The full Django/SQLite regression gate, migration drift, OpenAPI freshness, English/Albanian parity, plist/privacy/transport/reminder source contract, Python syntax, targeted secret scan, whitespace, and an independent Swift syntax-tree sanity check are **verified locally on Linux**.
+- The new Swift tests are **authored but not executed**. Swift 6 type/concurrency checking, SwiftFormat, XcodeGen regeneration, SwiftData runtime behavior, `UNUserNotificationCenter` authorization/request reconciliation, simulator UI/accessibility, background/terminated delivery, and notification preview behavior remain **unverified until macOS/device execution**.
+- Reminder delivery is optional and is not evidence of recurrence materialization. PostgreSQL/Redis/Celery multi-process behavior, Docker, hosted Actions, real server/Funnel, signing, and physical iPhone behavior remain unverified. No production system or signing service was contacted.
+
+### Next exact action
+
+Commit this reminder checkpoint. Then implement the authoritative installment backend vertical slice: immutable original terms, deterministic principal/interest/fee schedule, explicit schedule revisions, posted regular/extra payments, skip/reschedule, early payoff, and overpayment confirmation with REST/sync/audit tests before adding the native cache and Plans UI.

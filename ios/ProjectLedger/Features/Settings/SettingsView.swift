@@ -4,6 +4,7 @@ import SwiftUI
 struct SettingsView: View {
     let scopeKey: String
 
+    @EnvironmentObject private var reminders: RecurringReminderController
     @EnvironmentObject private var session: SessionController
     @EnvironmentObject private var sync: SyncController
     @Query private var outbox: [OutboxMutation]
@@ -162,6 +163,7 @@ struct SettingsView: View {
                     signingOut = true
                     Task {
                         await session.signOut()
+                        await reminders.deactivate()
                         signingOut = false
                     }
                 } label: {

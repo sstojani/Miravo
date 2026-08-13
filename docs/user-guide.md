@@ -28,6 +28,12 @@ Plans shows monthly, weekly, and custom-range budgets from the local store, so c
 
 Each budget retains its own currency, exponent, IANA time zone, civil start/end dates, category label snapshots, thresholds, and rollover choice. Only posted expenses count. Transfers, income, refunds, voided/deleted records, and non-posted states do not. Category budgets use the matching allocation rather than the whole transaction. When the ledger lacks a stored historical conversion into the budget currency, the card labels progress partial and lists the missing currency instead of inventing a rate. Rollover carries both underspending and overspending; it is shown as incomplete when any required prior conversion is absent. Custom ranges do not roll over.
 
+## Recurring entries and reminders
+
+Plans also keeps recurring expenses, recurring income, and subscriptions in the local store. Editors can create or edit a rule, pause or resume it, skip the next due date, end it, archive/restore it, or delete it while offline. The visible due pointer updates immediately and the command enters the outbox. Posted and skipped occurrence history remains server-authored; an offline skip does not fabricate a history row.
+
+Local reminders are optional and off by default. Enabling the toggle is the only action that asks iOS for notification permission. Choose the due time, one day, three days, or one week before; Project Ledger schedules the earliest 50 active future rules and refreshes them after local changes and successful synchronization. The lock-screen text is generic and never includes the amount, currency, merchant, note, rule name, or subscription provider. Plans shows permission and scheduled-count states, including a route to iOS Settings after denial. Turning reminders off or signing out removes the applicable pending requests. A missed or disabled notification never changes rule materialization or financial records.
+
 ## Shared trackers
 
 Owner controls ownership/deletion; admin manages settings/members; editor changes financial records; viewer is read-only. The synchronized collaborator roster and roles remain visible offline. The repository rejects viewer writes even if a stale screen attempts one; a role change received during pull updates the local permission state. Creating invitations and changing roles remain online collaboration work for Milestone 8. Expenses can eventually be split among registered/guest participants, and settlements will not count as spending.

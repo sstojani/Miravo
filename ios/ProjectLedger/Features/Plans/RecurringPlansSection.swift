@@ -1,6 +1,7 @@
 import Foundation
 import SwiftData
 import SwiftUI
+import UIKit
 
 private enum RecurringSheet: Identifiable {
     case create
@@ -19,6 +20,8 @@ struct RecurringPlansSection: View {
     let tracker: LocalTracker
 
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.openURL) private var openURL
+    @EnvironmentObject private var reminders: RecurringReminderController
     @EnvironmentObject private var session: SessionController
     @EnvironmentObject private var sync: SyncController
     @Query private var rules: [LocalRecurringRule]
@@ -116,6 +119,8 @@ struct RecurringPlansSection: View {
                 }
             }
 
+            reminderSettingsCard
+
             Label(
                 "Installment plans are the next planning slice.",
                 systemImage: "calendar.badge.plus"
@@ -148,6 +153,67 @@ struct RecurringPlansSection: View {
         } message: {
             Text("Posted occurrences remain in transaction history. The rule deletion syncs as a tombstone.")
         }
+    }
+
+    private var reminderSettingsCard: some View {
+        VStack(alignment: .leading, spacing: LedgerTheme.smallSpacing) {
+            Toggle(
+                "Local recurring reminders",
+                isOn: Binding(
+                    get: { reminders.isEnabled },
+                    set: { enabled in
+                        Task { await reminders.setEnabled(enabled, scopeKey: scopeKey) }
+                    }
+                )
+            )
+            .font(.headline)
+
+            if reminders.isEnabled {
+                Picker(
+                    "Reminder timing",
+                    selection: Binding(
+                        get: { reminders.leadTime },
+                        set: { value in
+                            Task { await reminders.setLeadTime(value, scopeKey: scopeKey) }
+                        }
+                    )
+                ) {
+                    ForEach(RecurringReminderLeadTime.allCases, id: \.self) {
+                        Text($0.displayName).tag($0)
+                    }
+                }
+            }
+
+            LabeledContent(
+                "Notification permission",
+                value: reminders.authorizationState.displayName
+            )
+            LabeledContent(
+                "Scheduled reminders",
+                value: reminders.scheduledCount.formatted()
+            )
+
+            if reminders.authorizationState == .denied {
+                Button("Open notification settings") {
+                    if let url = URL(string: UIApplication.openSettingsURLString) {
+                        openURL(url)
+                    }
+                }
+                .buttonStyle(.bordered)
+            }
+
+            Text("Reminder notifications use generic text and never show an amount, merchant, note, or subscription name.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            if let message = reminders.message {
+                Label(message, systemImage: "exclamationmark.triangle.fill")
+                    .font(.caption)
+                    .foregroundStyle(LedgerTheme.warning)
+            }
+        }
+        .disabled(reminders.isUpdating)
+        .ledgerCard()
     }
 
     private func ruleCard(_ rule: LocalRecurringRule) -> some View {
@@ -369,7 +435,10 @@ struct RecurringPlansSection: View {
         do {
             try action()
             safeError = nil
-            Task { await sync.synchronize(session: session) }
+            Task {
+                await reminders.refresh(scopeKey: scopeKey)
+                await sync.synchronize(session: session)
+            }
         } catch {
             safeError = String(localized: "The recurring rule could not be updated locally.")
         }
@@ -385,6 +454,7 @@ private struct RecurringRuleEditorView: View {
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @EnvironmentObject private var reminders: RecurringReminderController
     @EnvironmentObject private var session: SessionController
     @EnvironmentObject private var sync: SyncController
     @State private var name: String
@@ -713,7 +783,10 @@ private struct RecurringRuleEditorView: View {
                 )
             }
             dismiss()
-            Task { await sync.synchronize(session: session) }
+            Task {
+                await reminders.refresh(scopeKey: scopeKey)
+                await sync.synchronize(session: session)
+            }
         } catch let error as MoneyError {
             safeError = error == .tooManyFractionDigits
                 ? String(localized: "The amount has too many decimal places.")

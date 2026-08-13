@@ -2,7 +2,7 @@
 
 Last updated: 2026-08-13. A checked item is complete; its verification tier is recorded in `IMPLEMENT.md`. Items are not checked merely because scaffolding exists.
 
-Current focus: **Milestone 7 — recurrence reminders, then installments**. The authoritative scheduler passes locally, and the native scoped cache, rule outbox, strict bootstrap/pull reconciliation, matching calendar/cost logic, and role-aware Plans UI are implemented with authored tests. Optional local reminder delivery remains the final recurrence source slice. Swift compilation, simulator behavior, actual Wallet-trigger mapping, queue-file behavior, Docker, and hosted CI remain explicit external checks.
+Current focus: **Milestone 7 — installments**. Budgets and the authoritative recurrence/subscription scheduler pass locally. Native recurrence now includes the scoped cache/outbox, strict reconciliation, matching calendar/cost logic, role-aware Plans UI, and an explicitly opt-in privacy-safe reminder scheduler with authored tests. Actual notification delivery, Swift compilation, simulator behavior, Wallet-trigger mapping, queue-file behavior, Docker, and hosted CI remain explicit external checks.
 
 ## Milestone 0 — Discovery and durable project plan
 
@@ -76,7 +76,7 @@ Current acceptance: an authenticated device can push an ordered offline tracker/
 
 - [x] Budget periods, rollover, thresholds, historical reproducibility, explicit partial conversion, synchronized offline progress, and Plans UI (backend passing locally; native source/tests authored, macOS execution pending).
 - [x] Idempotent recurrence/subscription materialization, pause/skip/edit/end, bounded catch-up, deterministic occurrence identity, offline native rule cache/outbox, cost normalization, and role-aware Plans UI (backend passing locally; native source/tests authored, macOS execution pending).
-- [ ] Optional local recurrence reminders with explicit permission, privacy-safe content, bounded scheduling, and denial/revocation states.
+- [x] Optional local recurrence reminders with explicit permission, privacy-safe content, bounded scheduling, and denial/revocation states (source/tests implemented; macOS/device delivery pending).
 - [ ] Installment schedules/revisions, regular/extra payments, skip/reschedule, early payoff, and overpayment confirmation.
 
 ## Milestone 8 — Splits and realtime collaboration

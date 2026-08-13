@@ -7,6 +7,7 @@ Primary assets are financial records, identity/session data, tracker membership,
 | Threat | Principal controls | Residual risk / required validation |
 |---|---|---|
 | Stolen unlocked iPhone | iOS Data Protection, passcode guidance, optional Face ID UI lock, Keychain, device revocation | An already unlocked device can expose visible local data; physical-device test required |
+| Lock-screen notification disclosure | Recurring reminders are off by default, require explicit permission, use generic title/body copy, and carry only opaque hashed request identifiers; sign-out removes the active scope's pending requests | The existence and timing of a reminder can still reveal that the app is used; verify previews and signer behavior on the physical device |
 | Malicious/revoked signing certificate | No embedded secret or entitlement dependency; checksummed unsigned source artifact; server session revocation | A malicious signer can modify the app; user must trust signer and verify behavior |
 | IPA static extraction | Public configuration only; server-wide credentials absent | URLs, routes, and UI strings are public by design |
 | Leaked access token | Short lifetime, device-session active check, revocation, audit, TLS | Valid until expiry/revocation; future key rotation runbook |
