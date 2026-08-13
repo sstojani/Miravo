@@ -11,5 +11,5 @@ class AccessTokenAuthenticationScheme(OpenApiAuthenticationExtension):  # type: 
             "type": "http",
             "scheme": "bearer",
             "bearerFormat": "JWT",
-            "description": "Short-lived Project Ledger access token bound to a device session.",
+            "description": "Short-lived Miravo access token bound to a device session.",
         }

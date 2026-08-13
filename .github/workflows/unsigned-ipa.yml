@@ -12,6 +12,7 @@ permissions:
 env:
   XCODEGEN_VERSION: 2.46.0
   XCODE_PATH: /Applications/Xcode_16.4.app
+  EXPECTED_APP_NAME: Miravo
   EXPECTED_BUNDLE_ID: com.example.projectledger
   EXPECTED_MINIMUM_IOS: "18.0"
 
@@ -76,14 +77,15 @@ jobs:
         working-directory: ios
         run: |
           set -Eeuo pipefail
-          app="$PWD/build/Release-iphoneos/ProjectLedger.app"
+          app="$PWD/build/Release-iphoneos/Miravo.app"
           info="$app/Info.plist"
-          executable="$app/ProjectLedger"
+          executable="$app/Miravo"
           artifacts="$PWD/artifacts"
           stage="$PWD/unsigned-stage"
 
           test -d "$app"
           test -f "$executable"
+          test "$(plutil -extract CFBundleDisplayName raw "$info")" = "$EXPECTED_APP_NAME"
           test "$(plutil -extract CFBundleIdentifier raw "$info")" = "$EXPECTED_BUNDLE_ID"
           test "$(plutil -extract MinimumOSVersion raw "$info")" = "$EXPECTED_MINIMUM_IOS"
           test -n "$(plutil -extract CFBundleShortVersionString raw "$info")"
@@ -112,10 +114,10 @@ jobs:
           fi
 
           mkdir -p "$artifacts" "$stage/Payload"
-          ditto "$app" "$stage/Payload/ProjectLedger.app"
-          (cd "$stage" && ditto -c -k --keepParent Payload "$artifacts/ProjectLedger-UNSIGNED.ipa")
-          unzip -t "$artifacts/ProjectLedger-UNSIGNED.ipa"
-          unzip -l "$artifacts/ProjectLedger-UNSIGNED.ipa" | grep -q 'Payload/ProjectLedger.app/Info.plist'
+          ditto "$app" "$stage/Payload/Miravo.app"
+          (cd "$stage" && ditto -c -k --keepParent Payload "$artifacts/Miravo-UNSIGNED.ipa")
+          unzip -t "$artifacts/Miravo-UNSIGNED.ipa"
+          unzip -l "$artifacts/Miravo-UNSIGNED.ipa" | grep -q 'Payload/Miravo.app/Info.plist'
 
           version="$(plutil -extract CFBundleShortVersionString raw "$info")"
           build_number="$(plutil -extract CFBundleVersion raw "$info")"
@@ -127,23 +129,24 @@ jobs:
             --arg macos "$(sw_vers -productVersion)" \
             --arg xcode "$(xcodebuild -version | tr '\n' ' ')" \
             --arg swift "$(swift --version | head -n1)" \
+            --arg app_name "$EXPECTED_APP_NAME" \
             --arg bundle_id "$EXPECTED_BUNDLE_ID" \
             --arg version "$version" \
             --arg build_number "$build_number" \
             --arg minimum_ios "$EXPECTED_MINIMUM_IOS" \
             --arg architectures "$architectures" \
-            '{label:$label,commit:$commit,build_date:$build_date,macos:$macos,xcode:$xcode,swift:$swift,bundle_id:$bundle_id,version:$version,build_number:$build_number,minimum_ios:$minimum_ios,architectures:$architectures,code_signing:false,special_entitlements_required:false,feature_flags:{background_refresh:"optional",websocket_invalidation:"optional",manual_foreground_sync:"required"}}' \
+            '{label:$label,commit:$commit,build_date:$build_date,macos:$macos,xcode:$xcode,swift:$swift,app_name:$app_name,bundle_id:$bundle_id,version:$version,build_number:$build_number,minimum_ios:$minimum_ios,architectures:$architectures,code_signing:false,special_entitlements_required:false,feature_flags:{background_refresh:"optional",websocket_invalidation:"optional",manual_foreground_sync:"required"}}' \
             >"$artifacts/build-manifest.json"
 
-          (cd "$artifacts" && shasum -a 256 ProjectLedger-UNSIGNED.ipa >ProjectLedger-UNSIGNED.ipa.sha256)
-          dsym="$PWD/build/Release-iphoneos/ProjectLedger.app.dSYM"
+          (cd "$artifacts" && shasum -a 256 Miravo-UNSIGNED.ipa >Miravo-UNSIGNED.ipa.sha256)
+          dsym="$PWD/build/Release-iphoneos/Miravo.app.dSYM"
           if [[ -d "$dsym" ]]; then
-            ditto -c -k --keepParent "$dsym" "$artifacts/ProjectLedger.app.dSYM.zip"
+            ditto -c -k --keepParent "$dsym" "$artifacts/Miravo.app.dSYM.zip"
           fi
 
       - uses: actions/upload-artifact@v4
         with:
-          name: ProjectLedger-UNSIGNED-${{ github.sha }}
+          name: Miravo-UNSIGNED-${{ github.sha }}
           path: ios/artifacts/
           if-no-files-found: error
           retention-days: 30

@@ -16,15 +16,30 @@ from rest_framework import serializers, status
 from rest_framework.exceptions import APIException, NotFound
 
 from apps.audit.services import record_audit_event
-from apps.ledger.models import Account, Category, Tag, Tracker, TrackerMembership, Transaction
+from apps.ledger.models import (
+    Account,
+    Category,
+    Participant,
+    Settlement,
+    Tag,
+    Tracker,
+    TrackerMembership,
+    Transaction,
+)
 from apps.ledger.permissions import require_tracker_role
 from apps.ledger.serializers import (
     AccountSerializer,
     CategorySerializer,
+    ParticipantSerializer,
     TagSerializer,
     TransactionWriteSerializer,
 )
 from apps.ledger.services.collaboration import create_tracker, request_id
+from apps.ledger.services.settlements import (
+    create_settlement,
+    restore_settlement,
+    tombstone_settlement,
+)
 from apps.ledger.services.taxonomy import snapshot_category
 from apps.ledger.services.transactions import (
     VersionConflict,
@@ -158,6 +173,10 @@ def _tag_values(payload: dict[str, Any]) -> dict[str, Any]:
     return {field: payload[field] for field in ("tracker_id", "name", "color")}
 
 
+def _participant_values(payload: dict[str, Any]) -> dict[str, Any]:
+    return {field: payload[field] for field in ("tracker_id", "display_name")}
+
+
 def _budget_values(payload: dict[str, Any]) -> dict[str, Any]:
     return {
         field: payload.get(field)
@@ -277,7 +296,31 @@ def _transaction_values(payload: dict[str, Any]) -> dict[str, Any]:
                 "amount_minor": payload["amount_minor"],
             }
         ]
+    if "split" in payload:
+        result["split"] = payload["split"]
     return result
+
+
+def _settlement_values(payload: dict[str, Any]) -> dict[str, Any]:
+    return {
+        field: payload.get(field)
+        for field in (
+            "tracker_id",
+            "from_participant_id",
+            "to_participant_id",
+            "amount_minor",
+            "currency",
+            "occurred_at",
+            "note",
+            "account_id",
+            "account_amount_minor",
+            "base_amount_minor",
+            "base_currency",
+            "rate_snapshot",
+            "rate_source",
+            "rate_effective_at",
+        )
+    }
 
 
 def _audit(*, actor: User, instance: Any, action: str, request: Any) -> None:
@@ -535,6 +578,93 @@ def _apply_tag(operation: dict[str, Any], actor: User, request: Any) -> Tag:
     return tag
 
 
+def _apply_participant(operation: dict[str, Any], actor: User, request: Any) -> Participant:
+    entity_id = operation["entity_id"]
+    payload = operation["payload"]
+    command = operation["command"]
+    values = _participant_values(payload)
+    if command == "create":
+        _ensure_available(Participant, entity_id)
+        tracker = Tracker.objects.get(id=payload["tracker_id"], deleted_at__isnull=True)
+        require_tracker_role(actor, tracker, TrackerMembership.Role.EDITOR)
+        serializer = ParticipantSerializer(data=values)
+        serializer.is_valid(raise_exception=True)
+        participant = cast(
+            Participant,
+            serializer.save(
+                id=entity_id,
+                archived_at=timezone.now() if payload.get("archived_at") else None,
+            ),
+        )
+        _audit(
+            actor=actor,
+            instance=participant,
+            action="participant.guest_created",
+            request=request,
+        )
+        return participant
+
+    participant = (
+        Participant.objects.select_related("tracker", "linked_user")
+        .select_for_update()
+        .get(id=entity_id)
+    )
+    minimum_role = (
+        TrackerMembership.Role.ADMIN
+        if participant.linked_user_id is not None
+        else TrackerMembership.Role.EDITOR
+    )
+    require_tracker_role(actor, participant.tracker, minimum_role)
+    _require_version(
+        instance=participant,
+        expected=operation["base_server_version"],
+        entity_type=SyncChange.EntityType.PARTICIPANT,
+        actor=actor,
+        proposed=payload,
+    )
+    if payload["tracker_id"] != participant.tracker_id:
+        raise serializers.ValidationError({"tracker_id": "A participant cannot change tracker."})
+    if command == "update":
+        serializer = ParticipantSerializer(participant, data=values)
+        serializer.is_valid(raise_exception=True)
+        participant = cast(
+            Participant,
+            serializer.save(version=participant.version + 1),
+        )
+        _audit(
+            actor=actor,
+            instance=participant,
+            action="participant.updated",
+            request=request,
+        )
+    elif command in ("archive", "delete"):
+        if participant.linked_user_id is not None:
+            raise serializers.ValidationError(
+                {"participant": "Registered participants remain available for shared history."}
+            )
+        if participant.archived_at is None:
+            participant.archived_at = timezone.now()
+            participant.version += 1
+            participant.save(update_fields=("archived_at", "version", "updated_at"))
+            _audit(
+                actor=actor,
+                instance=participant,
+                action="participant.archived",
+                request=request,
+            )
+    elif command == "restore" and participant.archived_at is not None:
+        participant.archived_at = None
+        participant.version += 1
+        participant.save(update_fields=("archived_at", "version", "updated_at"))
+        _audit(
+            actor=actor,
+            instance=participant,
+            action="participant.restored",
+            request=request,
+        )
+    return participant
+
+
 def _apply_transaction(operation: dict[str, Any], actor: User, request: Any) -> Transaction:
     entity_id = operation["entity_id"]
     payload = operation["payload"]
@@ -584,6 +714,57 @@ def _apply_transaction(operation: dict[str, Any], actor: User, request: Any) -> 
             request=request,
         )
     raise serializers.ValidationError({"command": "Unsupported transaction command."})
+
+
+def _apply_settlement(operation: dict[str, Any], actor: User, request: Any) -> Settlement:
+    entity_id = operation["entity_id"]
+    payload = operation["payload"]
+    command = operation["command"]
+    if command == "create":
+        _ensure_available(Settlement, entity_id)
+        return create_settlement(
+            data=_settlement_values(payload),
+            actor=actor,
+            settlement_id=entity_id,
+            transaction_id=payload.get("transaction_id"),
+            request=request,
+        )
+
+    settlement = (
+        Settlement.objects.select_related(
+            "tracker",
+            "from_participant",
+            "to_participant",
+            "transaction",
+        )
+        .select_for_update()
+        .get(id=entity_id)
+    )
+    require_tracker_role(actor, settlement.tracker, TrackerMembership.Role.EDITOR)
+    _require_version(
+        instance=settlement,
+        expected=operation["base_server_version"],
+        entity_type=SyncChange.EntityType.SETTLEMENT,
+        actor=actor,
+        proposed=payload,
+    )
+    if payload["tracker_id"] != settlement.tracker_id:
+        raise serializers.ValidationError({"tracker_id": "A settlement cannot change tracker."})
+    if command == "delete":
+        return tombstone_settlement(
+            settlement=settlement,
+            actor=actor,
+            base_version=operation["base_server_version"],
+            request=request,
+        )
+    if command == "restore":
+        return restore_settlement(
+            settlement=settlement,
+            actor=actor,
+            base_version=operation["base_server_version"],
+            request=request,
+        )
+    raise serializers.ValidationError({"command": "Unsupported settlement command."})
 
 
 def _apply_budget(operation: dict[str, Any], actor: User, request: Any) -> Budget:
@@ -1048,10 +1229,12 @@ def apply_operation(operation: dict[str, Any], actor: User, request: Any) -> Any
         SyncChange.EntityType.ACCOUNT: _apply_account,
         SyncChange.EntityType.CATEGORY: _apply_category,
         SyncChange.EntityType.TAG: _apply_tag,
+        SyncChange.EntityType.PARTICIPANT: _apply_participant,
         SyncChange.EntityType.BUDGET: _apply_budget,
         SyncChange.EntityType.RECURRING_RULE: _apply_recurring_rule,
         SyncChange.EntityType.INSTALLMENT_PLAN: _apply_installment_plan,
         SyncChange.EntityType.TRANSACTION: _apply_transaction,
+        SyncChange.EntityType.SETTLEMENT: _apply_settlement,
     }[operation["entity_type"]]
     return handler(operation, actor, request)
 

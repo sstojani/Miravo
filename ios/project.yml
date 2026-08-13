@@ -12,7 +12,7 @@ configs:
 
 settings:
   base:
-    APP_DISPLAY_NAME: Project Ledger
+    APP_DISPLAY_NAME: Miravo
     CURRENT_PROJECT_VERSION: 1
     DEVELOPMENT_LANGUAGE: en
     GENERATE_INFOPLIST_FILE: false
@@ -44,7 +44,8 @@ targets:
     settings:
       base:
         INFOPLIST_FILE: ProjectLedger/Info.plist
-        PRODUCT_NAME: ProjectLedger
+        PRODUCT_MODULE_NAME: ProjectLedger
+        PRODUCT_NAME: Miravo
       configs:
         Debug:
           INFOPLIST_FILE: ProjectLedger/Info.Debug.plist

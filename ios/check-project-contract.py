@@ -20,6 +20,15 @@ def fail(message: str) -> None:
 
 
 def main() -> int:
+    project_spec = (IOS_ROOT / "project.yml").read_text(encoding="utf-8")
+    for fragment in (
+        "APP_DISPLAY_NAME: Miravo",
+        "PRODUCT_MODULE_NAME: ProjectLedger",
+        "PRODUCT_NAME: Miravo",
+    ):
+        if fragment not in project_spec:
+            fail(f"Miravo product identity drift: {fragment}")
+
     release_info = load(IOS_ROOT / "ProjectLedger/Info.plist")
     debug_info = load(IOS_ROOT / "ProjectLedger/Info.Debug.plist")
     privacy = load(IOS_ROOT / "Resources/PrivacyInfo.xcprivacy")
@@ -119,6 +128,70 @@ def main() -> int:
         if "rawToken" in source or "raw_token" in source or "OneTimeShortcutToken" in source:
             fail(f"Raw Shortcut credentials must not enter persistent storage: {relative_path}")
 
+    collaboration_models = (
+        IOS_ROOT / "ProjectLedger/Networking/CollaborationModels.swift"
+    ).read_text(encoding="utf-8")
+    collaboration_controller = (
+        IOS_ROOT / "ProjectLedger/Features/Settings/CollaborationController.swift"
+    ).read_text(encoding="utf-8")
+    collaboration_view = (
+        IOS_ROOT / "ProjectLedger/Features/Settings/CollaborationSettingsView.swift"
+    ).read_text(encoding="utf-8")
+    api_client = (IOS_ROOT / "ProjectLedger/Networking/APIClient.swift").read_text(
+        encoding="utf-8"
+    )
+    for fragment in (
+        'rawToken: <redacted>',
+        'rawValue: <redacted>',
+        'rawToken.hasPrefix("pli_")',
+        "protocol CollaborationTransport: Sendable",
+        "struct GuestParticipantMergeRequest",
+    ):
+        if fragment not in collaboration_models:
+            fail(f"Collaboration credential/transport contract drift: {fragment}")
+    for fragment in (
+        "listTrackerInvitations",
+        "createTrackerInvitation",
+        "revokeTrackerInvitation",
+        "updateTrackerMemberRole",
+        "removeTrackerMember",
+        "acceptTrackerInvitation",
+        "mergeGuestParticipant",
+        "extension APIClient: CollaborationTransport",
+    ):
+        if fragment not in api_client:
+            fail(f"Authenticated collaboration API wiring drift: {fragment}")
+    for fragment in (
+        "source.syncState == .synced",
+        "target.syncState == .synced",
+        "let baseVersion = source.serverVersion",
+        "target.serverVersion != nil",
+    ):
+        if fragment not in collaboration_controller:
+            fail(f"Guest merge safety gate drift: {fragment}")
+    for fragment in (
+        ".localOnly: true",
+        ".expirationDate:",
+        ".privacySensitive()",
+        ".interactiveDismissDisabled(controller.oneTimeInvitation != nil)",
+        "outbox.isEmpty",
+        "conflicts.isEmpty",
+    ):
+        if fragment not in collaboration_view:
+            fail(f"Collaboration UI safety contract drift: {fragment}")
+    forbidden_invite_storage = {
+        "ProjectLedger/App/AppPreferences.swift",
+        "ProjectLedger/Security/KeychainSessionTokenStore.swift",
+    }
+    forbidden_invite_storage.update(
+        str(path.relative_to(IOS_ROOT))
+        for path in (IOS_ROOT / "ProjectLedger/Persistence").glob("*.swift")
+    )
+    for relative_path in sorted(forbidden_invite_storage):
+        source = (IOS_ROOT / relative_path).read_text(encoding="utf-8")
+        if "OneTimeTrackerInvitation" in source or "pli_" in source:
+            fail(f"Raw tracker invitations must not enter persistent storage: {relative_path}")
+
     reminder_planner = (IOS_ROOT / "ProjectLedger/Domain/RecurringReminderPlanner.swift").read_text(
         encoding="utf-8"
     )
@@ -137,7 +210,7 @@ def main() -> int:
         fail("Reminder scope and request identifiers must remain opaque hashes.")
     required_generic_copy = (
         'String(localized: "Upcoming planned transaction")',
-        'localized: "A scheduled transaction is due soon. Open Project Ledger to review it."',
+        'localized: "A scheduled transaction is due soon. Open Miravo to review it."',
     )
     if not all(fragment in reminder_controller for fragment in required_generic_copy):
         fail("Local reminder notification content must remain generic.")
@@ -151,7 +224,152 @@ def main() -> int:
         if forbidden_reference in reminder_controller:
             fail(f"Notification scheduling must not read private preview data: {forbidden_reference}")
 
-    print("iOS transport, background-task, and privacy contract verified.")
+    application = (IOS_ROOT / "ProjectLedger/App/ProjectLedgerApp.swift").read_text(
+        encoding="utf-8"
+    )
+    installment_models = (
+        "LocalInstallmentPlan.self",
+        "LocalInstallmentScheduleItem.self",
+        "LocalInstallmentPayment.self",
+    )
+    for model in installment_models:
+        if application.count(model) != 2:
+            fail(f"Both persistent and fallback SwiftData schemas must register {model}.")
+
+    collaboration_models = (
+        "LocalParticipant.self",
+        "LocalSplitPayment.self",
+        "LocalSplitShare.self",
+        "LocalSettlement.self",
+    )
+    for model in collaboration_models:
+        if application.count(model) != 2:
+            fail(f"Both persistent and fallback SwiftData schemas must register {model}.")
+
+    collaboration_model = (
+        IOS_ROOT / "ProjectLedger/Persistence/LocalSplitting.swift"
+    ).read_text(encoding="utf-8")
+    for model in (
+        "final class LocalParticipant",
+        "final class LocalSplitPayment",
+        "final class LocalSplitShare",
+        "final class LocalSettlement",
+    ):
+        if model not in collaboration_model:
+            fail(f"Missing local split/settlement model: {model}")
+
+    installment_model = (
+        IOS_ROOT / "ProjectLedger/Persistence/LocalInstallment.swift"
+    ).read_text(encoding="utf-8")
+    for model in (
+        "final class LocalInstallmentPlan",
+        "final class LocalInstallmentScheduleItem",
+        "final class LocalInstallmentPayment",
+    ):
+        if model not in installment_model:
+            fail(f"Missing local installment model: {model}")
+
+    mutation_payload = (
+        IOS_ROOT / "ProjectLedger/Persistence/LocalMutationPayload.swift"
+    ).read_text(encoding="utf-8")
+    required_installment_mutations = (
+        "case installmentPlan = \"installment_plan\"",
+        "case recordPayment = \"record_payment\"",
+        "case payoff",
+        "case skipPayment = \"skip_payment\"",
+        "case reschedulePayment = \"reschedule_payment\"",
+        "struct InstallmentPlanMutationPayload",
+    )
+    for fragment in required_installment_mutations:
+        if fragment not in mutation_payload:
+            fail(f"Offline installment mutation contract drift: {fragment}")
+    for fragment in (
+        "case participant",
+        "case settlement",
+        "struct ParticipantMutationPayload",
+        "struct TransactionSplitMutationPayload",
+        "struct SettlementMutationPayload",
+        "enum TransactionSplitMutationValue",
+    ):
+        if fragment not in mutation_payload:
+            fail(f"Offline collaboration mutation contract drift: {fragment}")
+
+    local_writer = (
+        IOS_ROOT / "ProjectLedger/Persistence/LocalLedgerWriter.swift"
+    ).read_text(encoding="utf-8")
+    payment_writer = local_writer.split(
+        "private func queueInstallmentPayment", maxsplit=1
+    )[1].split("private func applyProjectedInstallmentPayment", maxsplit=1)[0]
+    if "LocalInstallmentPayment(" in payment_writer:
+        fail("Offline installment payments must not fabricate authoritative payment rows.")
+    required_projection_fragments = (
+        "source: .installment",
+        "context.insert(record)",
+        "try applyProjectedInstallmentPayment",
+        "command: command",
+        "paymentID: paymentID",
+        "transactionID: transactionID",
+    )
+    if not all(fragment in payment_writer for fragment in required_projection_fragments):
+        fail("Offline installment payments must atomically project a ledger row and queue the plan command.")
+    duplicate_scan = local_writer.split(
+        "private func queuedInstallmentPaymentExists", maxsplit=1
+    )[1].split("private func validatedBudgetValues", maxsplit=1)[0]
+    if ".convertFromSnakeCase" not in duplicate_scan:
+        fail("Queued installment idempotency checks must decode the persisted snake_case payload.")
+
+    installment_calculator = (
+        IOS_ROOT / "ProjectLedger/Domain/LocalInstallmentCalculator.swift"
+    ).read_text(encoding="utf-8")
+    if (
+        "Insecure.SHA1.hash" not in installment_calculator
+        or "bytes[6] = (bytes[6] & 0x0f) | 0x50" not in installment_calculator
+    ):
+        fail("Installment schedule identities must remain deterministic UUIDv5 values.")
+
+    sync_actor = (
+        IOS_ROOT / "ProjectLedger/Synchronization/LedgerSyncActor.swift"
+    ).read_text(encoding="utf-8")
+    for fragment in (
+        "dependency_conflict",
+        "markInstallmentProjection",
+        "discardInstallmentProjection",
+        "blockedEntitySequences",
+        "hasBlockingInstallmentParentMutation",
+        "preservingOutbox",
+        "validatedInstallmentPlanSnapshot",
+        "validatedInstallmentScheduleSnapshot",
+        "validatedInstallmentPaymentSnapshot",
+    ):
+        if fragment not in sync_actor:
+            fail(f"Installment conflict/rejection safety contract drift: {fragment}")
+
+    for fragment in (
+        '"participants": "participant"',
+        '"settlements": "settlement"',
+        "validateSplitSnapshot",
+        "upsertParticipant",
+        "upsertSettlement",
+        "markSettlementProjection",
+        "LocalSplitPayment(",
+        "LocalSplitShare(",
+    ):
+        if fragment not in sync_actor:
+            fail(f"Split/settlement synchronization contract drift: {fragment}")
+
+    split_calculator = (
+        IOS_ROOT / "ProjectLedger/Domain/LocalSplitCalculator.swift"
+    ).read_text(encoding="utf-8")
+    for fragment in (
+        "static func resolveShares",
+        "static func simplifyDebts",
+        "10_000",
+        "addingReportingOverflow",
+    ):
+        if fragment not in split_calculator:
+            fail(f"Deterministic local split math contract drift: {fragment}")
+
+    print("iOS transport, privacy, plan, and collaboration contracts verified.")
     return 0
 
 

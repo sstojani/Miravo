@@ -275,8 +275,46 @@ final class RecurringReminderController: ObservableObject {
                     deletedAt: $0.deletedAt
                 )
             }
-            let plans = RecurringReminderPlanner.plans(
-                candidates: candidates,
+            let installmentDescriptor = FetchDescriptor<LocalInstallmentPlan>(
+                predicate: #Predicate { $0.scopeKey == scopeKey }
+            )
+            let scheduleDescriptor = FetchDescriptor<LocalInstallmentScheduleItem>(
+                predicate: #Predicate { $0.scopeKey == scopeKey && $0.deletedAt == nil }
+            )
+            let installmentPlans = try modelContainer.mainContext.fetch(
+                installmentDescriptor
+            )
+            let scheduleItems = try modelContainer.mainContext.fetch(scheduleDescriptor)
+            let scheduleByPlan = Dictionary(grouping: scheduleItems, by: \.planID)
+            let installmentCandidates = try installmentPlans.compactMap {
+                plan -> InstallmentReminderCandidate? in
+                let next = scheduleByPlan[plan.id, default: []]
+                    .filter {
+                        $0.supersededAt == nil &&
+                            $0.state != .paid &&
+                            $0.state != .skipped
+                    }
+                    .min {
+                        $0.dueOn == $1.dueOn
+                            ? $0.sequence < $1.sequence : $0.dueOn < $1.dueOn
+                    }
+                guard let next else { return nil }
+                let dueAt = try LocalRecurrenceCalculator.scheduledDate(
+                    civilDate: next.dueOn,
+                    localTimeSeconds: 9 * 3_600,
+                    timeZoneIdentifier: plan.timeZoneIdentifier
+                )
+                return InstallmentReminderCandidate(
+                    planID: plan.id,
+                    nextDueAt: dueAt,
+                    state: plan.state,
+                    archivedAt: plan.archivedAt,
+                    deletedAt: plan.deletedAt
+                )
+            }
+            let plans = RecurringReminderPlanner.combinedPlans(
+                recurringCandidates: candidates,
+                installmentCandidates: installmentCandidates,
                 scopeKey: scopeKey,
                 leadTime: leadTime,
                 now: .now
@@ -292,7 +330,7 @@ final class RecurringReminderController: ObservableObject {
                         plan,
                         title: String(localized: "Upcoming planned transaction"),
                         body: String(
-                            localized: "A scheduled transaction is due soon. Open Project Ledger to review it."
+                            localized: "A scheduled transaction is due soon. Open Miravo to review it."
                         )
                     )
                     guard isCurrent(generation, scopeKey: scopeKey) else {
@@ -302,7 +340,7 @@ final class RecurringReminderController: ObservableObject {
                     accepted += 1
                 } catch {
                     message = String(
-                        localized: "Some recurring reminders could not be scheduled. Try again."
+                        localized: "Some plan reminders could not be scheduled. Try again."
                     )
                 }
             }
@@ -310,7 +348,7 @@ final class RecurringReminderController: ObservableObject {
         } catch {
             guard isCurrent(generation, scopeKey: scopeKey) else { return }
             scheduledCount = 0
-            message = String(localized: "Recurring reminders could not read local plans.")
+            message = String(localized: "Plan reminders could not read local schedules.")
         }
     }
 

@@ -9,6 +9,12 @@ from apps.ledger.models import (
     CategoryRevision,
     Merchant,
     MovementRevision,
+    Participant,
+    Settlement,
+    SplitPayment,
+    SplitPaymentRevision,
+    SplitShare,
+    SplitShareRevision,
     Tag,
     Tracker,
     TrackerInvite,
@@ -99,6 +105,55 @@ class CategoryAllocationInline(admin.TabularInline):  # type: ignore[type-arg]
     readonly_fields = ("category", "amount_minor")
 
 
+class SplitPaymentInline(admin.TabularInline):  # type: ignore[type-arg]
+    model = SplitPayment
+    extra = 0
+    can_delete = False
+    readonly_fields = ("participant", "amount_minor", "deleted_at", "version")
+
+
+class SplitShareInline(admin.TabularInline):  # type: ignore[type-arg]
+    model = SplitShare
+    extra = 0
+    can_delete = False
+    readonly_fields = (
+        "participant",
+        "amount_minor",
+        "method",
+        "percentage_basis_points",
+        "deleted_at",
+        "version",
+    )
+
+
+@admin.register(Participant)
+class ParticipantAdmin(admin.ModelAdmin):  # type: ignore[type-arg]
+    list_display = ("display_name", "tracker", "linked_user", "archived_at", "version")
+    search_fields = ("display_name", "tracker__name", "linked_user__email")
+    list_filter = ("archived_at", "deleted_at")
+    readonly_fields = ("id", "normalized_name", "created_at", "updated_at", "deleted_at", "version")
+
+
+@admin.register(Settlement)
+class SettlementAdmin(admin.ModelAdmin):  # type: ignore[type-arg]
+    list_display = (
+        "occurred_at",
+        "tracker",
+        "from_participant",
+        "to_participant",
+        "amount_minor",
+        "currency",
+        "version",
+    )
+    search_fields = (
+        "tracker__name",
+        "from_participant__display_name",
+        "to_participant__display_name",
+    )
+    list_filter = ("currency", "deleted_at")
+    readonly_fields = ("id", "created_at", "updated_at", "deleted_at", "version")
+
+
 @admin.register(Transaction)
 class TransactionAdmin(admin.ModelAdmin):  # type: ignore[type-arg]
     list_display = (
@@ -114,7 +169,12 @@ class TransactionAdmin(admin.ModelAdmin):  # type: ignore[type-arg]
     search_fields = ("payee", "merchant__display_name", "tracker__name")
     list_filter = ("kind", "status", "source", "currency")
     readonly_fields = ("id", "created_at", "updated_at", "deleted_at", "version")
-    inlines = (AccountMovementInline, CategoryAllocationInline)
+    inlines = (
+        AccountMovementInline,
+        CategoryAllocationInline,
+        SplitPaymentInline,
+        SplitShareInline,
+    )
 
 
 for model in (
@@ -124,6 +184,8 @@ for model in (
     TransactionRevision,
     MovementRevision,
     AllocationRevision,
+    SplitPaymentRevision,
+    SplitShareRevision,
     CategoryRevision,
 ):
     admin.site.register(model)

@@ -28,15 +28,17 @@ Exactly one active owner relationship exists per tracker. Object references may 
 | AccountMovement | Transaction/account, signed amount in account currency, conversion snapshot |
 | CategoryAllocation | Transaction/category, exact minor-unit amount, and category-version snapshot |
 | TransactionTag | Explicit transaction/tag relation |
-| TransactionRevision | Immutable prior material transaction fields before update/void/delete/merge |
+| TransactionRevision | Immutable prior material transaction fields before update/void/delete/split/merge |
 | MovementRevision | Prior account and signed movement linked to a transaction revision |
 | AllocationRevision | Prior category, category version, and amount linked to a transaction revision |
 | CategoryRevision | Prior category name/kind/parent/presentation values by monotonic version |
 | SplitPayment | Transaction/participant and amount paid |
 | SplitShare | Transaction/participant and amount owed; optional source percentage |
 | Settlement | From/to participant, currency/amount, optional transaction link |
+| SplitPaymentRevision | Prior participant/payment amount owned by a transaction revision |
+| SplitShareRevision | Prior participant/share amount/method/basis points owned by a transaction revision |
 
-Balances derive from posted/reconciled, non-deleted movements. Transfer movements net between accounts and do not count as spending/income. Allocations, paid amounts, and owed shares must each sum exactly at currency precision. Used entities archive instead of disappearing. Clients cannot author arbitrary signed movements; a locked domain service derives them from validated transaction commands.
+Balances derive from posted/reconciled, non-deleted movements. Transfer and settlement movements do not count as spending/income. Allocations, paid amounts, and owed shares must each sum exactly at currency precision. Equal shares place remainder units by participant UUID; percentages use exactly 10,000 basis points and deterministic largest-remainder allocation. Split balance is `paid - owed + sent settlement - received settlement` per currency/exponent, and simplification greedily matches the largest debts/credits with UUID tie-breaking. Settlements may reduce only a current debt and their optional account transaction is lifecycle-protected by the settlement root. Used entities archive instead of disappearing. Clients cannot author arbitrary signed movements; a locked domain service derives them from validated transaction commands.
 
 The native transaction cache additionally retains source/destination account IDs and integer amounts, tracker-base amount/currency, decimal rate snapshot/source/effective time, optional original-expense UUID for refunds, and explicit transaction/tag join rows. It caches membership email/role/state for an offline collaborator roster while treating the server as permission authority. Its repository derives matching local movements and commits those rows, tag links, and the outbox mutation in one rollback boundary. These cached values support immediate offline balances and reports; the server still revalidates commands and derives authoritative movements.
 
@@ -72,9 +74,11 @@ Recurring month/year generation clamps with the original anchor rather than chai
 
 The native cache mirrors `RecurringRule` and the read-only occurrence fields under compound `(scopeKey, UUID)` identity. It validates account/tracker/category scope, identity and converted-money snapshots, state timestamps, wall-time-derived `next_due_at`, and occurrence keys before publishing a sync page. Local rule commands are optimistic and outboxed. In particular, skip advances the local next-due presentation but does not invent a server occurrence UUID or audit row; normal pull supplies that canonical history.
 
-Installment schedules distribute integer minor units exactly. Without a regular amount, quotient rows receive remainders in deterministic later rows; principal, interest, and fee components use a deterministic largest-remainder allocation and sum to every row and the plan total. Monthly dates always clamp from the original day anchor, so a February clamp does not move March. A wholesale term replacement is allowed only before payment history and supersedes rather than edits original rows. Metadata edits and every skip/reschedule snapshot the prior state. A skip preserves the old row and appends one replacement at the schedule end.
+Installment schedules distribute integer minor units exactly. Without a regular amount, quotient rows receive remainders in deterministic later rows; principal, interest, and fee components use a deterministic largest-remainder allocation and sum to every row and the plan total. Monthly dates always clamp from the original day anchor, so a February clamp does not move March. Schedule UUIDs are UUIDv5 values derived from a fixed application namespace plus plan UUID, revision, and sequence; this lets a newly created offline plan reference a row before the server processes the preceding plan command without introducing a second identity scheme. A wholesale term replacement is allowed only before payment history and supersedes rather than edits original rows. Metadata edits and every skip/reschedule snapshot the prior state. A skip preserves the old row and appends one replacement at the schedule end.
 
 Every installment payment creates an ordinary posted expense through the authoritative ledger service. `amount_minor` is the amount tendered, `applied_amount_minor` is capped at remaining plan value, and `overpayment_minor` is the explicit difference; the latter requires confirmation and the linked financial transaction still records the full tender. Regular payments target one row and cannot exceed it. Extra/payoff commands allocate earliest active rows deterministically. The plan reaches paid-off only when applied payments equal the planned total. Client operation/payment/transaction UUIDs plus sync receipts make replay safe.
+
+The native cache mirrors plan, schedule, and payment records under compound `(scopeKey, UUID)` identity. Plan/schedule state is updated optimistically, and a queued payment creates its linked local expense/movement/allocation in the same save. It deliberately creates no `LocalInstallmentPayment`; downloaded payment rows remain the authority. Progress uses the greater of authoritative applied payments and the active schedule's paid projection so a pending payment is visible without double-counting after partial pull ordering.
 
 ## Required constraints
 

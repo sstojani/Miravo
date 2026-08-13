@@ -72,10 +72,71 @@ struct RecurringReminderControllerTests {
         #expect(controller.message != nil)
     }
 
+    @Test func activeInstallmentUsesTheSamePrivateReminderQueue() async throws {
+        let container = try makeContainer()
+        let dueOn = try #require(
+            BudgetDateCodec.canonicalDate(from: .now.addingTimeInterval(2 * 86_400))
+        )
+        let plan = LocalInstallmentPlan(
+            scopeKey: scope,
+            trackerID: UUID(),
+            name: "Private laptop plan",
+            accountID: UUID(),
+            categoryID: nil,
+            principalMinor: 120_000,
+            interestMinor: 0,
+            feesMinor: 0,
+            plannedTotalMinor: 120_000,
+            currencyCode: "EUR",
+            currencyExponent: 2,
+            installmentCount: 12,
+            plannedInstallmentMinor: 10_000,
+            cadence: .monthly,
+            timeZoneIdentifier: "Europe/Tirane",
+            startsOn: dueOn,
+            anchorDay: 1
+        )
+        let item = LocalInstallmentScheduleItem(
+            scopeKey: scope,
+            trackerID: plan.trackerID,
+            planID: plan.id,
+            revisionNumber: 1,
+            sequence: 1,
+            originalDueOn: dueOn,
+            dueOn: dueOn,
+            plannedPrincipalMinor: 120_000,
+            plannedInterestMinor: 0,
+            plannedFeesMinor: 0,
+            plannedTotalMinor: 120_000
+        )
+        container.mainContext.insert(plan)
+        container.mainContext.insert(item)
+        try container.mainContext.save()
+        let fixture = try makePreferences()
+        defer { fixture.defaults.removePersistentDomain(forName: fixture.suite) }
+        let scheduler = FakeRecurringNotificationScheduler(state: .authorized)
+        let controller = RecurringReminderController(
+            modelContainer: container,
+            preferences: fixture.preferences,
+            scheduler: scheduler
+        )
+
+        await controller.setEnabled(true, scopeKey: scope)
+
+        #expect(controller.scheduledCount == 1)
+        let scheduled = try #require(scheduler.scheduled.last)
+        #expect(scheduled.plan.ruleID == plan.id)
+        #expect(!scheduled.plan.identifier.contains(plan.id.uuidString))
+        #expect(!scheduled.title.contains(plan.name))
+        #expect(!scheduled.body.contains("120000"))
+    }
+
     private func makeContainer() throws -> ModelContainer {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
         return try ModelContainer(
             for: LocalRecurringRule.self,
+            LocalInstallmentPlan.self,
+            LocalInstallmentScheduleItem.self,
             configurations: configuration
         )
     }

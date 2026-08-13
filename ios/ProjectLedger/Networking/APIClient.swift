@@ -266,10 +266,110 @@ actor APIClient: SyncTransport {
         )
     }
 
+    func listTrackerInvitations(
+        trackerID: UUID,
+        accessToken: String
+    ) async throws -> [TrackerInvitationSummary] {
+        try await send(
+            [TrackerInvitationSummary].self,
+            path: "api/v1/trackers/\(trackerID.uuidString.lowercased())/invites/",
+            method: "GET",
+            accessToken: accessToken
+        )
+    }
+
+    func createTrackerInvitation(
+        trackerID: UUID,
+        request: TrackerInvitationCreateRequest,
+        accessToken: String
+    ) async throws -> IssuedTrackerInvitation {
+        try await send(
+            IssuedTrackerInvitation.self,
+            path: "api/v1/trackers/\(trackerID.uuidString.lowercased())/invites/",
+            method: "POST",
+            accessToken: accessToken,
+            body: encoder.encode(request)
+        )
+    }
+
+    func revokeTrackerInvitation(
+        trackerID: UUID,
+        invitationID: UUID,
+        accessToken: String
+    ) async throws {
+        try await sendWithoutResponse(
+            path: "api/v1/trackers/\(trackerID.uuidString.lowercased())/invites/\(invitationID.uuidString.lowercased())/",
+            method: "DELETE",
+            accessToken: accessToken
+        )
+    }
+
+    func updateTrackerMemberRole(
+        trackerID: UUID,
+        membershipID: UUID,
+        role: TrackerRole,
+        accessToken: String
+    ) async throws -> CollaborationMembershipSummary {
+        try await send(
+            CollaborationMembershipSummary.self,
+            path: "api/v1/trackers/\(trackerID.uuidString.lowercased())/members/\(membershipID.uuidString.lowercased())/",
+            method: "PATCH",
+            accessToken: accessToken,
+            body: encoder.encode(CollaborationRoleUpdateRequest(role: role))
+        )
+    }
+
+    func removeTrackerMember(
+        trackerID: UUID,
+        membershipID: UUID,
+        accessToken: String
+    ) async throws {
+        try await sendWithoutResponse(
+            path: "api/v1/trackers/\(trackerID.uuidString.lowercased())/members/\(membershipID.uuidString.lowercased())/",
+            method: "DELETE",
+            accessToken: accessToken
+        )
+    }
+
+    func acceptTrackerInvitation(
+        token: String,
+        accessToken: String
+    ) async throws -> CollaborationMembershipSummary {
+        try await send(
+            CollaborationMembershipSummary.self,
+            path: "api/v1/tracker-invites/accept",
+            method: "POST",
+            accessToken: accessToken,
+            body: encoder.encode(TrackerInvitationAcceptRequest(token: token))
+        )
+    }
+
+    func mergeGuestParticipant(
+        sourceParticipantID: UUID,
+        targetParticipantID: UUID,
+        baseVersion: Int64,
+        accessToken: String
+    ) async throws -> ParticipantSnapshot {
+        try await send(
+            ParticipantSnapshot.self,
+            path: "api/v1/participants/\(sourceParticipantID.uuidString.lowercased())/merge/",
+            method: "POST",
+            accessToken: accessToken,
+            body: encoder.encode(
+                GuestParticipantMergeRequest(
+                    targetParticipantID: targetParticipantID,
+                    baseVersion: baseVersion
+                )
+            )
+        )
+    }
+
     private func endpoint(_ path: String) -> URL {
-        path.split(separator: "/").reduce(baseURL) { partial, component in
+        let resolved = path.split(separator: "/").reduce(baseURL) { partial, component in
             partial.appending(path: String(component))
         }
+        guard path.hasSuffix("/") else { return resolved }
+        return URL(string: resolved.absoluteString + "/") ?? resolved
     }
 
     private func send<Value: Decodable>(
@@ -319,13 +419,18 @@ actor APIClient: SyncTransport {
     private func sendWithoutResponse(
         path: String,
         method: String,
-        accessToken: String
+        accessToken: String,
+        body: Data? = nil
     ) async throws {
         var request = URLRequest(url: endpoint(path))
         request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
         request.setValue(UUID().uuidString.lowercased(), forHTTPHeaderField: "X-Request-ID")
+        if let body {
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.httpBody = body
+        }
         let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse else {
             throw APIClientError(
@@ -419,3 +524,4 @@ actor APIClient: SyncTransport {
 }
 
 extension APIClient: ShortcutCredentialTransport {}
+extension APIClient: CollaborationTransport {}

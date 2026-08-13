@@ -6,7 +6,7 @@ Status: workflow contract only until a GitHub macOS runner produces the artifact
 
 The release workflow must provide:
 
-- `ProjectLedger-UNSIGNED.ipa` containing `Payload/ProjectLedger.app` from a Release `iphoneos` device build.
+- `Miravo-UNSIGNED.ipa` containing `Payload/Miravo.app` from a Release `iphoneos` device build.
 - SHA-256 file.
 - JSON manifest with revision, build/version, bundle ID, minimum iOS, Xcode/Swift/macOS versions, architectures, and feature flags.
 - Relevant dSYMs/symbol files.
@@ -16,7 +16,7 @@ Verify checksum before uploading to any signing service. The project never reque
 ## Signing/installing
 
 1. Download all artifacts from the same successful workflow run.
-2. Compare `sha256sum ProjectLedger-UNSIGNED.ipa` with the provided checksum.
+2. Compare `sha256sum Miravo-UNSIGNED.ipa` with the provided checksum.
 3. Upload the unsigned IPA through the owner’s separate signing service.
 4. Confirm the signer’s output has the intended app version and bundle identifier. A changed bundle ID produces a separate app container and will not inherit on-device pending records.
 5. Install according to that service’s documented method and trust/profile requirements.
@@ -38,4 +38,3 @@ Third-party certificates can be revoked and re-signers may alter/remove entitlem
 - [ ] Export pending on-device-only data before deleting an unsynced app installation.
 
 Synchronized server data survives reinstall: sign in and bootstrap. Unsynced local data does not automatically survive container deletion, signer bundle-ID change, or uninstall; use the local pending-data export first.
-

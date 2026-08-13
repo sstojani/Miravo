@@ -11,7 +11,7 @@ struct LockedView: View {
                 .frame(width: 104, height: 104)
                 .background(LedgerTheme.accent.opacity(0.12), in: Circle())
                 .accessibilityHidden(true)
-            Text("Project Ledger is locked")
+            Text("Miravo is locked")
                 .font(.title.bold())
             Text("Use Face ID or your device passcode to view local financial data.")
                 .foregroundStyle(.secondary)

@@ -1,8 +1,8 @@
-# Project Ledger
+# Miravo
 
-Project Ledger is an original, self-hosted, offline-first iPhone expense tracker. The native SwiftUI app writes to its local database immediately; a Django API on an Ubuntu server provides durable synchronization, collaboration, private receipt storage, scheduled work, and exports.
+Miravo (internal codename: Project Ledger) is an original, self-hosted, offline-first iPhone expense tracker. The native SwiftUI app writes to its local database immediately; a Django API on an Ubuntu server provides durable synchronization, collaboration, private receipt storage, scheduled work, and exports.
 
-> Status: Milestones 0–2 and Milestone 4’s backend transport pass their local Linux gates. Milestones 5–6 are source-complete at the available tier. Milestone 7 includes offline-first budgets, recurrence/subscriptions with privacy-safe local reminders, and a locally passing authoritative installment API/sync domain; native installment storage and UI are next. The complete backend gate passes 80 tests with 81.74% branch-aware coverage. Swift compilation, notification/Wallet execution, Docker, and hosted CI remain unavailable here. Nothing has been deployed, and no IPA has been signed or device-tested.
+> Status: Milestones 0–2 and Milestone 4’s backend transport pass their local Linux gates. Milestones 5–8 are source-complete at the available tier: the native app now includes offline participants, expense splits, balances, settlements, connected invite/member controls, and guarded guest merge alongside budgets, recurrence, and installments. The complete backend gate passes 85 tests with 81.20% branch-aware coverage; Linux localization/privacy/contracts and targeted Swift syntax parsing pass, but Swift compilation and native tests still require macOS. Notification/Wallet/two-device execution, Docker, and hosted CI remain unavailable here. Nothing has been deployed, and no IPA has been signed or device-tested.
 
 ## Repository map
 

@@ -33,6 +33,7 @@ def test_public_config_has_no_secret(api_client: APIClient) -> None:
     response = api_client.get("/api/v1/config/public")
     assert response.status_code == 200
     body = response.json()
+    assert body["app_name"] == "Miravo"
     assert body["registration_enabled"] is False
     assert body["default_currency"] == "ALL"
     assert body["supported_locales"] == ["en", "sq"]

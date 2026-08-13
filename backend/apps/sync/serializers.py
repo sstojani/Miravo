@@ -9,6 +9,7 @@ from rest_framework import serializers
 from apps.common.serializers import StrictSerializer
 from apps.ledger.currency import currency_exponent, normalize_currency
 from apps.ledger.models import Account, Category, Transaction
+from apps.ledger.serializers import TransactionSplitInputSerializer
 from apps.planning.models import Budget, InstallmentPlan, RecurringRule
 from apps.planning.serializers import normalize_time_zone
 from apps.planning.services.installments import build_schedule, planned_total_minor
@@ -98,6 +99,15 @@ class TagMutationPayloadSerializer(StrictSerializer):
     tracker_id = serializers.UUIDField()
     name = serializers.CharField(max_length=80)
     color = serializers.CharField(max_length=16)
+    archived_at = serializers.DateTimeField(required=False, allow_null=True)
+    deleted_at = serializers.DateTimeField(required=False, allow_null=True)
+
+
+class ParticipantMutationPayloadSerializer(StrictSerializer):
+    client_payload_version = serializers.IntegerField(min_value=1, max_value=1)
+    id = serializers.UUIDField()
+    tracker_id = serializers.UUIDField()
+    display_name = serializers.CharField(max_length=120)
     archived_at = serializers.DateTimeField(required=False, allow_null=True)
     deleted_at = serializers.DateTimeField(required=False, allow_null=True)
 
@@ -370,6 +380,7 @@ class TransactionMutationPayloadSerializer(StrictSerializer):
         default=list,
         allow_empty=True,
     )
+    split = TransactionSplitInputSerializer(required=False, allow_null=True)
     deleted_at = serializers.DateTimeField(required=False, allow_null=True)
 
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
@@ -398,15 +409,78 @@ class TransactionMutationPayloadSerializer(StrictSerializer):
         return attrs
 
 
+class SettlementMutationPayloadSerializer(StrictSerializer):
+    client_payload_version = serializers.IntegerField(min_value=1, max_value=1)
+    id = serializers.UUIDField()
+    tracker_id = serializers.UUIDField()
+    from_participant_id = serializers.UUIDField()
+    to_participant_id = serializers.UUIDField()
+    amount_minor = serializers.IntegerField(min_value=1)
+    currency = serializers.CharField(min_length=3, max_length=3)
+    currency_exponent = serializers.IntegerField(min_value=0, max_value=6)
+    occurred_at = serializers.DateTimeField()
+    note = serializers.CharField(max_length=5000, allow_blank=True, default="")
+    account_id = serializers.UUIDField(required=False, allow_null=True)
+    account_amount_minor = serializers.IntegerField(min_value=1, required=False)
+    base_amount_minor = serializers.IntegerField(min_value=1, required=False)
+    base_currency = serializers.CharField(min_length=3, max_length=3, required=False)
+    rate_snapshot = serializers.DecimalField(
+        max_digits=28,
+        decimal_places=12,
+        min_value=Decimal("0.000000000001"),
+        required=False,
+    )
+    rate_source = serializers.CharField(max_length=80, required=False)
+    rate_effective_at = serializers.DateTimeField(required=False)
+    transaction_id = serializers.UUIDField(required=False, allow_null=True)
+    deleted_at = serializers.DateTimeField(required=False, allow_null=True)
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        attrs = super().validate(attrs)
+        code = normalize_currency(attrs["currency"])
+        attrs["currency"] = code
+        if attrs["currency_exponent"] != currency_exponent(code):
+            raise serializers.ValidationError(
+                {"currency_exponent": "Does not match the currency's minor-unit exponent."}
+            )
+        if "base_currency" in attrs:
+            attrs["base_currency"] = normalize_currency(attrs["base_currency"])
+        if attrs.get("account_id") is None:
+            forbidden = [
+                field
+                for field in (
+                    "account_amount_minor",
+                    "base_amount_minor",
+                    "base_currency",
+                    "rate_snapshot",
+                    "rate_source",
+                    "rate_effective_at",
+                    "transaction_id",
+                )
+                if attrs.get(field) is not None
+            ]
+            if forbidden:
+                raise serializers.ValidationError(
+                    dict.fromkeys(forbidden, "Requires an account-linked settlement.")
+                )
+        elif attrs.get("transaction_id") is None:
+            raise serializers.ValidationError(
+                {"transaction_id": "Required for an account-linked settlement."}
+            )
+        return attrs
+
+
 PAYLOAD_SERIALIZERS: dict[str, type[StrictSerializer]] = {
     SyncChange.EntityType.TRACKER: TrackerMutationPayloadSerializer,
     SyncChange.EntityType.ACCOUNT: AccountMutationPayloadSerializer,
     SyncChange.EntityType.CATEGORY: CategoryMutationPayloadSerializer,
     SyncChange.EntityType.TAG: TagMutationPayloadSerializer,
+    SyncChange.EntityType.PARTICIPANT: ParticipantMutationPayloadSerializer,
     SyncChange.EntityType.BUDGET: BudgetMutationPayloadSerializer,
     SyncChange.EntityType.RECURRING_RULE: RecurringRuleMutationPayloadSerializer,
     SyncChange.EntityType.INSTALLMENT_PLAN: InstallmentPlanMutationPayloadSerializer,
     SyncChange.EntityType.TRANSACTION: TransactionMutationPayloadSerializer,
+    SyncChange.EntityType.SETTLEMENT: SettlementMutationPayloadSerializer,
 }
 
 
@@ -501,6 +575,24 @@ class SyncOperationSerializer(StrictSerializer):
                     {"command": "This command is unavailable for installment plans."}
                 )
             self._validate_installment_command(attrs["command"], payload)
+        if attrs["entity_type"] == SyncChange.EntityType.PARTICIPANT and attrs["command"] not in {
+            "create",
+            "update",
+            "archive",
+            "restore",
+            "delete",
+        }:
+            raise serializers.ValidationError(
+                {"command": "This command is unavailable for participants."}
+            )
+        if attrs["entity_type"] == SyncChange.EntityType.SETTLEMENT and attrs["command"] not in {
+            "create",
+            "restore",
+            "delete",
+        }:
+            raise serializers.ValidationError(
+                {"command": "This command is unavailable for settlements."}
+            )
         attrs["payload"] = payload
         return attrs
 

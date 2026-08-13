@@ -74,7 +74,7 @@ The write representation accepts account IDs and exact category allocations; it 
 | `GET /sync/bootstrap?bootstrap_cursor=…&limit=…` | Active access JWT | Bounded current authorized snapshot page, fixed normal pull cursor, signed next bootstrap cursor, and `has_more` |
 | `WSS /sync/events` | Active access JWT/device session in `Authorization` header | Optional foreground sequence invalidation; client then uses normal pull |
 
-Push currently accepts eight locally implemented aggregate roots: tracker, account, category, tag, transaction, budget, recurring rule, and installment plan. Each operation contains `operation_id`, positive ascending `local_sequence`, `entity_type`, client `entity_id`, command, nullable `base_server_version`, and a strict versioned payload. The server preserves client UUIDs. Creates omit a base version; later commands require one. The full batch is structurally validated, then each operation commits or rolls back independently.
+Push currently accepts ten client-mutable roots: tracker, account, category, tag, participant, transaction, settlement, budget, recurring rule, and installment plan. Each operation contains `operation_id`, positive ascending `local_sequence`, `entity_type`, client `entity_id`, command, nullable `base_server_version`, and a strict versioned payload. The server preserves client UUIDs. Creates omit a base version; later commands require one. The full batch is structurally validated, then each operation commits or rolls back independently.
 
 Receipts are scoped to the user rather than a transient login session. Exact replay returns `duplicate` without another domain write. Reusing an operation UUID for a different normalized fingerprint returns `idempotency_fingerprint_mismatch`. Stale edits return `conflict` with base version, current server representation, and the proposed payload; unrelated operations continue.
 
@@ -124,17 +124,35 @@ Recurring rules are client-mutable sync roots; pause/resume/end/skip-next are ex
 | `GET /installment-plans/{id}/revisions/` | admin | Return prior plan and schedule-item states |
 | `GET /installment-schedule-items/` and `/installment-payments/` | viewer | Read-only server-authored schedule and payment resources |
 
-Terms store positive principal plus nonnegative interest and fees in integer minor units. The server verifies the exact total and ISO exponent, accepts weekly or monthly schedules up to 600 rows, clamps monthly dates from the original start-day anchor, and assigns every minor unit deterministically across rows and components. A supplied regular installment amount must leave a positive final row no larger than the regular amount. Full financial/schedule terms can be replaced only before a payment exists; original rows are superseded and retained. Name/account/category/time-zone edits still create a plan revision.
+Terms store positive principal plus nonnegative interest and fees in integer minor units. The server verifies the exact total and ISO exponent, accepts weekly or monthly schedules up to 600 rows, clamps monthly dates from the original start-day anchor, and assigns every minor unit deterministically across rows and components. Each schedule row also has a UUIDv5 identity derived from the plan UUID, revision, and sequence so an offline client can safely reference a row produced by an earlier queued plan command. A supplied regular installment amount must leave a positive final row no larger than the regular amount. Full financial/schedule terms can be replaced only before a payment exists; original rows are superseded and retained. Name/account/category/time-zone edits still create a plan revision.
 
 A payment command requires client-generated payment and transaction UUIDs. It creates one posted `source=installment` ledger expense, so account movements, category snapshots, tracker-base conversion validation, audit, and balance derivation use the ordinary financial service. A regular payment requires an active item and cannot exceed that row; an extra payment allocates earliest active rows. A payoff defaults to the remaining plan amount. If tender exceeds the plan balance, `confirm_overpayment=true` is mandatory: the payment exposes actual, applied, and overpayment minor units separately while the ledger records the full actual amount. Replaying an identical payment UUID returns the existing record; conflicting reuse is rejected.
 
 Installment plans are offline client command roots. Sync adds `cancel`, `record_payment`, `payoff`, `skip_payment`, and `reschedule_payment` commands to the common lifecycle set. Plan conflicts carry the current representation and local proposal. Schedule items and payments are server-produced read-only sync entities; bootstrap orders plan, schedule, transaction, then payment data. Operation receipts make retries safe and separate change rows invalidate every affected client.
 
+## Implemented in Milestone 8 (collaboration domain)
+
+| Method/path | Minimum tracker role | Purpose |
+|---|---|---|
+| `GET/POST /participants/` | viewer / editor | List registered/guest identities or create a normalized guest |
+| `PUT/DELETE /participants/{id}/`, `POST /participants/{id}/restore/` | editor; admin for registered rename | Edit/archive/restore without erasing history; registered identities cannot be archived |
+| `POST /participants/{guest_id}/merge/` | admin | Merge a guest into one active registered participant with relational revisions |
+| `PUT/DELETE /transactions/{id}/split/` | editor | Atomically replace/clear the complete payer/share aggregate with `base_version` |
+| `GET /split-balances?tracker_id=…` | viewer | Return per-currency participant nets and deterministic simplified debts |
+| `GET/POST/DELETE /settlements/…`, `POST /settlements/{id}/restore/` | viewer / editor | Record immutable debt reduction, optionally linked to one account movement, then tombstone/restore it atomically |
+
+A split is valid only on a non-void expense. Payer amounts and derived share amounts each sum exactly to the transaction amount. Exact shares supply minor-unit amounts; equal shares assign quotient remainders by ascending participant UUID; percentage shares total exactly 10,000 basis points and allocate fractional remainders by largest remainder then UUID. Every participant must be active and belong to the same tracker. Material transaction and guest-merge changes snapshot payer/share rows in the ordinary transaction revision.
+
+Participant net is `paid - owed + settlements sent - settlements received`, grouped by original currency/exponent. Debt simplification is zero-sum and deterministic. A settlement sender must currently owe the recipient's currency, cannot exceed the live debt/credit pair, and never counts as spending or income. An optional linked transaction is `kind=settlement`, has no category allocation, and moves money only through the selected account. That movement cannot be edited, voided, or tombstoned independently from its settlement.
+
+Guests and settlements are versioned sync roots; payer/share children travel inside the owning transaction representation. Bootstrap orders participants before transactions and settlements after transactions. Exact operation replay therefore remains duplicate-safe without exposing split children as independently mutable roots.
+
+The native app uses ordinary sync for guest lifecycle, complete transaction splits, and settlement roots. Invite creation/revocation/acceptance, member role/removal, and guest merge call these narrow REST actions with the current short-lived app access token because membership authority and an irreversible identity rewrite cannot be queued speculatively offline. Invitation codes are decoded into a redacted one-time memory object, copied only with an expiring local-only pasteboard entry, and never persisted. Guest merge requires a successful clean sync plus authoritative participant versions before the request.
+
 ## Planned resource surface
 
 - Profile and configured recovery.
 - Attachments and receipt upload/download.
-- Participants, splits, simplified balances, settlements.
 - Currency rates, analytics, audit history, export jobs/expiring downloads.
 
 Collection endpoints use bounded cursor pagination, explicit filters/order, and stable error codes. Authorization returns 404 where revealing object existence would be inappropriate.

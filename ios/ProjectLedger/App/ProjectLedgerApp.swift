@@ -74,7 +74,7 @@ private struct LocalStoreBootstrap {
                     persistentStoreUnavailable: true
                 )
             } catch {
-                fatalError("Project Ledger could not initialize a safe local store.")
+                fatalError("Miravo could not initialize a safe local store.")
             }
         }
     }
@@ -86,6 +86,7 @@ private struct LocalStoreBootstrap {
             return try ModelContainer(
                 for: LocalTracker.self,
                 LocalTrackerMembership.self,
+                LocalParticipant.self,
                 LocalAccount.self,
                 LocalCategory.self,
                 LocalTag.self,
@@ -94,10 +95,16 @@ private struct LocalStoreBootstrap {
                 LocalBudgetThreshold.self,
                 LocalRecurringRule.self,
                 LocalRecurringOccurrence.self,
+                LocalInstallmentPlan.self,
+                LocalInstallmentScheduleItem.self,
+                LocalInstallmentPayment.self,
                 LedgerTransaction.self,
                 LocalAccountMovement.self,
                 LocalCategoryAllocation.self,
                 LocalTransactionTag.self,
+                LocalSplitPayment.self,
+                LocalSplitShare.self,
+                LocalSettlement.self,
                 OutboxMutation.self,
                 AttachmentTransfer.self,
                 SyncCursor.self,
@@ -109,6 +116,7 @@ private struct LocalStoreBootstrap {
         return try ModelContainer(
             for: LocalTracker.self,
             LocalTrackerMembership.self,
+            LocalParticipant.self,
             LocalAccount.self,
             LocalCategory.self,
             LocalTag.self,
@@ -117,10 +125,16 @@ private struct LocalStoreBootstrap {
             LocalBudgetThreshold.self,
             LocalRecurringRule.self,
             LocalRecurringOccurrence.self,
+            LocalInstallmentPlan.self,
+            LocalInstallmentScheduleItem.self,
+            LocalInstallmentPayment.self,
             LedgerTransaction.self,
             LocalAccountMovement.self,
             LocalCategoryAllocation.self,
             LocalTransactionTag.self,
+            LocalSplitPayment.self,
+            LocalSplitShare.self,
+            LocalSettlement.self,
             OutboxMutation.self,
             AttachmentTransfer.self,
             SyncCursor.self,

@@ -5,9 +5,12 @@ enum LocalMutationEntity: String, Codable, Sendable {
     case account
     case category
     case tag
+    case participant
     case budget
     case recurringRule = "recurring_rule"
+    case installmentPlan = "installment_plan"
     case transaction
+    case settlement
 }
 
 enum LocalMutationCommand: String, Codable, Sendable {
@@ -20,6 +23,11 @@ enum LocalMutationCommand: String, Codable, Sendable {
     case resume
     case end
     case skipNext = "skip_next"
+    case cancel
+    case recordPayment = "record_payment"
+    case payoff
+    case skipPayment = "skip_payment"
+    case reschedulePayment = "reschedule_payment"
 }
 
 struct TrackerMutationPayload: Codable, Sendable {
@@ -80,6 +88,15 @@ struct TagMutationPayload: Codable, Sendable {
     let deletedAt: Date?
 }
 
+struct ParticipantMutationPayload: Codable, Sendable {
+    let clientPayloadVersion = 1
+    let id: UUID
+    let trackerID: UUID
+    let displayName: String
+    let archivedAt: Date?
+    let deletedAt: Date?
+}
+
 struct BudgetMutationPayload: Codable, Sendable {
     let clientPayloadVersion = 1
     let id: UUID
@@ -136,6 +153,95 @@ struct RecurringRuleMutationPayload: Codable, Sendable {
     let deletedAt: Date?
 }
 
+struct InstallmentPlanMutationPayload: Codable, Sendable {
+    let clientPayloadVersion = 1
+    let id: UUID
+    let trackerID: UUID
+    let name: String
+    let accountID: UUID
+    let categoryID: UUID?
+    let principalMinor: Int64
+    let interestMinor: Int64
+    let feesMinor: Int64
+    let plannedTotalMinor: Int64
+    let currency: String
+    let currencyExponent: Int
+    let installmentCount: Int
+    let plannedInstallmentMinor: Int64?
+    let cadence: String
+    let timeZone: String
+    let startsOn: String
+    let anchorDay: Int
+    let archivedAt: Date?
+    let deletedAt: Date?
+    let paymentID: UUID?
+    let transactionID: UUID?
+    let scheduleItemID: UUID?
+    let paymentAmountMinor: Int64?
+    let occurredAt: Date?
+    let extraPayment: Bool?
+    let confirmOverpayment: Bool?
+    let accountAmountMinor: Int64?
+    let baseAmountMinor: Int64?
+    let baseCurrency: String?
+    let rateSnapshot: String?
+    let rateSource: String?
+    let rateEffectiveAt: Date?
+    let rescheduledDueOn: String?
+
+    init(
+        plan: LocalInstallmentPlan,
+        paymentID: UUID? = nil,
+        transactionID: UUID? = nil,
+        scheduleItemID: UUID? = nil,
+        paymentAmountMinor: Int64? = nil,
+        occurredAt: Date? = nil,
+        extraPayment: Bool? = nil,
+        confirmOverpayment: Bool? = nil,
+        accountAmountMinor: Int64? = nil,
+        baseAmountMinor: Int64? = nil,
+        baseCurrency: String? = nil,
+        rateSnapshot: String? = nil,
+        rateSource: String? = nil,
+        rateEffectiveAt: Date? = nil,
+        rescheduledDueOn: String? = nil
+    ) {
+        id = plan.id
+        trackerID = plan.trackerID
+        name = plan.name
+        accountID = plan.accountID
+        categoryID = plan.categoryID
+        principalMinor = plan.principalMinor
+        interestMinor = plan.interestMinor
+        feesMinor = plan.feesMinor
+        plannedTotalMinor = plan.plannedTotalMinor
+        currency = plan.currencyCode
+        currencyExponent = plan.currencyExponent
+        installmentCount = plan.installmentCount
+        plannedInstallmentMinor = plan.plannedInstallmentMinor
+        cadence = plan.cadenceRaw
+        timeZone = plan.timeZoneIdentifier
+        startsOn = BudgetDateCodec.string(from: plan.startsOn)
+        anchorDay = plan.anchorDay
+        archivedAt = plan.archivedAt
+        deletedAt = plan.deletedAt
+        self.paymentID = paymentID
+        self.transactionID = transactionID
+        self.scheduleItemID = scheduleItemID
+        self.paymentAmountMinor = paymentAmountMinor
+        self.occurredAt = occurredAt
+        self.extraPayment = extraPayment
+        self.confirmOverpayment = confirmOverpayment
+        self.accountAmountMinor = accountAmountMinor
+        self.baseAmountMinor = baseAmountMinor
+        self.baseCurrency = baseCurrency
+        self.rateSnapshot = rateSnapshot
+        self.rateSource = rateSource
+        self.rateEffectiveAt = rateEffectiveAt
+        self.rescheduledDueOn = rescheduledDueOn
+    }
+}
+
 struct TransactionMutationPayload: Codable, Sendable {
     let clientPayloadVersion = 1
     let id: UUID
@@ -161,5 +267,71 @@ struct TransactionMutationPayload: Codable, Sendable {
     let occurredAt: Date
     let refundOfID: UUID?
     let tagIDs: [UUID]
+    let split: TransactionSplitMutationValue?
+    let deletedAt: Date?
+}
+
+struct SplitPaymentMutationPayload: Codable, Sendable {
+    let id: UUID
+    let participantID: UUID
+    let amountMinor: Int64
+}
+
+struct SplitShareMutationPayload: Codable, Sendable {
+    let id: UUID
+    let participantID: UUID
+    let amountMinor: Int64?
+    let percentageBasisPoints: Int?
+}
+
+struct TransactionSplitMutationPayload: Codable, Sendable {
+    let method: String
+    let payments: [SplitPaymentMutationPayload]
+    let shares: [SplitShareMutationPayload]
+}
+
+enum TransactionSplitMutationValue: Codable, Sendable {
+    case none
+    case value(TransactionSplitMutationPayload)
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if container.decodeNil() {
+            self = .none
+        } else {
+            self = .value(try container.decode(TransactionSplitMutationPayload.self))
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        switch self {
+        case .none:
+            try container.encodeNil()
+        case let .value(payload):
+            try container.encode(payload)
+        }
+    }
+}
+
+struct SettlementMutationPayload: Codable, Sendable {
+    let clientPayloadVersion = 1
+    let id: UUID
+    let trackerID: UUID
+    let fromParticipantID: UUID
+    let toParticipantID: UUID
+    let amountMinor: Int64
+    let currency: String
+    let currencyExponent: Int
+    let occurredAt: Date
+    let note: String
+    let accountID: UUID?
+    let accountAmountMinor: Int64?
+    let baseAmountMinor: Int64?
+    let baseCurrency: String?
+    let rateSnapshot: String?
+    let rateSource: String?
+    let rateEffectiveAt: Date?
+    let transactionID: UUID?
     let deletedAt: Date?
 }

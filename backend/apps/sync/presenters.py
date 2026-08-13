@@ -12,6 +12,8 @@ from apps.ledger.models import (
     Account,
     Category,
     Merchant,
+    Participant,
+    Settlement,
     Tag,
     Tracker,
     TrackerMembership,
@@ -22,6 +24,8 @@ from apps.ledger.serializers import (
     CategorySerializer,
     MembershipSerializer,
     MerchantSerializer,
+    ParticipantSerializer,
+    SettlementSerializer,
     TagSerializer,
     TrackerSerializer,
     TransactionReadSerializer,
@@ -48,6 +52,7 @@ from apps.users.models import User
 BOOTSTRAP_ENTITY_ORDER = (
     ("trackers", SyncChange.EntityType.TRACKER),
     ("memberships", SyncChange.EntityType.TRACKER_MEMBERSHIP),
+    ("participants", SyncChange.EntityType.PARTICIPANT),
     ("accounts", SyncChange.EntityType.ACCOUNT),
     ("categories", SyncChange.EntityType.CATEGORY),
     ("tags", SyncChange.EntityType.TAG),
@@ -57,6 +62,7 @@ BOOTSTRAP_ENTITY_ORDER = (
     ("installment_plans", SyncChange.EntityType.INSTALLMENT_PLAN),
     ("installment_schedule_items", SyncChange.EntityType.INSTALLMENT_SCHEDULE_ITEM),
     ("transactions", SyncChange.EntityType.TRANSACTION),
+    ("settlements", SyncChange.EntityType.SETTLEMENT),
     ("recurring_occurrences", SyncChange.EntityType.RECURRING_OCCURRENCE),
     ("installment_payments", SyncChange.EntityType.INSTALLMENT_PAYMENT),
 )
@@ -120,6 +126,12 @@ def _load_instance(  # noqa: PLR0911, PLR0912
             .filter(id=entity_id)
             .first()
         )
+    if entity_type == SyncChange.EntityType.PARTICIPANT:
+        return (
+            Participant.objects.select_related("tracker", "linked_user")
+            .filter(id=entity_id)
+            .first()
+        )
     if entity_type == SyncChange.EntityType.BUDGET:
         return (
             Budget.objects.select_related("tracker", "created_by", "last_editor")
@@ -155,7 +167,26 @@ def _load_instance(  # noqa: PLR0911, PLR0912
             Transaction.objects.select_related(
                 "tracker", "merchant", "creator", "last_editor", "refund_of"
             )
-            .prefetch_related("movements", "allocations", "transaction_tags")
+            .prefetch_related(
+                "movements",
+                "allocations",
+                "transaction_tags",
+                "split_payments__participant",
+                "split_shares__participant",
+            )
+            .filter(id=entity_id)
+            .first()
+        )
+    if entity_type == SyncChange.EntityType.SETTLEMENT:
+        return (
+            Settlement.objects.select_related(
+                "tracker",
+                "from_participant",
+                "to_participant",
+                "transaction",
+                "created_by",
+                "last_editor",
+            )
             .filter(id=entity_id)
             .first()
         )
@@ -209,6 +240,8 @@ def _serialize_loaded_instance(  # noqa: PLR0912
     elif entity_type == SyncChange.EntityType.MERCHANT:
         data = dict(MerchantSerializer(instance).data)
         data["deleted_at"] = instance.deleted_at
+    elif entity_type == SyncChange.EntityType.PARTICIPANT:
+        data = dict(ParticipantSerializer(instance).data)
     elif entity_type == SyncChange.EntityType.BUDGET:
         data = dict(BudgetSerializer(instance).data)
     elif entity_type == SyncChange.EntityType.RECURRING_RULE:
@@ -219,6 +252,8 @@ def _serialize_loaded_instance(  # noqa: PLR0912
         data = dict(InstallmentScheduleItemSerializer(instance).data)
     elif entity_type == SyncChange.EntityType.TRANSACTION:
         data = dict(TransactionReadSerializer(instance).data)
+    elif entity_type == SyncChange.EntityType.SETTLEMENT:
+        data = dict(SettlementSerializer(instance).data)
     elif entity_type == SyncChange.EntityType.RECURRING_OCCURRENCE:
         data = dict(RecurringOccurrenceSerializer(instance).data)
     elif entity_type == SyncChange.EntityType.INSTALLMENT_PAYMENT:
@@ -313,6 +348,12 @@ def _bootstrap_queryset(  # noqa: PLR0911, PLR0912
             .select_related("tracker", "default_category")
             .order_by("id")
         )
+    if entity_type == SyncChange.EntityType.PARTICIPANT:
+        return (
+            Participant.objects.filter(tracker_id__in=tracker_ids, deleted_at__isnull=True)
+            .select_related("tracker", "linked_user")
+            .order_by("id")
+        )
     if entity_type == SyncChange.EntityType.BUDGET:
         return (
             Budget.objects.filter(tracker_id__in=tracker_ids, deleted_at__isnull=True)
@@ -345,7 +386,26 @@ def _bootstrap_queryset(  # noqa: PLR0911, PLR0912
         return (
             Transaction.objects.filter(tracker_id__in=tracker_ids, deleted_at__isnull=True)
             .select_related("tracker", "merchant", "creator", "last_editor", "refund_of")
-            .prefetch_related("movements", "allocations", "transaction_tags")
+            .prefetch_related(
+                "movements",
+                "allocations",
+                "transaction_tags",
+                "split_payments__participant",
+                "split_shares__participant",
+            )
+            .order_by("id")
+        )
+    if entity_type == SyncChange.EntityType.SETTLEMENT:
+        return (
+            Settlement.objects.filter(tracker_id__in=tracker_ids, deleted_at__isnull=True)
+            .select_related(
+                "tracker",
+                "from_participant",
+                "to_participant",
+                "transaction",
+                "created_by",
+                "last_editor",
+            )
             .order_by("id")
         )
     if entity_type == SyncChange.EntityType.RECURRING_OCCURRENCE:

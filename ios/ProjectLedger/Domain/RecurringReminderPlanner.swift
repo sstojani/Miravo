@@ -29,6 +29,14 @@ struct RecurringReminderCandidate: Equatable, Sendable {
     let deletedAt: Date?
 }
 
+struct InstallmentReminderCandidate: Equatable, Sendable {
+    let planID: UUID
+    let nextDueAt: Date
+    let state: InstallmentPlanState
+    let archivedAt: Date?
+    let deletedAt: Date?
+}
+
 struct RecurringReminderPlan: Equatable, Sendable {
     let identifier: String
     let ruleID: UUID
@@ -47,11 +55,29 @@ enum RecurringReminderPlanner {
         now: Date,
         maximumCount: Int = maximumScheduledCount
     ) -> [RecurringReminderPlan] {
+        combinedPlans(
+            recurringCandidates: candidates,
+            installmentCandidates: [],
+            scopeKey: scopeKey,
+            leadTime: leadTime,
+            now: now,
+            maximumCount: maximumCount
+        )
+    }
+
+    static func combinedPlans(
+        recurringCandidates: [RecurringReminderCandidate],
+        installmentCandidates: [InstallmentReminderCandidate],
+        scopeKey: String,
+        leadTime: RecurringReminderLeadTime,
+        now: Date,
+        maximumCount: Int = maximumScheduledCount
+    ) -> [RecurringReminderPlan] {
         let earliestFire = now.addingTimeInterval(minimumSchedulingDelay)
         let boundedMaximum = min(max(maximumCount, 0), maximumScheduledCount)
         guard boundedMaximum > 0 else { return [] }
 
-        return candidates.compactMap { candidate -> RecurringReminderPlan? in
+        let recurring = recurringCandidates.compactMap { candidate -> RecurringReminderPlan? in
             guard candidate.state == .active,
                   candidate.archivedAt == nil,
                   candidate.deletedAt == nil,
@@ -63,13 +89,36 @@ enum RecurringReminderPlanner {
             return RecurringReminderPlan(
                 identifier: reminderIdentifier(
                     scopeKey: scopeKey,
-                    ruleID: candidate.ruleID
+                    entityType: "recurring",
+                    entityID: candidate.ruleID
                 ),
                 ruleID: candidate.ruleID,
                 fireAt: max(preferredFire, earliestFire),
                 dueAt: candidate.nextDueAt
             )
         }
+        let installments = installmentCandidates.compactMap {
+            candidate -> RecurringReminderPlan? in
+            guard candidate.state == .active,
+                  candidate.archivedAt == nil,
+                  candidate.deletedAt == nil,
+                  candidate.nextDueAt > earliestFire
+            else {
+                return nil
+            }
+            let preferredFire = candidate.nextDueAt.addingTimeInterval(-leadTime.interval)
+            return RecurringReminderPlan(
+                identifier: reminderIdentifier(
+                    scopeKey: scopeKey,
+                    entityType: "installment",
+                    entityID: candidate.planID
+                ),
+                ruleID: candidate.planID,
+                fireAt: max(preferredFire, earliestFire),
+                dueAt: candidate.nextDueAt
+            )
+        }
+        return (recurring + installments)
         .sorted {
             if $0.fireAt != $1.fireAt { return $0.fireAt < $1.fireAt }
             if $0.dueAt != $1.dueAt { return $0.dueAt < $1.dueAt }
@@ -90,8 +139,12 @@ enum RecurringReminderPlanner {
             .joined()
     }
 
-    private static func reminderIdentifier(scopeKey: String, ruleID: UUID) -> String {
-        let source = "\(scopeKey):\(ruleID.uuidString.lowercased())"
+    private static func reminderIdentifier(
+        scopeKey: String,
+        entityType: String,
+        entityID: UUID
+    ) -> String {
+        let source = "\(scopeKey):\(entityType):\(entityID.uuidString.lowercased())"
         let digest = SHA256.hash(data: Data(source.utf8))
             .map { String(format: "%02x", $0) }
             .joined()

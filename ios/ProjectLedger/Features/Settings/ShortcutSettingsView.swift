@@ -74,7 +74,7 @@ struct ShortcutSettingsView: View {
     var body: some View {
         Form {
             Section("Optional Wallet capture") {
-                Text("A personal Apple Wallet Transaction automation can send one purchase to your server. Project Ledger remains fully useful without it.")
+                Text("A personal Apple Wallet Transaction automation can send one purchase to your server. Miravo remains fully useful without it.")
                     .foregroundStyle(.secondary)
             }
 
@@ -195,7 +195,7 @@ struct ShortcutSettingsView: View {
                         .font(.caption.monospaced())
                         .textSelection(.enabled)
                 }
-                Label("The raw token is shown once and is never saved by Project Ledger.", systemImage: "eye.slash")
+                Label("The raw token is shown once and is never saved by Miravo.", systemImage: "eye.slash")
                 Label("Use the same event UUID for retries and queued flushes.", systemImage: "arrow.triangle.2.circlepath")
                 Label("Wallet capture is not bank reconciliation.", systemImage: "exclamationmark.shield")
             } footer: {
@@ -476,7 +476,7 @@ private struct OneTimeShortcutTokenView: View {
             VStack(alignment: .leading, spacing: LedgerTheme.sectionSpacing) {
                 Label("Save this token now", systemImage: "key.viewfinder")
                     .font(.title2.bold())
-                Text("Project Ledger will never show this raw token again. Put it only in the Shortcut Authorization header.")
+                Text("Miravo will never show this raw token again. Put it only in the Shortcut Authorization header.")
                     .foregroundStyle(.secondary)
                 Text(token.rawValue)
                     .font(.caption.monospaced())

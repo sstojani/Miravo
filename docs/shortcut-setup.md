@@ -7,8 +7,8 @@ On 2026-08-09, Apple’s current [Transaction trigger guide](https://support.app
 ## Before creating the automation
 
 1. Confirm ordinary manual app entry and foreground sync work.
-2. In Project Ledger Settings → Apple Wallet Shortcut, create a token. The screen requests only `categories:read`, `accounts:read`, and `transactions:create`, and recommends locking it to one tracker.
-3. Copy the raw token once into the Shortcut. Project Ledger does not persist it; the explicit copy is local to the iPhone clipboard and expires after five minutes. Do not screenshot/share it. The server stores only its digest.
+2. In Miravo Settings → Apple Wallet Shortcut, create a token. The screen requests only `categories:read`, `accounts:read`, and `transactions:create`, and recommends locking it to one tracker.
+3. Copy the raw token once into the Shortcut. Miravo does not persist it; the explicit copy is local to the iPhone clipboard and expires after five minutes. Do not screenshot/share it. The server stores only its digest.
 4. Select a default tracker/account to reduce prompts.
 5. Replace `https://replace-me.ts.net` below with the exact HTTPS API host shown by the app.
 
@@ -69,7 +69,7 @@ Before enabling the personal trigger, copy `docs/examples/shortcut-transaction.j
 
 ## Offline queue variant
 
-Build the same versioned payload and UUID before networking. If the POST fails or its result is unknown, append only the payload—not the token—to one JSON object per line in a user-visible Shortcuts folder such as `Shortcuts/ProjectLedger/pending.jsonl`.
+Build the same versioned payload and UUID before networking. If the POST fails or its result is unknown, append only the payload—not the token—to one JSON object per line in a user-visible Shortcuts folder such as `Shortcuts/Miravo/pending.jsonl`.
 
 A separate “Flush Expense Queue” Shortcut should:
 

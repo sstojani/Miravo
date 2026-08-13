@@ -10,6 +10,8 @@ from apps.ledger.models import (
     Account,
     Category,
     Merchant,
+    Participant,
+    Settlement,
     Tag,
     Tracker,
     TrackerMembership,
@@ -63,6 +65,8 @@ def _record_change(sender: type[Any], instance: Any, raw: bool, **kwargs: Any) -
         InstallmentPlan: SyncChange.EntityType.INSTALLMENT_PLAN,
         InstallmentScheduleItem: SyncChange.EntityType.INSTALLMENT_SCHEDULE_ITEM,
         InstallmentPayment: SyncChange.EntityType.INSTALLMENT_PAYMENT,
+        Participant: SyncChange.EntityType.PARTICIPANT,
+        Settlement: SyncChange.EntityType.SETTLEMENT,
         Transaction: SyncChange.EntityType.TRANSACTION,
     }[sender]
     tracker_id, audience_user_id = _scope(instance)
@@ -94,6 +98,8 @@ for _sender in (
     InstallmentPlan,
     InstallmentScheduleItem,
     InstallmentPayment,
+    Participant,
+    Settlement,
     Transaction,
 ):
     receiver(

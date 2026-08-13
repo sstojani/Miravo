@@ -217,8 +217,8 @@ REST_FRAMEWORK = {
 }
 
 SPECTACULAR_SETTINGS = {
-    "TITLE": "Project Ledger API",
-    "DESCRIPTION": "Versioned API for the Project Ledger offline-first finance application.",
+    "TITLE": "Miravo API",
+    "DESCRIPTION": "Versioned API for the Miravo offline-first finance application.",
     "VERSION": "1.0.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "SCHEMA_PATH_PREFIX": r"/api/v1",
@@ -235,7 +235,7 @@ SPECTACULAR_SETTINGS = {
     },
 }
 
-APP_NAME = env("PROJECT_LEDGER_APP_NAME", "Project Ledger")
+APP_NAME = env("PROJECT_LEDGER_APP_NAME", "Miravo")
 BUNDLE_ID = env("PROJECT_LEDGER_BUNDLE_ID", "com.example.projectledger")
 PUBLIC_API_BASE_URL = os.getenv("PROJECT_LEDGER_PUBLIC_API_BASE_URL", "")
 PUBLIC_REGISTRATION_ENABLED = env_bool("PROJECT_LEDGER_PUBLIC_REGISTRATION", False)

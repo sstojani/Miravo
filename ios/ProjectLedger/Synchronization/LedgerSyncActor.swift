@@ -40,13 +40,18 @@ actor LedgerSyncActor {
     private enum DecodedRemote {
         case tracker(TrackerSnapshot)
         case membership(MembershipSnapshot)
+        case participant(ParticipantSnapshot)
         case account(AccountSnapshot)
         case category(CategorySnapshot)
         case tag(TagSnapshot)
         case budget(BudgetSnapshot)
         case recurringRule(RecurringRuleSnapshot)
         case recurringOccurrence(RecurringOccurrenceSnapshot)
+        case installmentPlan(InstallmentPlanSnapshot)
+        case installmentScheduleItem(InstallmentScheduleItemSnapshot)
+        case installmentPayment(InstallmentPaymentSnapshot)
         case transaction(TransactionSnapshot)
+        case settlement(SettlementSnapshot)
         case tombstone(entityType: String, entityID: UUID, changedAt: Date, version: Int64)
         case ignored
     }
@@ -54,6 +59,45 @@ actor LedgerSyncActor {
     private struct PreparedBatch {
         let request: SyncPushRequest
         let operationIDs: [UUID]
+    }
+
+    private struct ValidatedInstallmentPlanSnapshot {
+        let cadence: InstallmentCadence
+        let state: InstallmentPlanState
+        let money: Money
+        let startsOn: Date
+        let paidOffAt: Date?
+        let cancelledAt: Date?
+        let createdAt: Date
+        let updatedAt: Date
+        let archivedAt: Date?
+        let deletedAt: Date?
+    }
+
+    private struct ValidatedInstallmentScheduleSnapshot {
+        let state: InstallmentScheduleState
+        let originalDueOn: Date
+        let dueOn: Date
+        let skippedAt: Date?
+        let supersededAt: Date?
+        let createdAt: Date
+        let updatedAt: Date
+        let deletedAt: Date?
+    }
+
+    private struct ValidatedInstallmentPaymentSnapshot {
+        let appliedAt: Date
+        let createdAt: Date
+        let updatedAt: Date
+        let deletedAt: Date?
+    }
+
+    private struct ValidatedSettlementSnapshot {
+        let money: Money
+        let occurredAt: Date
+        let createdAt: Date
+        let updatedAt: Date
+        let deletedAt: Date?
     }
 
     func synchronize(authentication: SyncAuthenticationContext) async throws -> SyncRunSummary {
@@ -125,6 +169,16 @@ actor LedgerSyncActor {
             mutation.nextAttemptAt = nil
             mutation.lastSafeErrorCode = nil
             mutation.updatedAt = .now
+            try markInstallmentProjection(
+                scopeKey: scopeKey,
+                mutation: mutation,
+                state: .pending
+            )
+            try markSettlementProjection(
+                scopeKey: scopeKey,
+                mutation: mutation,
+                state: .pending
+            )
         }
         try saveOrRollback()
     }
@@ -136,15 +190,22 @@ actor LedgerSyncActor {
                 operationID: operationID
             ) else { return }
             let current = try JSONDecoder().decode(JSONValue.self, from: conflict.currentJSON)
+            let outbox = try fetchOutbox(scopeKey: scopeKey)
+            let resolvedMutation = outbox.first { $0.operationID == operationID }
             try applyRepresentation(
                 entityType: conflict.entityType,
                 value: current,
                 scopeKey: scopeKey,
                 respectPending: false
             )
-            let outbox = try fetchOutbox(scopeKey: scopeKey)
-            for mutation in outbox where mutation.operationID == operationID {
-                modelContext.delete(mutation)
+            if let resolvedMutation,
+               resolvedMutation.entityType == LocalMutationEntity.installmentPlan.rawValue {
+                try discardInstallmentProjection(
+                    scopeKey: scopeKey,
+                    mutation: resolvedMutation
+                )
+                let state = try cursorState(scopeKey: scopeKey)
+                state.bootstrapRequired = true
             }
             if let currentVersion = current.objectValue?["version"]?.integerValue {
                 rebaseRemainingMutations(
@@ -155,6 +216,18 @@ actor LedgerSyncActor {
                     to: currentVersion,
                     excluding: operationID
                 )
+            }
+            if let resolvedMutation,
+               resolvedMutation.entityType == LocalMutationEntity.installmentPlan.rawValue {
+                try preserveDependentInstallmentMutations(
+                    scopeKey: scopeKey,
+                    resolvedMutation: resolvedMutation,
+                    current: current,
+                    outbox: outbox
+                )
+            }
+            for mutation in outbox where mutation.operationID == operationID {
+                modelContext.delete(mutation)
             }
             conflict.resolvedAt = .now
             try saveOrRollback()
@@ -310,11 +383,21 @@ actor LedgerSyncActor {
                 $0.state == .pending && ($0.nextAttemptAt == nil || $0.nextAttemptAt! <= now)
             }
             .sorted { $0.localSequence < $1.localSequence }
+        let blockedEntitySequences = Dictionary(
+            grouping: outbox.filter { $0.state == .failed || $0.state == .conflicted },
+            by: { "\($0.entityType)|\($0.entityID.uuidString)" }
+        ).mapValues { mutations in
+            mutations.map(\.localSequence).min() ?? Int64.max
+        }
         var seenEntities = Set<String>()
         var operations = [SyncPushOperation]()
         var operationIDs = [UUID]()
         for mutation in eligible {
             let entityKey = "\(mutation.entityType)|\(mutation.entityID.uuidString)"
+            if let blockedSequence = blockedEntitySequences[entityKey],
+               mutation.localSequence > blockedSequence {
+                continue
+            }
             guard !seenEntities.contains(entityKey), operations.count < 100 else { continue }
             seenEntities.insert(entityKey)
             do {
@@ -406,6 +489,11 @@ actor LedgerSyncActor {
                     }) ? .pending : .synced,
                     serverVersion: serverVersion
                 )
+                try markSettlementProjection(
+                    scopeKey: scopeKey,
+                    mutation: mutation,
+                    state: .synced
+                )
                 processed += 1
             case .rejected, .unauthorized:
                 mutation.stateRaw = LocalSyncState.failed.rawValue
@@ -419,6 +507,16 @@ actor LedgerSyncActor {
                     state: .failed,
                     serverVersion: nil
                 )
+                try markInstallmentProjection(
+                    scopeKey: scopeKey,
+                    mutation: mutation,
+                    state: .failed
+                )
+                try markSettlementProjection(
+                    scopeKey: scopeKey,
+                    mutation: mutation,
+                    state: .failed
+                )
             case .conflict:
                 guard result.representation != nil, result.serverVersion != nil else {
                     mutation.stateRaw = LocalSyncState.failed.rawValue
@@ -431,6 +529,16 @@ actor LedgerSyncActor {
                         entityID: mutation.entityID,
                         state: .failed,
                         serverVersion: nil
+                    )
+                    try markInstallmentProjection(
+                        scopeKey: scopeKey,
+                        mutation: mutation,
+                        state: .failed
+                    )
+                    try markSettlementProjection(
+                        scopeKey: scopeKey,
+                        mutation: mutation,
+                        state: .failed
                     )
                     continue
                 }
@@ -449,6 +557,16 @@ actor LedgerSyncActor {
                     entityID: mutation.entityID,
                     state: .conflicted,
                     serverVersion: result.serverVersion
+                )
+                try markInstallmentProjection(
+                    scopeKey: scopeKey,
+                    mutation: mutation,
+                    state: .conflicted
+                )
+                try markSettlementProjection(
+                    scopeKey: scopeKey,
+                    mutation: mutation,
+                    state: .conflicted
                 )
             }
         }
@@ -496,6 +614,18 @@ actor LedgerSyncActor {
             (change, try decodeRemoteChange(change))
         }
         for (change, remote) in decoded {
+            if try hasBlockingInstallmentParentMutation(
+                remote: remote,
+                scopeKey: scopeKey
+            ) {
+                continue
+            }
+            if try hasBlockingSettlementProjectionMutation(
+                remote: remote,
+                scopeKey: scopeKey
+            ) {
+                continue
+            }
             switch remote {
             case let .membership(snapshot):
                 try applyMembership(snapshot, changedAt: change.changedAt, scopeKey: scopeKey)
@@ -613,14 +743,19 @@ actor LedgerSyncActor {
         let entityTypes = [
             "trackers": "tracker",
             "memberships": "tracker_membership",
+            "participants": "participant",
             "accounts": "account",
             "categories": "category",
             "tags": "tag",
             "merchants": "merchant",
             "budgets": "budget",
             "recurring_rules": "recurring_rule",
+            "installment_plans": "installment_plan",
+            "installment_schedule_items": "installment_schedule_item",
             "transactions": "transaction",
+            "settlements": "settlement",
             "recurring_occurrences": "recurring_occurrence",
+            "installment_payments": "installment_payment",
         ]
         let encoder = JSONEncoder()
         for (key, entityType) in entityTypes {
@@ -684,19 +819,27 @@ actor LedgerSyncActor {
         }
         try validateBootstrapRelationships(decoded.map(\.1))
         let outbox = try fetchOutbox(scopeKey: scopeKey)
-        let pendingKeys = Set(outbox.map { "\($0.entityType)|\($0.entityID.uuidString)" })
+        let preservingOutbox = outbox.filter { $0.state != .conflicted }
+        let pendingKeys = Set(
+            preservingOutbox.map { "\($0.entityType)|\($0.entityID.uuidString)" }
+        )
         var remoteIDs = [String: Set<UUID>]()
         let bootstrapPriority = [
             "tracker": 0,
             "tracker_membership": 1,
-            "account": 2,
-            "category": 3,
-            "tag": 4,
-            "budget": 5,
-            "recurring_rule": 6,
-            "transaction": 7,
-            "recurring_occurrence": 8,
-            "merchant": 9,
+            "participant": 2,
+            "account": 3,
+            "category": 4,
+            "tag": 5,
+            "budget": 6,
+            "recurring_rule": 7,
+            "installment_plan": 8,
+            "installment_schedule_item": 9,
+            "transaction": 10,
+            "settlement": 11,
+            "recurring_occurrence": 12,
+            "installment_payment": 13,
+            "merchant": 14,
         ]
         for (row, remote) in decoded.sorted(by: {
             (bootstrapPriority[$0.0.entityType] ?? 100) <
@@ -704,7 +847,26 @@ actor LedgerSyncActor {
         }) {
             remoteIDs[row.entityType, default: []].insert(row.entityID)
             let key = "\(row.entityType)|\(row.entityID.uuidString)"
-            if !pendingKeys.contains(key) {
+            let parentKey: String?
+            switch remote {
+            case let .installmentScheduleItem(snapshot):
+                parentKey = "installment_plan|\(snapshot.planID.uuidString)"
+            case let .settlement(snapshot):
+                parentKey = snapshot.transactionID.map {
+                    "transaction|\($0.uuidString)"
+                }
+            default:
+                parentKey = nil
+            }
+            let parentBlocked = parentKey.map { pendingKeys.contains($0) } ?? false
+            let projectionBlocked = try settlementProjectionBlocked(
+                remote: remote,
+                scopeKey: scopeKey,
+                pendingKeys: pendingKeys
+            )
+            if !pendingKeys.contains(key) &&
+                !parentBlocked &&
+                !projectionBlocked {
                 try applyDecoded(remote, scopeKey: scopeKey)
             }
         }
@@ -724,19 +886,36 @@ actor LedgerSyncActor {
 
     private func validateBootstrapRelationships(_ decoded: [DecodedRemote]) throws {
         var trackerIDs = Set<UUID>()
-        var accountIDs = Set<UUID>()
+        var participantTrackers = [UUID: UUID]()
+        var accountTrackers = [UUID: UUID]()
         var categoryIDs = Set<UUID>()
         var categoryTrackers = [UUID: UUID]()
+        var categoryKinds = [UUID: String]()
         var tagTrackers = [UUID: UUID]()
         var recurringRuleTrackers = [UUID: UUID]()
         var recurringOccurrenceKeys = Set<String>()
+        var installmentPlanTrackers = [UUID: UUID]()
+        var installmentPlans = [UUID: InstallmentPlanSnapshot]()
+        var validatedInstallmentPlans = [UUID: ValidatedInstallmentPlanSnapshot]()
+        var installmentSchedulePlans = [UUID: UUID]()
+        var installmentScheduleTrackers = [UUID: UUID]()
+        var validatedInstallmentSchedules = [UUID: ValidatedInstallmentScheduleSnapshot]()
+        var installmentScheduleKeys = Set<String>()
         var transactionTrackers = [UUID: UUID]()
+        var transactions = [UUID: TransactionSnapshot]()
         for item in decoded {
             switch item {
             case let .tracker(snapshot): trackerIDs.insert(snapshot.id)
-            case let .account(snapshot): accountIDs.insert(snapshot.id)
+            case let .participant(snapshot):
+                guard participantTrackers[snapshot.id] == nil else {
+                    throw SyncEngineError.invalidServerResponse
+                }
+                participantTrackers[snapshot.id] = snapshot.trackerID
+            case let .account(snapshot):
+                accountTrackers[snapshot.id] = snapshot.trackerID
             case let .category(snapshot):
                 categoryIDs.insert(snapshot.id)
+                categoryKinds[snapshot.id] = snapshot.kind
                 if let trackerID = snapshot.trackerID {
                     categoryTrackers[snapshot.id] = trackerID
                 }
@@ -747,14 +926,39 @@ actor LedgerSyncActor {
                 guard recurringOccurrenceKeys.insert(snapshot.occurrenceKey).inserted else {
                     throw SyncEngineError.invalidServerResponse
                 }
+            case let .installmentPlan(snapshot):
+                guard installmentPlans[snapshot.id] == nil else {
+                    throw SyncEngineError.invalidServerResponse
+                }
+                installmentPlanTrackers[snapshot.id] = snapshot.trackerID
+                installmentPlans[snapshot.id] = snapshot
+                validatedInstallmentPlans[snapshot.id] = try validatedInstallmentPlanSnapshot(
+                    snapshot
+                )
+            case let .installmentScheduleItem(snapshot):
+                installmentSchedulePlans[snapshot.id] = snapshot.planID
+                installmentScheduleTrackers[snapshot.id] = snapshot.trackerID
+                validatedInstallmentSchedules[snapshot.id] =
+                    try validatedInstallmentScheduleSnapshot(snapshot)
+                let key = "\(snapshot.planID)|\(snapshot.revisionNumber)|\(snapshot.sequence)"
+                guard installmentScheduleKeys.insert(key).inserted else {
+                    throw SyncEngineError.invalidServerResponse
+                }
+            case let .installmentPayment(snapshot):
+                _ = try validatedInstallmentPaymentSnapshot(snapshot)
             case let .transaction(snapshot):
                 transactionTrackers[snapshot.id] = snapshot.trackerID
+                transactions[snapshot.id] = snapshot
             default: break
             }
         }
         for item in decoded {
             switch item {
             case let .membership(snapshot):
+                guard trackerIDs.contains(snapshot.trackerID) else {
+                    throw SyncEngineError.invalidServerResponse
+                }
+            case let .participant(snapshot):
                 guard trackerIDs.contains(snapshot.trackerID) else {
                     throw SyncEngineError.invalidServerResponse
                 }
@@ -780,26 +984,101 @@ actor LedgerSyncActor {
                 }
             case let .recurringRule(snapshot):
                 guard trackerIDs.contains(snapshot.trackerID),
-                      accountIDs.contains(snapshot.accountID),
+                      accountTrackers[snapshot.accountID] == snapshot.trackerID,
                       snapshot.categoryID.map({
                           categoryTrackers[$0] == snapshot.trackerID
                       }) ?? true
                 else {
                     throw SyncEngineError.invalidServerResponse
                 }
-            case let .transaction(snapshot):
+            case let .installmentPlan(snapshot):
                 guard trackerIDs.contains(snapshot.trackerID),
-                      snapshot.movements.allSatisfy({ accountIDs.contains($0.accountID) }),
-                      snapshot.allocations.allSatisfy({ categoryIDs.contains($0.categoryID) }),
+                      accountTrackers[snapshot.accountID] == snapshot.trackerID,
+                      snapshot.categoryID.map({
+                          categoryTrackers[$0] == snapshot.trackerID &&
+                              categoryKinds[$0] == CategoryKind.expense.rawValue
+                      }) ?? true
+                else {
+                    throw SyncEngineError.invalidServerResponse
+                }
+            case let .installmentScheduleItem(snapshot):
+                guard let plan = installmentPlans[snapshot.planID],
+                      let validatedPlan = validatedInstallmentPlans[snapshot.planID],
+                      let validatedSchedule = validatedInstallmentSchedules[snapshot.id],
+                      trackerIDs.contains(snapshot.trackerID),
+                      installmentPlanTrackers[snapshot.planID] == snapshot.trackerID,
+                      snapshot.revisionNumber <= plan.revisionNumber,
+                      validatedSchedule.originalDueOn >= validatedPlan.startsOn,
+                      validatedSchedule.dueOn >= validatedPlan.startsOn
+                else {
+                    throw SyncEngineError.invalidServerResponse
+                }
+            case let .transaction(snapshot):
+                try validateSplitSnapshot(
+                    snapshot,
+                    participantTrackers: participantTrackers
+                )
+                guard trackerIDs.contains(snapshot.trackerID),
+                      snapshot.movements.allSatisfy({
+                          accountTrackers[$0.accountID] == snapshot.trackerID
+                      }),
+                      snapshot.allocations.allSatisfy({
+                          categoryIDs.contains($0.categoryID) &&
+                              categoryTrackers[$0.categoryID] == snapshot.trackerID
+                      }),
                       snapshot.tagIDs.allSatisfy({ tagTrackers[$0] == snapshot.trackerID })
                 else {
                     throw SyncEngineError.invalidServerResponse
                 }
+            case let .settlement(snapshot):
+                guard trackerIDs.contains(snapshot.trackerID),
+                      snapshot.fromParticipantID != snapshot.toParticipantID,
+                      participantTrackers[snapshot.fromParticipantID] == snapshot.trackerID,
+                      participantTrackers[snapshot.toParticipantID] == snapshot.trackerID,
+                      snapshot.transactionID.map({ transactionID in
+                          guard let transaction = transactions[transactionID] else {
+                              return false
+                          }
+                          return transaction.trackerID == snapshot.trackerID &&
+                              transaction.kind == TransactionKind.settlement.rawValue &&
+                              transaction.amountMinor == snapshot.amountMinor &&
+                              transaction.currency == snapshot.currency &&
+                              transaction.currencyExponent == snapshot.currencyExponent
+                      }) ?? true
+                else {
+                    throw SyncEngineError.invalidServerResponse
+                }
+                _ = try validatedSettlementSnapshot(snapshot)
             case let .recurringOccurrence(snapshot):
                 guard trackerIDs.contains(snapshot.trackerID),
                       recurringRuleTrackers[snapshot.ruleID] == snapshot.trackerID,
                       snapshot.transactionID.map({
                           transactionTrackers[$0] == snapshot.trackerID
+                      }) ?? true
+                else {
+                    throw SyncEngineError.invalidServerResponse
+                }
+            case let .installmentPayment(snapshot):
+                guard let plan = installmentPlans[snapshot.planID],
+                      let transaction = transactions[snapshot.transactionID],
+                      let kind = TransactionKind(rawValue: transaction.kind),
+                      let source = TransactionSource(rawValue: transaction.source),
+                      let primary = primaryMovement(transaction.movements, kind: kind),
+                      trackerIDs.contains(snapshot.trackerID),
+                      installmentPlanTrackers[snapshot.planID] == snapshot.trackerID,
+                      transactionTrackers[snapshot.transactionID] == snapshot.trackerID,
+                      primary.accountID == plan.accountID,
+                      primary.signedAmountMinor < 0,
+                      kind == .expense,
+                      source == .installment,
+                      transaction.status == TransactionStatus.posted.rawValue,
+                      transaction.amountMinor == snapshot.amountMinor,
+                      transaction.currency == plan.currency,
+                      transaction.currencyExponent == plan.currencyExponent,
+                      snapshot.appliedAmountMinor <= plan.plannedTotalMinor,
+                      snapshot.scheduleItemID.map({
+                          installmentSchedulePlans[$0] == snapshot.planID &&
+                              installmentScheduleTrackers[$0] == snapshot.trackerID
                       }) ?? true
                 else {
                     throw SyncEngineError.invalidServerResponse
@@ -829,6 +1108,8 @@ actor LedgerSyncActor {
             .tracker(try SyncSnapshotDecoder.decode(TrackerSnapshot.self, from: data))
         case "tracker_membership":
             .membership(try SyncSnapshotDecoder.decode(MembershipSnapshot.self, from: data))
+        case "participant":
+            .participant(try SyncSnapshotDecoder.decode(ParticipantSnapshot.self, from: data))
         case "account":
             .account(try SyncSnapshotDecoder.decode(AccountSnapshot.self, from: data))
         case "category":
@@ -845,8 +1126,22 @@ actor LedgerSyncActor {
             .recurringOccurrence(
                 try SyncSnapshotDecoder.decode(RecurringOccurrenceSnapshot.self, from: data)
             )
+        case "installment_plan":
+            .installmentPlan(
+                try SyncSnapshotDecoder.decode(InstallmentPlanSnapshot.self, from: data)
+            )
+        case "installment_schedule_item":
+            .installmentScheduleItem(
+                try SyncSnapshotDecoder.decode(InstallmentScheduleItemSnapshot.self, from: data)
+            )
+        case "installment_payment":
+            .installmentPayment(
+                try SyncSnapshotDecoder.decode(InstallmentPaymentSnapshot.self, from: data)
+            )
         case "transaction":
             .transaction(try SyncSnapshotDecoder.decode(TransactionSnapshot.self, from: data))
+        case "settlement":
+            .settlement(try SyncSnapshotDecoder.decode(SettlementSnapshot.self, from: data))
         default:
             .ignored
         }
@@ -856,6 +1151,7 @@ actor LedgerSyncActor {
         switch remote {
         case let .tracker(snapshot): try upsertTracker(snapshot, scopeKey: scopeKey)
         case let .membership(snapshot): try upsertMembership(snapshot, scopeKey: scopeKey)
+        case let .participant(snapshot): try upsertParticipant(snapshot, scopeKey: scopeKey)
         case let .account(snapshot): try upsertAccount(snapshot, scopeKey: scopeKey)
         case let .category(snapshot): try upsertCategory(snapshot, scopeKey: scopeKey)
         case let .tag(snapshot): try upsertTag(snapshot, scopeKey: scopeKey)
@@ -863,7 +1159,14 @@ actor LedgerSyncActor {
         case let .recurringRule(snapshot): try upsertRecurringRule(snapshot, scopeKey: scopeKey)
         case let .recurringOccurrence(snapshot):
             try upsertRecurringOccurrence(snapshot, scopeKey: scopeKey)
+        case let .installmentPlan(snapshot):
+            try upsertInstallmentPlan(snapshot, scopeKey: scopeKey)
+        case let .installmentScheduleItem(snapshot):
+            try upsertInstallmentScheduleItem(snapshot, scopeKey: scopeKey)
+        case let .installmentPayment(snapshot):
+            try upsertInstallmentPayment(snapshot, scopeKey: scopeKey)
         case let .transaction(snapshot): try upsertTransaction(snapshot, scopeKey: scopeKey)
+        case let .settlement(snapshot): try upsertSettlement(snapshot, scopeKey: scopeKey)
         case let .tombstone(entityType, entityID, changedAt, version):
             try applyTombstone(
                 entityType: entityType,
@@ -986,6 +1289,59 @@ actor LedgerSyncActor {
         membership.createdAt = try parseTimestamp(snapshot.createdAt)
         membership.updatedAt = try parseTimestamp(snapshot.updatedAt)
         membership.deletedAt = try parseOptionalTimestamp(snapshot.deletedAt)
+    }
+
+    private func upsertParticipant(
+        _ snapshot: ParticipantSnapshot,
+        scopeKey: String
+    ) throws {
+        let name = snapshot.displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trackerID = snapshot.trackerID
+        guard snapshot.version > 0,
+              !name.isEmpty,
+              (snapshot.linkedUserID == nil) == (snapshot.linkedEmail == nil),
+              try modelContext.fetch(
+                  FetchDescriptor<LocalTracker>(
+                      predicate: #Predicate {
+                          $0.scopeKey == scopeKey && $0.id == trackerID
+                      }
+                  )
+              ).first != nil
+        else {
+            throw SyncEngineError.invalidServerResponse
+        }
+        let createdAt = try parseTimestamp(snapshot.createdAt)
+        let updatedAt = try parseTimestamp(snapshot.updatedAt)
+        guard updatedAt >= createdAt else { throw SyncEngineError.invalidServerResponse }
+        let snapshotID = snapshot.id
+        let existing = try modelContext.fetch(
+            FetchDescriptor<LocalParticipant>(
+                predicate: #Predicate { $0.scopeKey == scopeKey && $0.id == snapshotID }
+            )
+        ).first
+        if let version = existing?.serverVersion, version > snapshot.version { return }
+        let participant = existing ?? LocalParticipant(
+            id: snapshot.id,
+            scopeKey: scopeKey,
+            trackerID: snapshot.trackerID,
+            linkedUserID: snapshot.linkedUserID,
+            linkedEmail: snapshot.linkedEmail,
+            displayName: name,
+            serverVersion: snapshot.version,
+            syncState: .synced,
+            createdAt: createdAt
+        )
+        if existing == nil { modelContext.insert(participant) }
+        participant.trackerID = snapshot.trackerID
+        participant.linkedUserID = snapshot.linkedUserID
+        participant.linkedEmail = snapshot.linkedEmail
+        participant.displayName = name
+        participant.archivedAt = try parseOptionalTimestamp(snapshot.archivedAt)
+        participant.serverVersion = snapshot.version
+        participant.syncStateRaw = LocalSyncState.synced.rawValue
+        participant.createdAt = createdAt
+        participant.updatedAt = updatedAt
+        participant.deletedAt = try parseOptionalTimestamp(snapshot.deletedAt)
     }
 
     private func upsertAccount(_ snapshot: AccountSnapshot, scopeKey: String) throws {
@@ -1522,7 +1878,436 @@ actor LedgerSyncActor {
         occurrence.deletedAt = nil
     }
 
+    private func validatedInstallmentPlanSnapshot(
+        _ snapshot: InstallmentPlanSnapshot
+    ) throws -> ValidatedInstallmentPlanSnapshot {
+        guard let cadence = InstallmentCadence(rawValue: snapshot.cadence),
+              let state = InstallmentPlanState(rawValue: snapshot.state),
+              TimeZone(identifier: snapshot.timeZone) != nil,
+              snapshot.version > 0,
+              snapshot.revisionNumber > 0,
+              !snapshot.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else {
+            throw SyncEngineError.invalidServerResponse
+        }
+        let money = try Money(
+            minorUnits: snapshot.plannedTotalMinor,
+            currencyCode: snapshot.currency,
+            exponent: snapshot.currencyExponent
+        )
+        let startsOn = try parseDate(snapshot.startsOn)
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let expectedTotal = try LocalInstallmentCalculator.plannedTotal(
+            principalMinor: snapshot.principalMinor,
+            interestMinor: snapshot.interestMinor,
+            feesMinor: snapshot.feesMinor
+        )
+        guard snapshot.anchorDay == calendar.component(.day, from: startsOn),
+              snapshot.plannedTotalMinor == expectedTotal,
+              snapshot.currency == money.currencyCode
+        else {
+            throw SyncEngineError.invalidServerResponse
+        }
+        _ = try LocalInstallmentCalculator.buildSchedule(
+            principalMinor: snapshot.principalMinor,
+            interestMinor: snapshot.interestMinor,
+            feesMinor: snapshot.feesMinor,
+            installmentCount: snapshot.installmentCount,
+            plannedInstallmentMinor: snapshot.plannedInstallmentMinor,
+            cadence: cadence,
+            startsOn: startsOn,
+            anchorDay: snapshot.anchorDay
+        )
+        let paidOffAt = try parseOptionalTimestamp(snapshot.paidOffAt)
+        let cancelledAt = try parseOptionalTimestamp(snapshot.cancelledAt)
+        guard (state == .active && paidOffAt == nil && cancelledAt == nil) ||
+            (state == .paidOff && paidOffAt != nil && cancelledAt == nil) ||
+            (state == .cancelled && paidOffAt == nil && cancelledAt != nil),
+            snapshot.progress.plannedTotalMinor == snapshot.plannedTotalMinor,
+            snapshot.progress.paidMinor >= 0,
+            snapshot.progress.paidMinor <= snapshot.plannedTotalMinor,
+            snapshot.progress.remainingMinor ==
+                snapshot.plannedTotalMinor - snapshot.progress.paidMinor,
+            state != .paidOff || snapshot.progress.remainingMinor == 0,
+            state != .active || snapshot.progress.remainingMinor > 0
+        else {
+            throw SyncEngineError.invalidServerResponse
+        }
+        _ = try snapshot.progress.nextDueOn.map { try parseDate($0) }
+        _ = try snapshot.progress.estimatedPayoffOn.map { try parseDate($0) }
+        return try ValidatedInstallmentPlanSnapshot(
+            cadence: cadence,
+            state: state,
+            money: money,
+            startsOn: startsOn,
+            paidOffAt: paidOffAt,
+            cancelledAt: cancelledAt,
+            createdAt: parseTimestamp(snapshot.createdAt),
+            updatedAt: parseTimestamp(snapshot.updatedAt),
+            archivedAt: parseOptionalTimestamp(snapshot.archivedAt),
+            deletedAt: parseOptionalTimestamp(snapshot.deletedAt)
+        )
+    }
+
+    private func validatedInstallmentScheduleSnapshot(
+        _ snapshot: InstallmentScheduleItemSnapshot
+    ) throws -> ValidatedInstallmentScheduleSnapshot {
+        guard let state = InstallmentScheduleState(rawValue: snapshot.state),
+              snapshot.version > 0,
+              snapshot.revisionNumber > 0,
+              snapshot.sequence > 0,
+              snapshot.plannedPrincipalMinor >= 0,
+              snapshot.plannedInterestMinor >= 0,
+              snapshot.plannedFeesMinor >= 0,
+              snapshot.plannedTotalMinor > 0,
+              snapshot.paidMinor >= 0,
+              snapshot.paidMinor <= snapshot.plannedTotalMinor
+        else {
+            throw SyncEngineError.invalidServerResponse
+        }
+        let first = snapshot.plannedPrincipalMinor.addingReportingOverflow(
+            snapshot.plannedInterestMinor
+        )
+        let total = first.partialValue.addingReportingOverflow(snapshot.plannedFeesMinor)
+        guard !first.overflow, !total.overflow,
+              total.partialValue == snapshot.plannedTotalMinor
+        else {
+            throw SyncEngineError.invalidServerResponse
+        }
+        let skippedAt = try parseOptionalTimestamp(snapshot.skippedAt)
+        guard (state == .planned && snapshot.paidMinor == 0 && skippedAt == nil) ||
+            (state == .partiallyPaid && snapshot.paidMinor > 0 &&
+                snapshot.paidMinor < snapshot.plannedTotalMinor && skippedAt == nil) ||
+            (state == .paid && snapshot.paidMinor == snapshot.plannedTotalMinor &&
+                skippedAt == nil) ||
+            (state == .skipped && snapshot.paidMinor == 0 && skippedAt != nil)
+        else {
+            throw SyncEngineError.invalidServerResponse
+        }
+        return try ValidatedInstallmentScheduleSnapshot(
+            state: state,
+            originalDueOn: parseDate(snapshot.originalDueOn),
+            dueOn: parseDate(snapshot.dueOn),
+            skippedAt: skippedAt,
+            supersededAt: parseOptionalTimestamp(snapshot.supersededAt),
+            createdAt: parseTimestamp(snapshot.createdAt),
+            updatedAt: parseTimestamp(snapshot.updatedAt),
+            deletedAt: parseOptionalTimestamp(snapshot.deletedAt)
+        )
+    }
+
+    private func validatedInstallmentPaymentSnapshot(
+        _ snapshot: InstallmentPaymentSnapshot
+    ) throws -> ValidatedInstallmentPaymentSnapshot {
+        let sum = snapshot.appliedAmountMinor.addingReportingOverflow(
+            snapshot.overpaymentMinor
+        )
+        guard snapshot.version > 0,
+              snapshot.amountMinor > 0,
+              snapshot.appliedAmountMinor > 0,
+              snapshot.overpaymentMinor >= 0,
+              !sum.overflow,
+              sum.partialValue == snapshot.amountMinor,
+              snapshot.extraPayment || snapshot.scheduleItemID != nil
+        else {
+            throw SyncEngineError.invalidServerResponse
+        }
+        return try ValidatedInstallmentPaymentSnapshot(
+            appliedAt: parseTimestamp(snapshot.appliedAt),
+            createdAt: parseTimestamp(snapshot.createdAt),
+            updatedAt: parseTimestamp(snapshot.updatedAt),
+            deletedAt: parseOptionalTimestamp(snapshot.deletedAt)
+        )
+    }
+
+    private func upsertInstallmentPlan(
+        _ snapshot: InstallmentPlanSnapshot,
+        scopeKey: String
+    ) throws {
+        let validated = try validatedInstallmentPlanSnapshot(snapshot)
+        let cadence = validated.cadence
+        let state = validated.state
+        let money = validated.money
+        let startsOn = validated.startsOn
+        let trackerID = snapshot.trackerID
+        let accountID = snapshot.accountID
+        guard try modelContext.fetch(
+            FetchDescriptor<LocalTracker>(
+                predicate: #Predicate { $0.scopeKey == scopeKey && $0.id == trackerID }
+            )
+        ).first != nil,
+        let account = try modelContext.fetch(
+            FetchDescriptor<LocalAccount>(
+                predicate: #Predicate { $0.scopeKey == scopeKey && $0.id == accountID }
+            )
+        ).first,
+        account.trackerID == trackerID
+        else {
+            throw SyncEngineError.invalidServerResponse
+        }
+        if let categoryID = snapshot.categoryID {
+            guard let category = try modelContext.fetch(
+                FetchDescriptor<LocalCategory>(
+                    predicate: #Predicate { $0.scopeKey == scopeKey && $0.id == categoryID }
+                )
+            ).first,
+            category.trackerID == trackerID,
+            category.kind == .expense
+            else {
+                throw SyncEngineError.invalidServerResponse
+            }
+        }
+        let paidOffAt = validated.paidOffAt
+        let cancelledAt = validated.cancelledAt
+        let snapshotID = snapshot.id
+        let existing = try modelContext.fetch(
+            FetchDescriptor<LocalInstallmentPlan>(
+                predicate: #Predicate { $0.scopeKey == scopeKey && $0.id == snapshotID }
+            )
+        ).first
+        if let version = existing?.serverVersion, version > snapshot.version { return }
+        let plan = existing ?? LocalInstallmentPlan(
+            id: snapshot.id,
+            scopeKey: scopeKey,
+            trackerID: snapshot.trackerID,
+            name: snapshot.name,
+            accountID: snapshot.accountID,
+            categoryID: snapshot.categoryID,
+            principalMinor: snapshot.principalMinor,
+            interestMinor: snapshot.interestMinor,
+            feesMinor: snapshot.feesMinor,
+            plannedTotalMinor: money.minorUnits,
+            currencyCode: money.currencyCode,
+            currencyExponent: money.exponent,
+            installmentCount: snapshot.installmentCount,
+            plannedInstallmentMinor: snapshot.plannedInstallmentMinor,
+            cadence: cadence,
+            timeZoneIdentifier: snapshot.timeZone,
+            startsOn: startsOn,
+            anchorDay: snapshot.anchorDay,
+            state: state,
+            revisionNumber: snapshot.revisionNumber,
+            syncState: .synced,
+            createdAt: validated.createdAt
+        )
+        if existing == nil { modelContext.insert(plan) }
+        plan.trackerID = snapshot.trackerID
+        plan.name = snapshot.name
+        plan.accountID = snapshot.accountID
+        plan.categoryID = snapshot.categoryID
+        plan.principalMinor = snapshot.principalMinor
+        plan.interestMinor = snapshot.interestMinor
+        plan.feesMinor = snapshot.feesMinor
+        plan.plannedTotalMinor = snapshot.plannedTotalMinor
+        plan.currencyCode = snapshot.currency
+        plan.currencyExponent = snapshot.currencyExponent
+        plan.installmentCount = snapshot.installmentCount
+        plan.plannedInstallmentMinor = snapshot.plannedInstallmentMinor
+        plan.cadenceRaw = snapshot.cadence
+        plan.timeZoneIdentifier = snapshot.timeZone
+        plan.startsOn = startsOn
+        plan.anchorDay = snapshot.anchorDay
+        plan.stateRaw = snapshot.state
+        plan.revisionNumber = snapshot.revisionNumber
+        plan.paidOffAt = paidOffAt
+        plan.cancelledAt = cancelledAt
+        plan.serverVersion = snapshot.version
+        plan.syncStateRaw = LocalSyncState.synced.rawValue
+        plan.createdAt = validated.createdAt
+        plan.updatedAt = validated.updatedAt
+        plan.archivedAt = validated.archivedAt
+        plan.deletedAt = validated.deletedAt
+    }
+
+    private func upsertInstallmentScheduleItem(
+        _ snapshot: InstallmentScheduleItemSnapshot,
+        scopeKey: String
+    ) throws {
+        let validated = try validatedInstallmentScheduleSnapshot(snapshot)
+        let state = validated.state
+        let skippedAt = validated.skippedAt
+        let planID = snapshot.planID
+        let originalDueOn = validated.originalDueOn
+        let dueOn = validated.dueOn
+        guard let plan = try modelContext.fetch(
+            FetchDescriptor<LocalInstallmentPlan>(
+                predicate: #Predicate { $0.scopeKey == scopeKey && $0.id == planID }
+            )
+        ).first,
+        plan.trackerID == snapshot.trackerID,
+        snapshot.revisionNumber <= plan.revisionNumber,
+        originalDueOn >= plan.startsOn,
+        dueOn >= plan.startsOn
+        else {
+            throw SyncEngineError.invalidServerResponse
+        }
+        let snapshotID = snapshot.id
+        let revisionNumber = snapshot.revisionNumber
+        let sequence = snapshot.sequence
+        let matching = try modelContext.fetch(
+            FetchDescriptor<LocalInstallmentScheduleItem>(
+                predicate: #Predicate {
+                    $0.scopeKey == scopeKey &&
+                        $0.planID == planID &&
+                        $0.revisionNumber == revisionNumber &&
+                        $0.sequence == sequence
+                }
+            )
+        )
+        for preview in matching where preview.id != snapshotID {
+            guard preview.serverVersion == 0 else {
+                throw SyncEngineError.invalidServerResponse
+            }
+            modelContext.delete(preview)
+        }
+        let existing = try modelContext.fetch(
+            FetchDescriptor<LocalInstallmentScheduleItem>(
+                predicate: #Predicate { $0.scopeKey == scopeKey && $0.id == snapshotID }
+            )
+        ).first
+        if let existing, existing.serverVersion > snapshot.version { return }
+        let item = existing ?? LocalInstallmentScheduleItem(
+            id: snapshot.id,
+            scopeKey: scopeKey,
+            trackerID: snapshot.trackerID,
+            planID: snapshot.planID,
+            revisionNumber: snapshot.revisionNumber,
+            sequence: snapshot.sequence,
+            originalDueOn: originalDueOn,
+            dueOn: dueOn,
+            plannedPrincipalMinor: snapshot.plannedPrincipalMinor,
+            plannedInterestMinor: snapshot.plannedInterestMinor,
+            plannedFeesMinor: snapshot.plannedFeesMinor,
+            plannedTotalMinor: snapshot.plannedTotalMinor,
+            paidMinor: snapshot.paidMinor,
+            state: state,
+            serverVersion: snapshot.version,
+            createdAt: validated.createdAt
+        )
+        if existing == nil { modelContext.insert(item) }
+        item.trackerID = snapshot.trackerID
+        item.planID = snapshot.planID
+        item.revisionNumber = snapshot.revisionNumber
+        item.sequence = snapshot.sequence
+        item.originalDueOn = originalDueOn
+        item.dueOn = dueOn
+        item.plannedPrincipalMinor = snapshot.plannedPrincipalMinor
+        item.plannedInterestMinor = snapshot.plannedInterestMinor
+        item.plannedFeesMinor = snapshot.plannedFeesMinor
+        item.plannedTotalMinor = snapshot.plannedTotalMinor
+        item.paidMinor = snapshot.paidMinor
+        item.stateRaw = snapshot.state
+        item.skippedAt = skippedAt
+        item.supersededAt = validated.supersededAt
+        item.serverVersion = snapshot.version
+        item.createdAt = validated.createdAt
+        item.updatedAt = validated.updatedAt
+        item.deletedAt = validated.deletedAt
+    }
+
+    private func upsertInstallmentPayment(
+        _ snapshot: InstallmentPaymentSnapshot,
+        scopeKey: String
+    ) throws {
+        let validated = try validatedInstallmentPaymentSnapshot(snapshot)
+        let planID = snapshot.planID
+        let transactionID = snapshot.transactionID
+        guard let plan = try modelContext.fetch(
+            FetchDescriptor<LocalInstallmentPlan>(
+                predicate: #Predicate { $0.scopeKey == scopeKey && $0.id == planID }
+            )
+        ).first,
+        let transaction = try modelContext.fetch(
+            FetchDescriptor<LedgerTransaction>(
+                predicate: #Predicate { $0.scopeKey == scopeKey && $0.id == transactionID }
+            )
+        ).first,
+        plan.trackerID == snapshot.trackerID,
+        transaction.trackerID == snapshot.trackerID,
+        transaction.accountID == plan.accountID,
+        transaction.kind == .expense,
+        transaction.source == .installment,
+        transaction.status == .posted,
+        transaction.amountMinor == snapshot.amountMinor,
+        transaction.currencyCode == plan.currencyCode,
+        transaction.currencyExponent == plan.currencyExponent,
+        snapshot.appliedAmountMinor <= plan.plannedTotalMinor
+        else {
+            throw SyncEngineError.invalidServerResponse
+        }
+        if let scheduleItemID = snapshot.scheduleItemID {
+            guard let item = try modelContext.fetch(
+                FetchDescriptor<LocalInstallmentScheduleItem>(
+                    predicate: #Predicate {
+                        $0.scopeKey == scopeKey && $0.id == scheduleItemID
+                    }
+                )
+            ).first,
+            item.planID == snapshot.planID,
+            item.trackerID == snapshot.trackerID
+            else {
+                throw SyncEngineError.invalidServerResponse
+            }
+        }
+        let snapshotID = snapshot.id
+        if let duplicate = try modelContext.fetch(
+            FetchDescriptor<LocalInstallmentPayment>(
+                predicate: #Predicate {
+                    $0.scopeKey == scopeKey && $0.transactionID == transactionID
+                }
+            )
+        ).first, duplicate.id != snapshotID {
+            throw SyncEngineError.invalidServerResponse
+        }
+        let existing = try modelContext.fetch(
+            FetchDescriptor<LocalInstallmentPayment>(
+                predicate: #Predicate { $0.scopeKey == scopeKey && $0.id == snapshotID }
+            )
+        ).first
+        if let existing, existing.serverVersion > snapshot.version { return }
+        let payment = existing ?? LocalInstallmentPayment(
+            id: snapshot.id,
+            scopeKey: scopeKey,
+            trackerID: snapshot.trackerID,
+            planID: snapshot.planID,
+            scheduleItemID: snapshot.scheduleItemID,
+            transactionID: snapshot.transactionID,
+            amountMinor: snapshot.amountMinor,
+            appliedAmountMinor: snapshot.appliedAmountMinor,
+            overpaymentMinor: snapshot.overpaymentMinor,
+            extraPayment: snapshot.extraPayment,
+            appliedAt: validated.appliedAt,
+            createdByID: snapshot.createdByID,
+            serverVersion: snapshot.version,
+            createdAt: validated.createdAt
+        )
+        if existing == nil { modelContext.insert(payment) }
+        payment.trackerID = snapshot.trackerID
+        payment.planID = snapshot.planID
+        payment.scheduleItemID = snapshot.scheduleItemID
+        payment.transactionID = snapshot.transactionID
+        payment.amountMinor = snapshot.amountMinor
+        payment.appliedAmountMinor = snapshot.appliedAmountMinor
+        payment.overpaymentMinor = snapshot.overpaymentMinor
+        payment.extraPayment = snapshot.extraPayment
+        payment.appliedAt = validated.appliedAt
+        payment.createdByID = snapshot.createdByID
+        payment.serverVersion = snapshot.version
+        payment.createdAt = validated.createdAt
+        payment.updatedAt = validated.updatedAt
+        payment.deletedAt = validated.deletedAt
+    }
+
     private func upsertTransaction(_ snapshot: TransactionSnapshot, scopeKey: String) throws {
+        let participantTrackers = Dictionary(
+            uniqueKeysWithValues: try modelContext.fetch(
+                FetchDescriptor<LocalParticipant>(
+                    predicate: #Predicate { $0.scopeKey == scopeKey }
+                )
+            ).map { ($0.id, $0.trackerID) }
+        )
+        try validateSplitSnapshot(snapshot, participantTrackers: participantTrackers)
         guard let kind = TransactionKind(rawValue: snapshot.kind),
               let source = TransactionSource(rawValue: snapshot.source),
               let status = TransactionStatus(rawValue: snapshot.status),
@@ -1596,6 +2381,83 @@ actor LedgerSyncActor {
         try replaceChildren(snapshot, scopeKey: scopeKey)
     }
 
+    private func upsertSettlement(
+        _ snapshot: SettlementSnapshot,
+        scopeKey: String
+    ) throws {
+        let validated = try validatedSettlementSnapshot(snapshot)
+        let fromID = snapshot.fromParticipantID
+        let toID = snapshot.toParticipantID
+        guard let from = try modelContext.fetch(
+            FetchDescriptor<LocalParticipant>(
+                predicate: #Predicate { $0.scopeKey == scopeKey && $0.id == fromID }
+            )
+        ).first,
+        let to = try modelContext.fetch(
+            FetchDescriptor<LocalParticipant>(
+                predicate: #Predicate { $0.scopeKey == scopeKey && $0.id == toID }
+            )
+        ).first,
+        from.trackerID == snapshot.trackerID,
+        to.trackerID == snapshot.trackerID
+        else {
+            throw SyncEngineError.invalidServerResponse
+        }
+        if let transactionID = snapshot.transactionID {
+            guard let transaction = try modelContext.fetch(
+                FetchDescriptor<LedgerTransaction>(
+                    predicate: #Predicate {
+                        $0.scopeKey == scopeKey && $0.id == transactionID
+                    }
+                )
+            ).first,
+            transaction.trackerID == snapshot.trackerID,
+            transaction.kind == .settlement,
+            transaction.amountMinor == snapshot.amountMinor,
+            transaction.currencyCode == snapshot.currency,
+            transaction.currencyExponent == snapshot.currencyExponent
+            else {
+                throw SyncEngineError.invalidServerResponse
+            }
+        }
+        let snapshotID = snapshot.id
+        let existing = try modelContext.fetch(
+            FetchDescriptor<LocalSettlement>(
+                predicate: #Predicate { $0.scopeKey == scopeKey && $0.id == snapshotID }
+            )
+        ).first
+        if let version = existing?.serverVersion, version > snapshot.version { return }
+        let settlement = existing ?? LocalSettlement(
+            id: snapshot.id,
+            scopeKey: scopeKey,
+            trackerID: snapshot.trackerID,
+            fromParticipantID: snapshot.fromParticipantID,
+            toParticipantID: snapshot.toParticipantID,
+            money: validated.money,
+            occurredAt: validated.occurredAt,
+            note: snapshot.note,
+            transactionID: snapshot.transactionID,
+            serverVersion: snapshot.version,
+            syncState: .synced,
+            createdAt: validated.createdAt
+        )
+        if existing == nil { modelContext.insert(settlement) }
+        settlement.trackerID = snapshot.trackerID
+        settlement.fromParticipantID = snapshot.fromParticipantID
+        settlement.toParticipantID = snapshot.toParticipantID
+        settlement.amountMinor = snapshot.amountMinor
+        settlement.currencyCode = snapshot.currency
+        settlement.currencyExponent = snapshot.currencyExponent
+        settlement.occurredAt = validated.occurredAt
+        settlement.note = snapshot.note
+        settlement.transactionID = snapshot.transactionID
+        settlement.serverVersion = snapshot.version
+        settlement.syncStateRaw = LocalSyncState.synced.rawValue
+        settlement.createdAt = validated.createdAt
+        settlement.updatedAt = validated.updatedAt
+        settlement.deletedAt = validated.deletedAt
+    }
+
     private func replaceChildren(_ snapshot: TransactionSnapshot, scopeKey: String) throws {
         let transactionID = snapshot.id
         for movement in try modelContext.fetch(
@@ -1624,6 +2486,24 @@ actor LedgerSyncActor {
             )
         ) {
             modelContext.delete(tagLink)
+        }
+        for payment in try modelContext.fetch(
+            FetchDescriptor<LocalSplitPayment>(
+                predicate: #Predicate {
+                    $0.scopeKey == scopeKey && $0.transactionID == transactionID
+                }
+            )
+        ) {
+            modelContext.delete(payment)
+        }
+        for share in try modelContext.fetch(
+            FetchDescriptor<LocalSplitShare>(
+                predicate: #Predicate {
+                    $0.scopeKey == scopeKey && $0.transactionID == transactionID
+                }
+            )
+        ) {
+            modelContext.delete(share)
         }
         for movement in snapshot.movements {
             modelContext.insert(
@@ -1660,6 +2540,168 @@ actor LedgerSyncActor {
                 )
             )
         }
+        for payment in snapshot.split?.payments ?? [] {
+            modelContext.insert(
+                LocalSplitPayment(
+                    id: payment.id,
+                    scopeKey: scopeKey,
+                    transactionID: transactionID,
+                    participantID: payment.participantID,
+                    amountMinor: payment.amountMinor,
+                    serverVersion: payment.version
+                )
+            )
+        }
+        for share in snapshot.split?.shares ?? [] {
+            guard let method = LocalSplitMethod(rawValue: share.method) else {
+                throw SyncEngineError.invalidServerResponse
+            }
+            modelContext.insert(
+                LocalSplitShare(
+                    id: share.id,
+                    scopeKey: scopeKey,
+                    transactionID: transactionID,
+                    participantID: share.participantID,
+                    amountMinor: share.amountMinor,
+                    method: method,
+                    percentageBasisPoints: share.percentageBasisPoints,
+                    serverVersion: share.version
+                )
+            )
+        }
+    }
+
+    private func validateSplitSnapshot(
+        _ snapshot: TransactionSnapshot,
+        participantTrackers: [UUID: UUID]
+    ) throws {
+        guard let split = snapshot.split else { return }
+        guard snapshot.kind == TransactionKind.expense.rawValue,
+              snapshot.status != TransactionStatus.voided.rawValue,
+              snapshot.amountMinor > 0,
+              let method = LocalSplitMethod(rawValue: split.method),
+              !split.payments.isEmpty,
+              !split.shares.isEmpty,
+              split.totalPaidMinor == snapshot.amountMinor,
+              split.totalOwedMinor == snapshot.amountMinor,
+              Set(split.payments.map(\.id)).count == split.payments.count,
+              Set(split.shares.map(\.id)).count == split.shares.count,
+              Set(split.payments.map(\.participantID)).count == split.payments.count,
+              Set(split.shares.map(\.participantID)).count == split.shares.count,
+              split.payments.allSatisfy({
+                  $0.amountMinor > 0 &&
+                      participantTrackers[$0.participantID] == snapshot.trackerID
+              }),
+              split.shares.allSatisfy({
+                  $0.amountMinor > 0 &&
+                      $0.method == split.method &&
+                      participantTrackers[$0.participantID] == snapshot.trackerID
+              }),
+              try sumMinorUnits(split.payments.map(\.amountMinor)) == snapshot.amountMinor,
+              try sumMinorUnits(split.shares.map(\.amountMinor)) == snapshot.amountMinor
+        else {
+            throw SyncEngineError.invalidServerResponse
+        }
+
+        switch method {
+        case .exact:
+            guard split.shares.allSatisfy({ $0.percentageBasisPoints == nil }) else {
+                throw SyncEngineError.invalidServerResponse
+            }
+        case .equal:
+            guard split.shares.allSatisfy({ $0.percentageBasisPoints == nil }) else {
+                throw SyncEngineError.invalidServerResponse
+            }
+            let ordered = split.shares.sorted {
+                $0.participantID.uuidString < $1.participantID.uuidString
+            }
+            let divisor = Int64(ordered.count)
+            let quotient = snapshot.amountMinor / divisor
+            let remainder = snapshot.amountMinor % divisor
+            guard quotient > 0,
+                  ordered.enumerated().allSatisfy({ row in
+                      let (index, share) = row
+                      return share.amountMinor ==
+                          quotient + (Int64(index) < remainder ? 1 : 0)
+                  })
+            else {
+                throw SyncEngineError.invalidServerResponse
+            }
+        case .percentage:
+            let basisPoints = split.shares.compactMap(\.percentageBasisPoints)
+            guard basisPoints.count == split.shares.count,
+                  basisPoints.allSatisfy({ (1 ... 10_000).contains($0) }),
+                  basisPoints.reduce(0, +) == 10_000
+            else {
+                throw SyncEngineError.invalidServerResponse
+            }
+            var expected = [UUID: Int64]()
+            var remainders = [(remainder: Int64, participantID: UUID)]()
+            for share in split.shares {
+                guard let rawBasisPoints = share.percentageBasisPoints else {
+                    throw SyncEngineError.invalidServerResponse
+                }
+                let points = Int64(rawBasisPoints)
+                let whole = snapshot.amountMinor / 10_000
+                let fraction = snapshot.amountMinor % 10_000
+                expected[share.participantID] = whole * points + fraction * points / 10_000
+                remainders.append((fraction * points % 10_000, share.participantID))
+            }
+            let allocated = try sumMinorUnits(Array(expected.values))
+            let remaining = snapshot.amountMinor - allocated
+            guard remaining >= 0, remaining <= Int64(split.shares.count) else {
+                throw SyncEngineError.invalidServerResponse
+            }
+            let ranked = remainders.sorted {
+                if $0.remainder != $1.remainder { return $0.remainder > $1.remainder }
+                return $0.participantID.uuidString < $1.participantID.uuidString
+            }
+            for row in ranked.prefix(Int(remaining)) {
+                expected[row.participantID, default: 0] += 1
+            }
+            guard split.shares.allSatisfy({
+                expected[$0.participantID] == $0.amountMinor
+            }) else {
+                throw SyncEngineError.invalidServerResponse
+            }
+        }
+    }
+
+    private func sumMinorUnits(_ values: [Int64]) throws -> Int64 {
+        var total: Int64 = 0
+        for value in values {
+            let result = total.addingReportingOverflow(value)
+            guard !result.overflow else { throw SyncEngineError.invalidServerResponse }
+            total = result.partialValue
+        }
+        return total
+    }
+
+    private func validatedSettlementSnapshot(
+        _ snapshot: SettlementSnapshot
+    ) throws -> ValidatedSettlementSnapshot {
+        guard snapshot.version > 0,
+              snapshot.amountMinor > 0,
+              snapshot.fromParticipantID != snapshot.toParticipantID
+        else {
+            throw SyncEngineError.invalidServerResponse
+        }
+        let money = try Money(
+            minorUnits: snapshot.amountMinor,
+            currencyCode: snapshot.currency,
+            exponent: snapshot.currencyExponent
+        )
+        let occurredAt = try parseTimestamp(snapshot.occurredAt)
+        let createdAt = try parseTimestamp(snapshot.createdAt)
+        let updatedAt = try parseTimestamp(snapshot.updatedAt)
+        guard updatedAt >= createdAt else { throw SyncEngineError.invalidServerResponse }
+        return ValidatedSettlementSnapshot(
+            money: money,
+            occurredAt: occurredAt,
+            createdAt: createdAt,
+            updatedAt: updatedAt,
+            deletedAt: try parseOptionalTimestamp(snapshot.deletedAt)
+        )
     }
 
     private func primaryMovement(
@@ -1771,6 +2813,17 @@ actor LedgerSyncActor {
                     tracker.syncStateRaw = LocalSyncState.synced.rawValue
                 }
             }
+        case "participant":
+            if let value = try modelContext.fetch(
+                FetchDescriptor<LocalParticipant>(
+                    predicate: #Predicate { $0.scopeKey == scopeKey && $0.id == entityID }
+                )
+            ).first {
+                value.deletedAt = changedAt
+                value.archivedAt = changedAt
+                value.serverVersion = version
+                value.syncStateRaw = LocalSyncState.synced.rawValue
+            }
         case "tag":
             if let value = try modelContext.fetch(
                 FetchDescriptor<LocalTag>(
@@ -1814,9 +2867,51 @@ actor LedgerSyncActor {
                 value.deletedAt = changedAt
                 value.serverVersion = version
             }
+        case "installment_plan":
+            if let value = try modelContext.fetch(
+                FetchDescriptor<LocalInstallmentPlan>(
+                    predicate: #Predicate { $0.scopeKey == scopeKey && $0.id == entityID }
+                )
+            ).first {
+                value.deletedAt = changedAt
+                value.archivedAt = changedAt
+                value.stateRaw = InstallmentPlanState.cancelled.rawValue
+                value.paidOffAt = nil
+                value.cancelledAt = changedAt
+                value.serverVersion = version
+                value.syncStateRaw = LocalSyncState.synced.rawValue
+            }
+        case "installment_schedule_item":
+            if let value = try modelContext.fetch(
+                FetchDescriptor<LocalInstallmentScheduleItem>(
+                    predicate: #Predicate { $0.scopeKey == scopeKey && $0.id == entityID }
+                )
+            ).first {
+                value.deletedAt = changedAt
+                value.serverVersion = version
+            }
+        case "installment_payment":
+            if let value = try modelContext.fetch(
+                FetchDescriptor<LocalInstallmentPayment>(
+                    predicate: #Predicate { $0.scopeKey == scopeKey && $0.id == entityID }
+                )
+            ).first {
+                value.deletedAt = changedAt
+                value.serverVersion = version
+            }
         case "transaction":
             if let value = try modelContext.fetch(
                 FetchDescriptor<LedgerTransaction>(
+                    predicate: #Predicate { $0.scopeKey == scopeKey && $0.id == entityID }
+                )
+            ).first {
+                value.deletedAt = changedAt
+                value.serverVersion = version
+                value.syncStateRaw = LocalSyncState.synced.rawValue
+            }
+        case "settlement":
+            if let value = try modelContext.fetch(
+                FetchDescriptor<LocalSettlement>(
                     predicate: #Predicate { $0.scopeKey == scopeKey && $0.id == entityID }
                 )
             ).first {
@@ -1835,10 +2930,34 @@ actor LedgerSyncActor {
         pendingKeys: Set<String>
     ) throws {
         for value in try modelContext.fetch(
+            FetchDescriptor<LocalInstallmentPayment>(
+                predicate: #Predicate { $0.scopeKey == scopeKey }
+            )
+        ) where !(remoteIDs["installment_payment"] ?? []).contains(value.id) {
+            modelContext.delete(value)
+        }
+        for value in try modelContext.fetch(
+            FetchDescriptor<LocalInstallmentScheduleItem>(
+                predicate: #Predicate { $0.scopeKey == scopeKey }
+            )
+        ) where !(remoteIDs["installment_schedule_item"] ?? []).contains(value.id) &&
+            (value.serverVersion > 0 ||
+                !pendingKeys.contains("installment_plan|\(value.planID.uuidString)")) {
+            modelContext.delete(value)
+        }
+        for value in try modelContext.fetch(
             FetchDescriptor<LocalRecurringOccurrence>(
                 predicate: #Predicate { $0.scopeKey == scopeKey }
             )
         ) where !(remoteIDs["recurring_occurrence"] ?? []).contains(value.id) {
+            modelContext.delete(value)
+        }
+        for value in try modelContext.fetch(
+            FetchDescriptor<LocalSettlement>(
+                predicate: #Predicate { $0.scopeKey == scopeKey && $0.serverVersion != nil }
+            )
+        ) where !(remoteIDs["settlement"] ?? []).contains(value.id) &&
+            !pendingKeys.contains("settlement|\(value.id.uuidString)") {
             modelContext.delete(value)
         }
         for value in try modelContext.fetch(
@@ -1890,10 +3009,26 @@ actor LedgerSyncActor {
             try deleteRecurringRuleAndOccurrences(value, scopeKey: scopeKey)
         }
         for value in try modelContext.fetch(
+            FetchDescriptor<LocalInstallmentPlan>(
+                predicate: #Predicate { $0.scopeKey == scopeKey && $0.serverVersion != nil }
+            )
+        ) where !(remoteIDs["installment_plan"] ?? []).contains(value.id) &&
+            !pendingKeys.contains("installment_plan|\(value.id.uuidString)") {
+            try deleteInstallmentPlanAndChildren(value, scopeKey: scopeKey)
+        }
+        for value in try modelContext.fetch(
             FetchDescriptor<LocalTrackerMembership>(
                 predicate: #Predicate { $0.scopeKey == scopeKey }
             )
         ) where !(remoteIDs["tracker_membership"] ?? []).contains(value.id) {
+            modelContext.delete(value)
+        }
+        for value in try modelContext.fetch(
+            FetchDescriptor<LocalParticipant>(
+                predicate: #Predicate { $0.scopeKey == scopeKey && $0.serverVersion != nil }
+            )
+        ) where !(remoteIDs["participant"] ?? []).contains(value.id) &&
+            !pendingKeys.contains("participant|\(value.id.uuidString)") {
             modelContext.delete(value)
         }
         for value in try modelContext.fetch(
@@ -1927,6 +3062,20 @@ actor LedgerSyncActor {
         ) { modelContext.delete(value) }
         for value in try modelContext.fetch(
             FetchDescriptor<LocalTransactionTag>(
+                predicate: #Predicate {
+                    $0.scopeKey == scopeKey && $0.transactionID == transactionID
+                }
+            )
+        ) { modelContext.delete(value) }
+        for value in try modelContext.fetch(
+            FetchDescriptor<LocalSplitPayment>(
+                predicate: #Predicate {
+                    $0.scopeKey == scopeKey && $0.transactionID == transactionID
+                }
+            )
+        ) { modelContext.delete(value) }
+        for value in try modelContext.fetch(
+            FetchDescriptor<LocalSplitShare>(
                 predicate: #Predicate {
                     $0.scopeKey == scopeKey && $0.transactionID == transactionID
                 }
@@ -1971,6 +3120,32 @@ actor LedgerSyncActor {
         modelContext.delete(rule)
     }
 
+    private func deleteInstallmentPlanAndChildren(
+        _ plan: LocalInstallmentPlan,
+        scopeKey: String
+    ) throws {
+        let planID = plan.id
+        for value in try modelContext.fetch(
+            FetchDescriptor<LocalInstallmentPayment>(
+                predicate: #Predicate {
+                    $0.scopeKey == scopeKey && $0.planID == planID
+                }
+            )
+        ) {
+            modelContext.delete(value)
+        }
+        for value in try modelContext.fetch(
+            FetchDescriptor<LocalInstallmentScheduleItem>(
+                predicate: #Predicate {
+                    $0.scopeKey == scopeKey && $0.planID == planID
+                }
+            )
+        ) {
+            modelContext.delete(value)
+        }
+        modelContext.delete(plan)
+    }
+
     private func storeConflict(
         scopeKey: String,
         mutation: OutboxMutation,
@@ -2002,6 +3177,224 @@ actor LedgerSyncActor {
         }
     }
 
+    private func installmentPayload(
+        for mutation: OutboxMutation
+    ) -> InstallmentPlanMutationPayload? {
+        let isPayment = mutation.command == LocalMutationCommand.recordPayment.rawValue ||
+            mutation.command == LocalMutationCommand.payoff.rawValue
+        guard mutation.entityType == LocalMutationEntity.installmentPlan.rawValue,
+              isPayment
+        else {
+            return nil
+        }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        return try? decoder.decode(
+            InstallmentPlanMutationPayload.self,
+            from: mutation.payloadJSON
+        )
+    }
+
+    private func settlementPayload(
+        for mutation: OutboxMutation
+    ) -> SettlementMutationPayload? {
+        guard mutation.entityType == LocalMutationEntity.settlement.rawValue else {
+            return nil
+        }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        return try? decoder.decode(SettlementMutationPayload.self, from: mutation.payloadJSON)
+    }
+
+    private func markSettlementProjection(
+        scopeKey: String,
+        mutation: OutboxMutation,
+        state: LocalSyncState
+    ) throws {
+        guard mutation.entityType == LocalMutationEntity.settlement.rawValue else {
+            return
+        }
+        let settlementID = mutation.entityID
+        let storedTransactionID = try modelContext.fetch(
+            FetchDescriptor<LocalSettlement>(
+                predicate: #Predicate {
+                    $0.scopeKey == scopeKey && $0.id == settlementID
+                }
+            )
+        ).first?.transactionID
+        guard let transactionID = settlementPayload(for: mutation)?.transactionID ??
+            storedTransactionID
+        else { return }
+        if let record = try modelContext.fetch(
+            FetchDescriptor<LedgerTransaction>(
+                predicate: #Predicate {
+                    $0.scopeKey == scopeKey && $0.id == transactionID
+                }
+            )
+        ).first, record.kind == .settlement {
+            record.syncStateRaw = state.rawValue
+        }
+    }
+
+    private func hasBlockingInstallmentParentMutation(
+        remote: DecodedRemote,
+        scopeKey: String
+    ) throws -> Bool {
+        let planID: UUID?
+        switch remote {
+        case let .installmentScheduleItem(snapshot):
+            planID = snapshot.planID
+        case let .tombstone(entityType, entityID, _, _)
+            where entityType == "installment_schedule_item":
+            planID = try modelContext.fetch(
+                FetchDescriptor<LocalInstallmentScheduleItem>(
+                    predicate: #Predicate {
+                        $0.scopeKey == scopeKey && $0.id == entityID
+                    }
+                )
+            ).first?.planID
+        default:
+            planID = nil
+        }
+        guard let planID else { return false }
+        return try hasLocalMutation(
+            scopeKey: scopeKey,
+            entityType: LocalMutationEntity.installmentPlan.rawValue,
+            entityID: planID
+        )
+    }
+
+    private func settlementProjectionIDs(
+        remote: DecodedRemote,
+        scopeKey: String
+    ) throws -> [UUID] {
+        let transactionID: UUID?
+        switch remote {
+        case let .transaction(snapshot):
+            transactionID = snapshot.id
+        case let .tombstone(entityType, entityID, _, _) where entityType == "transaction":
+            transactionID = entityID
+        default:
+            transactionID = nil
+        }
+        guard let transactionID else { return [] }
+        return try modelContext.fetch(
+            FetchDescriptor<LocalSettlement>(
+                predicate: #Predicate {
+                    $0.scopeKey == scopeKey && $0.transactionID == transactionID
+                }
+            )
+        ).map(\.id)
+    }
+
+    private func hasBlockingSettlementProjectionMutation(
+        remote: DecodedRemote,
+        scopeKey: String
+    ) throws -> Bool {
+        for settlementID in try settlementProjectionIDs(remote: remote, scopeKey: scopeKey) {
+            if try hasLocalMutation(
+                scopeKey: scopeKey,
+                entityType: LocalMutationEntity.settlement.rawValue,
+                entityID: settlementID
+            ) {
+                return true
+            }
+        }
+        return false
+    }
+
+    private func settlementProjectionBlocked(
+        remote: DecodedRemote,
+        scopeKey: String,
+        pendingKeys: Set<String>
+    ) throws -> Bool {
+        try settlementProjectionIDs(remote: remote, scopeKey: scopeKey).contains {
+            pendingKeys.contains("settlement|\($0.uuidString)")
+        }
+    }
+
+    private func markInstallmentProjection(
+        scopeKey: String,
+        mutation: OutboxMutation,
+        state: LocalSyncState
+    ) throws {
+        guard let transactionID = installmentPayload(for: mutation)?.transactionID else {
+            return
+        }
+        if let record = try modelContext.fetch(
+            FetchDescriptor<LedgerTransaction>(
+                predicate: #Predicate {
+                    $0.scopeKey == scopeKey && $0.id == transactionID
+                }
+            )
+        ).first, record.source == .installment, record.serverVersion == nil {
+            record.syncStateRaw = state.rawValue
+        }
+    }
+
+    private func discardInstallmentProjection(
+        scopeKey: String,
+        mutation: OutboxMutation
+    ) throws {
+        guard let transactionID = installmentPayload(for: mutation)?.transactionID else {
+            return
+        }
+        if let record = try modelContext.fetch(
+            FetchDescriptor<LedgerTransaction>(
+                predicate: #Predicate {
+                    $0.scopeKey == scopeKey && $0.id == transactionID
+                }
+            )
+        ).first, record.source == .installment, record.serverVersion == nil {
+            try deleteTransactionAndChildren(record, scopeKey: scopeKey)
+        }
+    }
+
+    private func preserveDependentInstallmentMutations(
+        scopeKey: String,
+        resolvedMutation: OutboxMutation,
+        current: JSONValue,
+        outbox: [OutboxMutation]
+    ) throws {
+        let encoder = JSONEncoder()
+        let currentJSON = try encoder.encode(current)
+        for mutation in outbox where
+            mutation.operationID != resolvedMutation.operationID &&
+            mutation.entityType == resolvedMutation.entityType &&
+            mutation.entityID == resolvedMutation.entityID &&
+            mutation.localSequence > resolvedMutation.localSequence &&
+            mutation.state != .conflicted {
+            mutation.stateRaw = LocalSyncState.conflicted.rawValue
+            mutation.lastSafeErrorCode = "dependency_conflict"
+            mutation.nextAttemptAt = nil
+            mutation.updatedAt = .now
+            if try unresolvedConflict(
+                scopeKey: scopeKey,
+                operationID: mutation.operationID
+            ) == nil {
+                modelContext.insert(
+                    SyncConflict(
+                        operationID: mutation.operationID,
+                        scopeKey: scopeKey,
+                        entityType: mutation.entityType,
+                        entityID: mutation.entityID,
+                        baseServerVersion: mutation.baseServerVersion,
+                        currentJSON: currentJSON,
+                        proposedJSON: mutation.payloadJSON,
+                        safeErrorCode: "dependency_conflict"
+                    )
+                )
+            }
+            try markInstallmentProjection(
+                scopeKey: scopeKey,
+                mutation: mutation,
+                state: .conflicted
+            )
+        }
+    }
+
     private func markTransportFailure(
         scopeKey: String,
         operationIDs: [UUID],
@@ -2014,8 +3407,8 @@ actor LedgerSyncActor {
         } ?? false
         for mutation in try fetchOutbox(scopeKey: scopeKey)
         where operationIDs.contains(mutation.operationID) {
-            mutation.stateRaw = permanent
-                ? LocalSyncState.failed.rawValue : LocalSyncState.pending.rawValue
+            let projectionState: LocalSyncState = permanent ? .failed : .pending
+            mutation.stateRaw = projectionState.rawValue
             mutation.lastSafeErrorCode = code
             mutation.nextAttemptAt = permanent || shouldRefresh(after: error as? APIClientError)
                 ? nil
@@ -2026,6 +3419,16 @@ actor LedgerSyncActor {
                     )
                 )
             mutation.updatedAt = .now
+            try markInstallmentProjection(
+                scopeKey: scopeKey,
+                mutation: mutation,
+                state: projectionState
+            )
+            try markSettlementProjection(
+                scopeKey: scopeKey,
+                mutation: mutation,
+                state: projectionState
+            )
         }
         try saveOrRollback()
     }
@@ -2069,6 +3472,15 @@ actor LedgerSyncActor {
         case "tracker":
             if let value = try modelContext.fetch(
                 FetchDescriptor<LocalTracker>(
+                    predicate: #Predicate { $0.scopeKey == scopeKey && $0.id == entityID }
+                )
+            ).first {
+                value.syncStateRaw = state.rawValue
+                if let serverVersion { value.serverVersion = serverVersion }
+            }
+        case "participant":
+            if let value = try modelContext.fetch(
+                FetchDescriptor<LocalParticipant>(
                     predicate: #Predicate { $0.scopeKey == scopeKey && $0.id == entityID }
                 )
             ).first {
@@ -2120,9 +3532,27 @@ actor LedgerSyncActor {
                 value.syncStateRaw = state.rawValue
                 if let serverVersion { value.serverVersion = serverVersion }
             }
+        case "installment_plan":
+            if let value = try modelContext.fetch(
+                FetchDescriptor<LocalInstallmentPlan>(
+                    predicate: #Predicate { $0.scopeKey == scopeKey && $0.id == entityID }
+                )
+            ).first {
+                value.syncStateRaw = state.rawValue
+                if let serverVersion { value.serverVersion = serverVersion }
+            }
         case "transaction":
             if let value = try modelContext.fetch(
                 FetchDescriptor<LedgerTransaction>(
+                    predicate: #Predicate { $0.scopeKey == scopeKey && $0.id == entityID }
+                )
+            ).first {
+                value.syncStateRaw = state.rawValue
+                if let serverVersion { value.serverVersion = serverVersion }
+            }
+        case "settlement":
+            if let value = try modelContext.fetch(
+                FetchDescriptor<LocalSettlement>(
                     predicate: #Predicate { $0.scopeKey == scopeKey && $0.id == entityID }
                 )
             ).first {

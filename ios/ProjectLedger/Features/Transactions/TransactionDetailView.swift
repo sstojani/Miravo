@@ -15,8 +15,13 @@ struct TransactionDetailView: View {
     @Query private var tags: [LocalTag]
     @Query private var transactionTags: [LocalTransactionTag]
     @Query private var transactions: [LedgerTransaction]
+    @Query private var participants: [LocalParticipant]
+    @Query private var splitPayments: [LocalSplitPayment]
+    @Query private var splitShares: [LocalSplitShare]
+    @Query private var settlements: [LocalSettlement]
     @State private var showingEditor = false
     @State private var showingRefund = false
+    @State private var showingSplitEditor = false
     @State private var safeError: String?
 
     init(scopeKey: String, transaction: LedgerTransaction) {
@@ -32,6 +37,10 @@ struct TransactionDetailView: View {
         _tags = Query(filter: #Predicate { $0.scopeKey == scopeKey && $0.deletedAt == nil })
         _transactionTags = Query(filter: #Predicate { $0.scopeKey == scopeKey })
         _transactions = Query(filter: #Predicate { $0.scopeKey == scopeKey })
+        _participants = Query(filter: #Predicate { $0.scopeKey == scopeKey })
+        _splitPayments = Query(filter: #Predicate { $0.scopeKey == scopeKey })
+        _splitShares = Query(filter: #Predicate { $0.scopeKey == scopeKey })
+        _settlements = Query(filter: #Predicate { $0.scopeKey == scopeKey })
     }
 
     private var tracker: LocalTracker? {
@@ -73,6 +82,26 @@ struct TransactionDetailView: View {
                 .map(\.tagID)
         )
         return tags.filter { linkedIDs.contains($0.id) }.map(\.name).sorted()
+    }
+
+    private var transactionSplitPayments: [LocalSplitPayment] {
+        splitPayments.filter { $0.transactionID == transaction.id }.sorted {
+            participantName($0.participantID).localizedCaseInsensitiveCompare(
+                participantName($1.participantID)
+            ) == .orderedAscending
+        }
+    }
+
+    private var transactionSplitShares: [LocalSplitShare] {
+        splitShares.filter { $0.transactionID == transaction.id }.sorted {
+            participantName($0.participantID).localizedCaseInsensitiveCompare(
+                participantName($1.participantID)
+            ) == .orderedAscending
+        }
+    }
+
+    private var linkedSettlement: LocalSettlement? {
+        settlements.first { $0.transactionID == transaction.id }
     }
 
     var body: some View {
@@ -137,12 +166,64 @@ struct TransactionDetailView: View {
                 Section("Note") { Text(transaction.note) }
             }
 
+            if !transactionSplitPayments.isEmpty || !transactionSplitShares.isEmpty {
+                Section("Cost split") {
+                    ForEach(transactionSplitPayments) { payment in
+                        LabeledContent(
+                            String.localizedStringWithFormat(
+                                String(localized: "Paid by participant format"),
+                                participantName(payment.participantID)
+                            ),
+                            value: formattedMinor(payment.amountMinor)
+                        )
+                    }
+                    ForEach(transactionSplitShares) { share in
+                        LabeledContent(
+                            String.localizedStringWithFormat(
+                                String(localized: "Owed by participant format"),
+                                participantName(share.participantID)
+                            ),
+                            value: formattedMinor(share.amountMinor)
+                        )
+                    }
+                    if let method = transactionSplitShares.first?.method {
+                        LabeledContent("Split method", value: method.displayName)
+                    }
+                }
+            }
+
+            if let linkedSettlement {
+                Section("Settlement") {
+                    LabeledContent(
+                        "From",
+                        value: participantName(linkedSettlement.fromParticipantID)
+                    )
+                    LabeledContent(
+                        "To",
+                        value: participantName(linkedSettlement.toParticipantID)
+                    )
+                    Text("Settlements adjust shared balances and are excluded from spending totals.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
             if canEdit {
                 Section {
-                    if transaction.kind == .expense, transaction.deletedAt == nil {
+                    if transaction.kind == .expense,
+                       transaction.deletedAt == nil,
+                       linkedSettlement == nil {
                         Button("Record refund") { showingRefund = true }
+                        Button(
+                            transactionSplitShares.isEmpty ? "Add cost split" : "Edit cost split",
+                            systemImage: "person.2"
+                        ) {
+                            showingSplitEditor = true
+                        }
                     }
-                    Button("Duplicate") { duplicate() }
+                    if linkedSettlement == nil {
+                        Button("Duplicate") { duplicate() }
+                    }
                     Button {
                         setDeleted(transaction.deletedAt == nil)
                     } label: {
@@ -165,7 +246,7 @@ struct TransactionDetailView: View {
         }
         .navigationTitle("Transaction")
         .toolbar {
-            if transaction.deletedAt == nil, canEdit {
+            if transaction.deletedAt == nil, canEdit, linkedSettlement == nil {
                 Button("Edit") { showingEditor = true }
             }
         }
@@ -186,6 +267,19 @@ struct TransactionDetailView: View {
                 accounts: accounts,
                 categories: categories
             )
+        }
+        .sheet(isPresented: $showingSplitEditor) {
+            if let tracker {
+                TransactionSplitEditorView(
+                    transaction: transaction,
+                    tracker: tracker,
+                    participants: participants.filter {
+                        $0.trackerID == tracker.id && $0.deletedAt == nil
+                    },
+                    payments: transactionSplitPayments,
+                    shares: transactionSplitShares
+                )
+            }
         }
         .alert("Could not save", isPresented: Binding(
             get: { safeError != nil },
@@ -208,13 +302,29 @@ struct TransactionDetailView: View {
 
     private func setDeleted(_ deleted: Bool) {
         do {
-            try LocalLedgerRepository(context: modelContext)
-                .setTransactionDeleted(transaction, deleted: deleted)
+            let repository = LocalLedgerRepository(context: modelContext)
+            if let linkedSettlement {
+                try repository.setSettlementDeleted(linkedSettlement, deleted: deleted)
+            } else {
+                try repository.setTransactionDeleted(transaction, deleted: deleted)
+            }
             Task { await sync.synchronize(session: session) }
             if deleted { dismiss() }
         } catch {
             safeError = String(localized: "The local change could not be saved.")
         }
+    }
+
+    private func participantName(_ id: UUID) -> String {
+        participants.first { $0.id == id }?.displayName ?? String(localized: "Unknown participant")
+    }
+
+    private func formattedMinor(_ amountMinor: Int64) -> String {
+        (try? Money(
+            minorUnits: amountMinor,
+            currencyCode: transaction.currencyCode,
+            exponent: transaction.currencyExponent
+        ))?.formatted(locale: .current) ?? "—"
     }
 }
 

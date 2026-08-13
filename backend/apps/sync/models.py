@@ -20,6 +20,8 @@ class SyncChange(models.Model):
         INSTALLMENT_PLAN = "installment_plan", "Installment plan"
         INSTALLMENT_SCHEDULE_ITEM = "installment_schedule_item", "Installment schedule item"
         INSTALLMENT_PAYMENT = "installment_payment", "Installment payment"
+        PARTICIPANT = "participant", "Participant"
+        SETTLEMENT = "settlement", "Settlement"
         TRANSACTION = "transaction", "Transaction"
 
     class Operation(models.TextChoices):

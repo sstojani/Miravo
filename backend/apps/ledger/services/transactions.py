@@ -23,6 +23,9 @@ from apps.ledger.models import (
     CategoryAllocation,
     Merchant,
     MovementRevision,
+    Settlement,
+    SplitPaymentRevision,
+    SplitShareRevision,
     Tag,
     Tracker,
     TrackerMembership,
@@ -33,6 +36,11 @@ from apps.ledger.models import (
 )
 from apps.ledger.permissions import require_tracker_role
 from apps.ledger.services.collaboration import request_id
+from apps.ledger.services.splitting import (
+    apply_resolved_split,
+    has_active_split,
+    resolve_transaction_split,
+)
 from apps.users.models import User
 
 
@@ -40,6 +48,17 @@ class VersionConflict(APIException):
     status_code = 409
     default_detail = "The record changed after the supplied base version."
     default_code = "version_conflict"
+
+
+def _protect_linked_settlement_transaction(
+    record: Transaction,
+    *,
+    allow_linked_settlement: bool,
+) -> None:
+    if not allow_linked_settlement and Settlement.objects.filter(transaction_id=record.id).exists():
+        raise serializers.ValidationError(
+            {"transaction": "Manage this account movement through its settlement record."}
+        )
 
 
 def account_balance_minor(account: Account) -> int:
@@ -456,6 +475,32 @@ def snapshot_transaction(record: Transaction, *, editor: User, reason: str) -> T
             for allocation in record.allocations.select_related("category")
         ]
     )
+    SplitPaymentRevision.objects.bulk_create(
+        [
+            SplitPaymentRevision(
+                revision=revision,
+                participant=payment.participant,
+                amount_minor=payment.amount_minor,
+            )
+            for payment in record.split_payments.filter(deleted_at__isnull=True).select_related(
+                "participant"
+            )
+        ]
+    )
+    SplitShareRevision.objects.bulk_create(
+        [
+            SplitShareRevision(
+                revision=revision,
+                participant=share.participant,
+                amount_minor=share.amount_minor,
+                method=share.method,
+                percentage_basis_points=share.percentage_basis_points,
+            )
+            for share in record.split_shares.filter(deleted_at__isnull=True).select_related(
+                "participant"
+            )
+        ]
+    )
     return revision
 
 
@@ -468,6 +513,18 @@ def create_financial_transaction(
     request: Any | None = None,
 ) -> Transaction:
     parts = _resolve_transaction_parts(data, actor)
+    split_supplied = "split" in data
+    resolved_split = (
+        resolve_transaction_split(
+            tracker=parts.tracker,
+            kind=parts.transaction_values["kind"],
+            status=parts.transaction_values["status"],
+            amount_minor=parts.transaction_values["amount_minor"],
+            value=data.get("split"),
+        )
+        if split_supplied
+        else None
+    )
     create_values = {
         **parts.transaction_values,
         "creator": actor,
@@ -477,6 +534,8 @@ def create_financial_transaction(
         create_values["id"] = record_id
     record = Transaction.objects.create(**create_values)
     _create_transaction_children(record, parts)
+    if split_supplied:
+        apply_resolved_split(record, resolved_split)
     record_audit_event(
         actor=actor,
         tracker_id=parts.tracker.id,
@@ -496,12 +555,17 @@ def replace_financial_transaction(
     actor: User,
     base_version: int,
     request: Any | None = None,
+    allow_linked_settlement: bool = False,
 ) -> Transaction:
     locked = Transaction.objects.select_for_update().get(id=record.id)
     if locked.version != base_version:
         raise VersionConflict()
     if locked.deleted_at:
         raise serializers.ValidationError({"id": "Deleted transactions cannot be edited."})
+    _protect_linked_settlement_transaction(
+        locked,
+        allow_linked_settlement=allow_linked_settlement,
+    )
     if UUID(str(data["tracker_id"])) != locked.tracker_id:
         raise serializers.ValidationError({"tracker_id": "A transaction cannot change tracker."})
     if str(data.get("source", Transaction.Source.MANUAL)) != locked.source:
@@ -516,6 +580,30 @@ def replace_financial_transaction(
         actor,
         permitted_archived_tag_ids=locked.transaction_tags.values_list("tag_id", flat=True),
     )
+    split_supplied = "split" in data
+    if (
+        has_active_split(locked)
+        and not split_supplied
+        and (
+            parts.transaction_values["kind"] != locked.kind
+            or parts.transaction_values["amount_minor"] != locked.amount_minor
+            or parts.transaction_values["currency"] != locked.currency
+        )
+    ):
+        raise serializers.ValidationError(
+            {"split": "Supply the complete split when changing its kind, amount, or currency."}
+        )
+    resolved_split = (
+        resolve_transaction_split(
+            tracker=parts.tracker,
+            kind=parts.transaction_values["kind"],
+            status=parts.transaction_values["status"],
+            amount_minor=parts.transaction_values["amount_minor"],
+            value=data.get("split"),
+        )
+        if split_supplied
+        else None
+    )
     snapshot_transaction(locked, editor=actor, reason="update")
     for field, value in parts.transaction_values.items():
         setattr(locked, field, value)
@@ -526,6 +614,8 @@ def replace_financial_transaction(
     locked.allocations.all().delete()
     locked.transaction_tags.all().delete()
     _create_transaction_children(locked, parts)
+    if split_supplied:
+        apply_resolved_split(locked, resolved_split)
     record_audit_event(
         actor=actor,
         tracker_id=locked.tracker_id,
@@ -539,12 +629,21 @@ def replace_financial_transaction(
 
 @db_transaction.atomic
 def tombstone_transaction(
-    *, record: Transaction, actor: User, base_version: int, request: Any | None = None
+    *,
+    record: Transaction,
+    actor: User,
+    base_version: int,
+    request: Any | None = None,
+    allow_linked_settlement: bool = False,
 ) -> Transaction:
     require_tracker_role(actor, record.tracker, TrackerMembership.Role.EDITOR)
     locked = Transaction.objects.select_for_update().get(id=record.id)
     if locked.version != base_version:
         raise VersionConflict()
+    _protect_linked_settlement_transaction(
+        locked,
+        allow_linked_settlement=allow_linked_settlement,
+    )
     if locked.deleted_at is None:
         snapshot_transaction(locked, editor=actor, reason="delete")
         locked.deleted_at = timezone.now()
@@ -564,12 +663,21 @@ def tombstone_transaction(
 
 @db_transaction.atomic
 def restore_transaction(
-    *, record: Transaction, actor: User, base_version: int, request: Any | None = None
+    *,
+    record: Transaction,
+    actor: User,
+    base_version: int,
+    request: Any | None = None,
+    allow_linked_settlement: bool = False,
 ) -> Transaction:
     require_tracker_role(actor, record.tracker, TrackerMembership.Role.EDITOR)
     locked = Transaction.objects.select_for_update().get(id=record.id)
     if locked.version != base_version:
         raise VersionConflict()
+    _protect_linked_settlement_transaction(
+        locked,
+        allow_linked_settlement=allow_linked_settlement,
+    )
     if locked.deleted_at is not None:
         snapshot_transaction(locked, editor=actor, reason="restore")
         locked.deleted_at = None
@@ -589,12 +697,21 @@ def restore_transaction(
 
 @db_transaction.atomic
 def void_transaction(
-    *, record: Transaction, actor: User, base_version: int, request: Any | None = None
+    *,
+    record: Transaction,
+    actor: User,
+    base_version: int,
+    request: Any | None = None,
+    allow_linked_settlement: bool = False,
 ) -> Transaction:
     require_tracker_role(actor, record.tracker, TrackerMembership.Role.EDITOR)
     locked = Transaction.objects.select_for_update().get(id=record.id)
     if locked.version != base_version:
         raise VersionConflict()
+    _protect_linked_settlement_transaction(
+        locked,
+        allow_linked_settlement=allow_linked_settlement,
+    )
     if locked.status == Transaction.Status.VOIDED:
         return locked
     snapshot_transaction(locked, editor=actor, reason="void")

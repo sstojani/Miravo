@@ -17,7 +17,7 @@ from apps.planning.models import (
     InstallmentScheduleItem,
     InstallmentScheduleItemRevision,
 )
-from apps.planning.services.installments import build_schedule
+from apps.planning.services.installments import build_schedule, schedule_item_id
 from apps.users.models import User
 
 pytestmark = pytest.mark.django_db
@@ -161,6 +161,9 @@ def _push(client: APIClient, operation: dict[str, object]):
 
 
 def test_schedule_is_exact_and_preserves_month_end_and_leap_year() -> None:
+    assert schedule_item_id(UUID("10000000-0000-0000-0000-000000000001"), 1, 1) == UUID(
+        "6aeb1cec-6102-510c-975b-96cdfc43718e"
+    )
     rows = build_schedule(
         principal_minor=10_001,
         interest_minor=499,

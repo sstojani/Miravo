@@ -1,6 +1,6 @@
 # Security policy and implementation baseline
 
-Project Ledger stores sensitive financial and identity data. Report suspected vulnerabilities privately to the repository owner; do not open a public issue containing real data, credentials, logs, or receipt content.
+Miravo stores sensitive financial and identity data. Report suspected vulnerabilities privately to the repository owner; do not open a public issue containing real data, credentials, logs, or receipt content.
 
 ## Baseline controls
 
@@ -9,6 +9,7 @@ Project Ledger stores sensitive financial and identity data. Report suspected vu
 - Tracker invitation credentials are independent, email-bound, expiring, HMAC-hashed, revocable, and shown once.
 - Shortcut credentials use their own secret pepper and high-entropy token family. Only a prefix and HMAC-SHA-256 digest are stored; the raw token is shown once, can be tracker-restricted, carries explicit read/create scopes, expires by default, and is immediately revocable. The narrow routes apply client-attempt, per-token, and per-user throttles.
 - The iOS credential screen never writes a raw Shortcut token to SwiftData, UserDefaults, Keychain, logs, or descriptions. It holds the create response only in memory; user-initiated copy uses a local-only pasteboard item with a five-minute expiry, and closing the one-time screen clears the app reference.
+- The iOS collaboration screen applies the same one-time treatment to tracker invite codes: redacted non-`Codable` memory only, explicit local-only five-minute clipboard copy, and no persistence. Invite/member/merge calls use the normal short-lived app access token, never a Shortcut token.
 - iOS secrets belong only in Keychain. The IPA contains public configuration only.
 - iOS access/refresh credentials use a non-synchronizing Keychain item with `AfterFirstUnlockThisDeviceOnly` accessibility and no custom access group; a password is never persisted.
 - Cached iOS entities are partitioned by normalized server origin and authenticated user UUID. Sign-out hides the scope without destructively deleting possibly unsynchronized records.
@@ -18,6 +19,8 @@ Project Ledger stores sensitive financial and identity data. Report suspected vu
 - Release URL validation and ATS permit HTTPS only. The Debug-only ATS exception is constrained in code to loopback, and redirects are refused for credential-bearing requests.
 - The privacy manifest declares linked app-functionality data accurately, declares no tracking domains, and records only the CA92.1 app-owned UserDefaults required reason.
 - Authorization is enforced per object on the server. Shared-tracker tests cover every role.
+- Split and settlement commands re-resolve every participant through the authorized tracker, derive totals rather than trust a client balance, lock version roots, and prevent a linked settlement movement from being changed outside the settlement lifecycle.
+- Native guest merge requires a clean outbox/conflict state, a fresh synchronization, and authoritative versions for both identities before the server performs the audited irreversible rewrite.
 - Financial values are integer minor units; exchange rates use decimal arithmetic and immutable historical snapshots.
 - Request bodies and sensitive fields are excluded from logs. Safe errors include request IDs.
 - Attachments and exports use private random storage keys and authenticated/expiring delivery, never raw public media URLs.

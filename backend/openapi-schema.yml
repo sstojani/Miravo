@@ -1,8 +1,8 @@
 openapi: 3.0.3
 info:
-  title: Project Ledger API
+  title: Miravo API
   version: 1.0.0
-  description: Versioned API for the Project Ledger offline-first finance application.
+  description: Versioned API for the Miravo offline-first finance application.
 paths:
   /api/v1/accounts/:
     get:
@@ -1445,6 +1445,224 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/participants/:
+    get:
+      operationId: participants_list
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      tags:
+      - participants
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedParticipantList'
+          description: ''
+    post:
+      operationId: participants_create
+      tags:
+      - participants
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ParticipantRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ParticipantRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ParticipantRequest'
+        required: true
+      security:
+      - accessToken: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Participant'
+          description: ''
+  /api/v1/participants/{id}/:
+    get:
+      operationId: participants_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this participant.
+        required: true
+      tags:
+      - participants
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Participant'
+          description: ''
+    put:
+      operationId: participants_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this participant.
+        required: true
+      tags:
+      - participants
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ParticipantRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ParticipantRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ParticipantRequest'
+        required: true
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Participant'
+          description: ''
+    patch:
+      operationId: participants_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this participant.
+        required: true
+      tags:
+      - participants
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedParticipantRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedParticipantRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedParticipantRequest'
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Participant'
+          description: ''
+    delete:
+      operationId: participants_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this participant.
+        required: true
+      tags:
+      - participants
+      security:
+      - accessToken: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/participants/{id}/merge/:
+    post:
+      operationId: participants_merge_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this participant.
+        required: true
+      tags:
+      - participants
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ParticipantMergeRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ParticipantMergeRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ParticipantMergeRequest'
+        required: true
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Participant'
+          description: ''
+  /api/v1/participants/{id}/restore/:
+    post:
+      operationId: participants_restore_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this participant.
+        required: true
+      tags:
+      - participants
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ParticipantRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ParticipantRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ParticipantRequest'
+        required: true
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Participant'
+          description: ''
   /api/v1/recurring-occurrences/:
     get:
       operationId: recurring_occurrences_list
@@ -1770,6 +1988,125 @@ paths:
               schema:
                 $ref: '#/components/schemas/RecurringOccurrence'
           description: ''
+  /api/v1/settlements/:
+    get:
+      operationId: settlements_list
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      tags:
+      - settlements
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedSettlementList'
+          description: ''
+    post:
+      operationId: settlements_create
+      tags:
+      - settlements
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SettlementWriteRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SettlementWriteRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SettlementWriteRequest'
+        required: true
+      security:
+      - accessToken: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Settlement'
+          description: ''
+  /api/v1/settlements/{id}/:
+    get:
+      operationId: settlements_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this settlement.
+        required: true
+      tags:
+      - settlements
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Settlement'
+          description: ''
+    delete:
+      operationId: settlements_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this settlement.
+        required: true
+      tags:
+      - settlements
+      security:
+      - accessToken: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/settlements/{id}/restore/:
+    post:
+      operationId: settlements_restore_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this settlement.
+        required: true
+      tags:
+      - settlements
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BaseVersionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/BaseVersionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/BaseVersionRequest'
+        required: true
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Settlement'
+          description: ''
   /api/v1/shortcut/accounts:
     get:
       operationId: shortcut_accounts_retrieve
@@ -1946,6 +2283,20 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ShortcutBatchResult'
+          description: ''
+  /api/v1/split-balances:
+    get:
+      operationId: split_balances_retrieve
+      tags:
+      - split-balances
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SplitBalanceResponse'
           description: ''
   /api/v1/subscriptions/:
     get:
@@ -3136,6 +3487,61 @@ paths:
               schema:
                 $ref: '#/components/schemas/PaginatedTransactionRevisionList'
           description: ''
+  /api/v1/transactions/{id}/split/:
+    put:
+      operationId: transactions_split_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this transaction.
+        required: true
+      tags:
+      - transactions
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransactionSplitUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TransactionSplitUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TransactionSplitUpdateRequest'
+        required: true
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionRead'
+          description: ''
+    delete:
+      operationId: transactions_split_destroy
+      parameters:
+      - in: query
+        name: base_version
+        schema:
+          type: integer
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this transaction.
+        required: true
+      tags:
+      - transactions
+      security:
+      - accessToken: []
+      responses:
+        '204':
+          description: No response body
   /api/v1/transactions/{id}/void/:
     post:
       operationId: transactions_void_create
@@ -3837,20 +4243,24 @@ components:
       - account
       - category
       - tag
+      - participant
       - budget
       - recurring_rule
       - installment_plan
       - transaction
+      - settlement
       type: string
       description: |-
         * `tracker` - tracker
         * `account` - account
         * `category` - category
         * `tag` - tag
+        * `participant` - participant
         * `budget` - budget
         * `recurring_rule` - recurring_rule
         * `installment_plan` - installment_plan
         * `transaction` - transaction
+        * `settlement` - settlement
     InstallmentPayment:
       type: object
       description: Model serializer with strict input-field handling.
@@ -4875,6 +5285,16 @@ components:
       required:
       - display_name
       - tracker_id
+    MethodEnum:
+      enum:
+      - equal
+      - exact
+      - percentage
+      type: string
+      description: |-
+        * `equal` - Equal
+        * `exact` - Exact amounts
+        * `percentage` - Percentages
     Movement:
       type: object
       description: Model serializer with strict input-field handling.
@@ -5155,6 +5575,25 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Merchant'
+    PaginatedParticipantList:
+      type: object
+      required:
+      - results
+      properties:
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cD00ODY%3D"
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Participant'
     PaginatedRecurringOccurrenceList:
       type: object
       required:
@@ -5212,6 +5651,25 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/RecurringRuleRevision'
+    PaginatedSettlementList:
+      type: object
+      required:
+      - results
+      properties:
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cD00ODY%3D"
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Settlement'
     PaginatedTagList:
       type: object
       required:
@@ -5288,6 +5746,115 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/TransactionRevision'
+    Participant:
+      type: object
+      description: Model serializer with strict input-field handling.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        tracker_id:
+          type: string
+          format: uuid
+        linked_user_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        linked_email:
+          type: string
+          format: email
+          readOnly: true
+          nullable: true
+        display_name:
+          type: string
+          maxLength: 120
+        archived_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        version:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        deleted_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+      required:
+      - archived_at
+      - created_at
+      - deleted_at
+      - display_name
+      - id
+      - linked_email
+      - linked_user_id
+      - tracker_id
+      - updated_at
+      - version
+    ParticipantBalance:
+      type: object
+      description: Serializer that rejects misspelled or unsupported request fields.
+      properties:
+        participant_id:
+          type: string
+          format: uuid
+          readOnly: true
+        display_name:
+          type: string
+          readOnly: true
+        currency:
+          type: string
+          readOnly: true
+        currency_exponent:
+          type: integer
+          readOnly: true
+        net_minor:
+          type: integer
+          readOnly: true
+      required:
+      - currency
+      - currency_exponent
+      - display_name
+      - net_minor
+      - participant_id
+    ParticipantMergeRequest:
+      type: object
+      description: Serializer that rejects misspelled or unsupported request fields.
+      properties:
+        base_version:
+          type: integer
+          minimum: 1
+        target_participant_id:
+          type: string
+          format: uuid
+      required:
+      - base_version
+      - target_participant_id
+    ParticipantRequest:
+      type: object
+      description: Model serializer with strict input-field handling.
+      properties:
+        tracker_id:
+          type: string
+          format: uuid
+        display_name:
+          type: string
+          minLength: 1
+          maxLength: 120
+      required:
+      - display_name
+      - tracker_id
     PatchedAccountRequest:
       type: object
       description: Model serializer with strict input-field handling.
@@ -5381,6 +5948,17 @@ components:
           type: string
           format: uuid
           nullable: true
+    PatchedParticipantRequest:
+      type: object
+      description: Model serializer with strict input-field handling.
+      properties:
+        tracker_id:
+          type: string
+          format: uuid
+        display_name:
+          type: string
+          minLength: 1
+          maxLength: 120
     PatchedTagRequest:
       type: object
       description: Model serializer with strict input-field handling.
@@ -6060,6 +6638,151 @@ components:
       - last_seen_at
       - platform
       - revoked_at
+    Settlement:
+      type: object
+      description: Model serializer with strict input-field handling.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        tracker_id:
+          type: string
+          format: uuid
+          readOnly: true
+        from_participant_id:
+          type: string
+          format: uuid
+          readOnly: true
+        to_participant_id:
+          type: string
+          format: uuid
+          readOnly: true
+        amount_minor:
+          type: integer
+          readOnly: true
+        currency:
+          type: string
+          readOnly: true
+        currency_exponent:
+          type: integer
+          readOnly: true
+        occurred_at:
+          type: string
+          format: date-time
+          readOnly: true
+        note:
+          type: string
+          readOnly: true
+        transaction_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        created_by_id:
+          type: string
+          format: uuid
+          readOnly: true
+        last_editor_id:
+          type: string
+          format: uuid
+          readOnly: true
+        version:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        deleted_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+      required:
+      - amount_minor
+      - created_at
+      - created_by_id
+      - currency
+      - currency_exponent
+      - deleted_at
+      - from_participant_id
+      - id
+      - last_editor_id
+      - note
+      - occurred_at
+      - to_participant_id
+      - tracker_id
+      - transaction_id
+      - updated_at
+      - version
+    SettlementWriteRequest:
+      type: object
+      description: Serializer that rejects misspelled or unsupported request fields.
+      properties:
+        tracker_id:
+          type: string
+          format: uuid
+        from_participant_id:
+          type: string
+          format: uuid
+        to_participant_id:
+          type: string
+          format: uuid
+        amount_minor:
+          type: integer
+          minimum: 1
+        currency:
+          type: string
+          minLength: 3
+          maxLength: 3
+        occurred_at:
+          type: string
+          format: date-time
+        note:
+          type: string
+          default: ''
+          maxLength: 5000
+        account_id:
+          type: string
+          format: uuid
+          nullable: true
+        account_amount_minor:
+          type: integer
+          minimum: 1
+        base_amount_minor:
+          type: integer
+          minimum: 1
+        base_currency:
+          type: string
+          minLength: 3
+          maxLength: 3
+        rate_snapshot:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,16}(?:\.\d{0,12})?$
+        rate_source:
+          type: string
+          minLength: 1
+          maxLength: 80
+        rate_effective_at:
+          type: string
+          format: date-time
+        base_version:
+          type: integer
+          minimum: 1
+          writeOnly: true
+      required:
+      - amount_minor
+      - currency
+      - from_participant_id
+      - occurred_at
+      - to_participant_id
+      - tracker_id
     ShortcutAccount:
       type: object
       description: Serializer that rejects misspelled or unsupported request fields.
@@ -6507,6 +7230,184 @@ components:
       - apple_wallet_shortcut
       type: string
       description: '* `apple_wallet_shortcut` - apple_wallet_shortcut'
+    SimplifiedDebt:
+      type: object
+      description: Serializer that rejects misspelled or unsupported request fields.
+      properties:
+        from_participant_id:
+          type: string
+          format: uuid
+          readOnly: true
+        to_participant_id:
+          type: string
+          format: uuid
+          readOnly: true
+        amount_minor:
+          type: integer
+          readOnly: true
+        currency:
+          type: string
+          readOnly: true
+        currency_exponent:
+          type: integer
+          readOnly: true
+      required:
+      - amount_minor
+      - currency
+      - currency_exponent
+      - from_participant_id
+      - to_participant_id
+    SplitBalanceResponse:
+      type: object
+      description: Serializer that rejects misspelled or unsupported request fields.
+      properties:
+        tracker_id:
+          type: string
+          format: uuid
+          readOnly: true
+        balances:
+          type: array
+          items:
+            $ref: '#/components/schemas/ParticipantBalance'
+          readOnly: true
+        simplified_debts:
+          type: array
+          items:
+            $ref: '#/components/schemas/SimplifiedDebt'
+          readOnly: true
+      required:
+      - balances
+      - simplified_debts
+      - tracker_id
+    SplitPayment:
+      type: object
+      description: Model serializer with strict input-field handling.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        participant_id:
+          type: string
+          format: uuid
+          readOnly: true
+        amount_minor:
+          type: integer
+          readOnly: true
+        version:
+          type: integer
+          readOnly: true
+      required:
+      - amount_minor
+      - id
+      - participant_id
+      - version
+    SplitPaymentInputRequest:
+      type: object
+      description: Serializer that rejects misspelled or unsupported request fields.
+      properties:
+        id:
+          type: string
+          format: uuid
+        participant_id:
+          type: string
+          format: uuid
+        amount_minor:
+          type: integer
+          minimum: 1
+      required:
+      - amount_minor
+      - participant_id
+    SplitPaymentRevision:
+      type: object
+      description: Model serializer with strict input-field handling.
+      properties:
+        participant_id:
+          type: string
+          format: uuid
+          readOnly: true
+        amount_minor:
+          type: integer
+          readOnly: true
+      required:
+      - amount_minor
+      - participant_id
+    SplitShare:
+      type: object
+      description: Model serializer with strict input-field handling.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        participant_id:
+          type: string
+          format: uuid
+          readOnly: true
+        amount_minor:
+          type: integer
+          readOnly: true
+        method:
+          allOf:
+          - $ref: '#/components/schemas/MethodEnum'
+          readOnly: true
+        percentage_basis_points:
+          type: integer
+          readOnly: true
+          nullable: true
+        version:
+          type: integer
+          readOnly: true
+      required:
+      - amount_minor
+      - id
+      - method
+      - participant_id
+      - percentage_basis_points
+      - version
+    SplitShareInputRequest:
+      type: object
+      description: Serializer that rejects misspelled or unsupported request fields.
+      properties:
+        id:
+          type: string
+          format: uuid
+        participant_id:
+          type: string
+          format: uuid
+        amount_minor:
+          type: integer
+          minimum: 1
+        percentage_basis_points:
+          type: integer
+          maximum: 10000
+          minimum: 1
+      required:
+      - participant_id
+    SplitShareRevision:
+      type: object
+      description: Model serializer with strict input-field handling.
+      properties:
+        participant_id:
+          type: string
+          format: uuid
+          readOnly: true
+        amount_minor:
+          type: integer
+          readOnly: true
+        method:
+          allOf:
+          - $ref: '#/components/schemas/MethodEnum'
+          readOnly: true
+        percentage_basis_points:
+          type: integer
+          readOnly: true
+          nullable: true
+      required:
+      - amount_minor
+      - method
+      - participant_id
+      - percentage_basis_points
     SyncAckRequest:
       type: object
       description: Serializer that rejects misspelled or unsupported request fields.
@@ -7027,6 +7928,11 @@ components:
           items:
             type: string
           readOnly: true
+        split:
+          allOf:
+          - $ref: '#/components/schemas/TransactionSplitRead'
+          nullable: true
+          readOnly: true
         version:
           type: integer
           readOnly: true
@@ -7071,6 +7977,7 @@ components:
       - rate_source
       - refund_of_id
       - source
+      - split
       - status
       - tag_ids
       - tracker_id
@@ -7171,6 +8078,16 @@ components:
           items:
             $ref: '#/components/schemas/AllocationRevision'
           readOnly: true
+        split_payments:
+          type: array
+          items:
+            $ref: '#/components/schemas/SplitPaymentRevision'
+          readOnly: true
+        split_shares:
+          type: array
+          items:
+            $ref: '#/components/schemas/SplitShareRevision'
+          readOnly: true
         created_at:
           type: string
           format: date-time
@@ -7200,6 +8117,8 @@ components:
       - recorded_version
       - refund_of_id
       - source
+      - split_payments
+      - split_shares
       - status
     TransactionSource:
       enum:
@@ -7219,6 +8138,66 @@ components:
         * `receipt_scan` - Receipt scan
         * `import` - Import
         * `server` - Server
+    TransactionSplitInputRequest:
+      type: object
+      description: Serializer that rejects misspelled or unsupported request fields.
+      properties:
+        method:
+          $ref: '#/components/schemas/MethodEnum'
+        payments:
+          type: array
+          items:
+            $ref: '#/components/schemas/SplitPaymentInputRequest'
+        shares:
+          type: array
+          items:
+            $ref: '#/components/schemas/SplitShareInputRequest'
+      required:
+      - method
+      - payments
+      - shares
+    TransactionSplitRead:
+      type: object
+      description: Serializer that rejects misspelled or unsupported request fields.
+      properties:
+        method:
+          $ref: '#/components/schemas/MethodEnum'
+        payments:
+          type: array
+          items:
+            $ref: '#/components/schemas/SplitPayment'
+          readOnly: true
+        shares:
+          type: array
+          items:
+            $ref: '#/components/schemas/SplitShare'
+          readOnly: true
+        total_paid_minor:
+          type: integer
+          readOnly: true
+        total_owed_minor:
+          type: integer
+          readOnly: true
+      required:
+      - method
+      - payments
+      - shares
+      - total_owed_minor
+      - total_paid_minor
+    TransactionSplitUpdateRequest:
+      type: object
+      description: Serializer that rejects misspelled or unsupported request fields.
+      properties:
+        base_version:
+          type: integer
+          minimum: 1
+        split:
+          allOf:
+          - $ref: '#/components/schemas/TransactionSplitInputRequest'
+          nullable: true
+      required:
+      - base_version
+      - split
     TransactionStatus:
       enum:
       - draft
@@ -7324,6 +8303,10 @@ components:
           type: string
           format: uuid
           nullable: true
+        split:
+          allOf:
+          - $ref: '#/components/schemas/TransactionSplitInputRequest'
+          nullable: true
         base_version:
           type: integer
           minimum: 1
@@ -7379,7 +8362,7 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
-      description: Short-lived Project Ledger access token bound to a device session.
+      description: Short-lived Miravo access token bound to a device session.
     shortcutToken:
       type: http
       scheme: bearer

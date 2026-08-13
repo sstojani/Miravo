@@ -638,3 +638,160 @@ Commit this reminder checkpoint. Then implement the authoritative installment ba
 ### Next exact action
 
 Commit the authoritative backend checkpoint. Then mirror its wire/domain invariants in scoped SwiftData models and a pure Swift installment calculator; add atomic create/edit/archive/cancel/payment/payoff/skip/reschedule outbox commands and strict bootstrap reconciliation before exposing a role-aware Plans UI.
+
+## 2026-08-13 — Milestone 7 native offline-first installment checkpoint
+
+### Acceptance checks established
+
+- Plan, active/superseded schedule, and authoritative payment history persist under the compound server/user scope. The Swift calculator matches server integer row/component distribution, weekly/monthly anchor behavior, progress, and a committed cross-language UUIDv5 schedule-row test vector.
+- Create/edit/archive/restore/cancel/delete, skip/reschedule, regular/extra payment, and payoff validate tracker role and references before one rollback-guarded local save. A payment inserts its pending `source=installment` expense, account movement, optional allocation, plan/schedule projection, and plan outbox command atomically; it never fabricates a server payment-history row.
+- Multiple pending commands remain ordered. A failed/conflicted predecessor blocks only later commands for that plan. Rejection marks the projected transaction failed. Keep-server discards only the affected unsynchronized ledger projection, preserves later proposals as dependency conflicts, and requires authoritative bootstrap; keep-mine retains the proposal with a new operation ID.
+- Pull/bootstrap reject invalid plan math/state, cross-tracker account/category/schedule/transaction links, invalid row component/state shapes, and inconsistent payment identity. A pending/failed plan mutation protects its preview schedule through cursor recovery without preventing unrelated entities from synchronizing.
+- Plans is role-aware and offline-first: it exposes create/edit/detail, exact progress and due/overdue state, schedule/history, regular/extra/payoff, skip/reschedule, archive/restore/cancel/delete, explicit cross-currency account/base input, unavailable-account state, sync status, and complete English/Albanian copy.
+- Recurring and installment due dates share the same opt-in, opaque, generic, earliest-50 local reminder queue. Reminder delivery remains optional and cannot change financial state.
+
+### Material work
+
+- Added `LocalInstallmentPlan`, `LocalInstallmentScheduleItem`, and `LocalInstallmentPayment` SwiftData models and registered them in persistent, recovery, and all relevant test schemas.
+- Added `LocalInstallmentCalculator` with overflow-checked exact allocation, original-anchor date generation, optimistic/authoritative progress reconciliation, and UUIDv5 row identity matching Python's fixed namespace/name scheme.
+- Added strict snake-case installment mutation payloads and repository commands. Optimistic payments use ordinary ledger primitives and explicit account/tracker-base snapshots, allow confirmed tender overpayment while applying only remaining value, and leave canonical payment rows to the server.
+- Extended wire DTOs and the sync actor with installment plan/schedule/payment decode, dependency-ordered bootstrap, same-tracker validation, tombstones, missing-row reconciliation, failure/conflict projection handling, parent-aware recovery, and same-entity failure ordering.
+- Added a live-query installment Plans section, editor/detail/payment/reschedule flows, viewer boundaries, linked-account failure state, exact progress, schedule revision display, and nonblocking sync/reminder triggers.
+- Generalized the existing reminder planner/controller to combine recurring and installment candidates without carrying private preview fields or increasing the 50-request ceiling. Kept legacy preference/identifier names for installed-client compatibility.
+- Changed server-generated schedule IDs from random UUID4 values to deterministic UUIDv5 values for new rows, including skip replacements. Existing stored UUIDs remain accepted and no migration is required.
+- Authored native tests for exact schedule math and identity, lifecycle/revision/outbox ordering, multiple offline payments, rollback, payoff, viewer access, cross-currency account amounts, wire decoding, rejected projection state, same-plan dependency blocking, pending-bootstrap preservation, and combined private reminders. Extended the Linux source contract around schema registration, mutation shape, nonfabricated history, payload decoding, UUIDv5, projection/conflict safety, and reminder privacy.
+
+### Commands and outcomes
+
+- `PROJECT_LEDGER_ENV=test PROJECT_LEDGER_DATABASE_URL=sqlite:///:memory: .venv/bin/pytest backend/tests/test_installments.py -q`: **6 passed locally** after deterministic row identity was added.
+- `make check`: **passed locally** — 80 tests, 82.03% branch-aware coverage, Ruff format/lint, Django system checks, strict mypy over 93 source files, and validated byte-current OpenAPI. Ruff first identified one formatting-only test change; formatting that file and rerunning produced the clean result.
+- `PROJECT_LEDGER_ENV=test PROJECT_LEDGER_DATABASE_URL=sqlite:///:memory: .venv/bin/python backend/manage.py makemigrations --check --dry-run`: **no changes detected**.
+- `.venv/bin/python -m compileall -q backend`: **passed locally**.
+- `./ios/check-localizations.sh`: **passed locally** — 544 literal UI keys with identical English/Albanian sets and compatible placeholders.
+- `python3 ios/check-project-contract.py`: **passed locally**, including transport/privacy, combined reminder, and installment persistence/outbox/recovery contracts.
+- `tree-sitter-swift` 0.7.1 parsed all 84 Swift application/test files using the established compatibility harness: **no syntax-tree errors or missing nodes**.
+- `git diff --check`: **passed locally**.
+
+### Verification boundary
+
+- The complete Django/SQLite regression gate, deterministic Python identity vector, migration drift, OpenAPI freshness, Python compilation, native localization parity, privacy/installment source contract, whitespace, and independent Swift syntax-tree structure are **verified locally on Linux**.
+- The new Swift tests are **authored but not executed**. Swift 6 type/concurrency checking, XcodeGen regeneration, SwiftFormat, SwiftData schema migration/runtime behavior, UUID byte-order parity on Apple Foundation, local transaction/relaunch behavior, simulator UI/accessibility, notification authorization/delivery, and 50,000-record interaction remain **unverified until macOS/device execution**.
+- PostgreSQL lock/concurrency behavior, Redis/Celery/Channels, Docker, hosted Actions, real server/Funnel, signing, and physical-iPhone behavior remain unverified. No production system, remote repository, or signing service was contacted.
+
+### Next exact action
+
+Commit the native installment checkpoint. Then begin Milestone 8 with the authoritative participant/split/settlement backend: registered and guest participants, multiple payers, equal/exact/percentage validation, deterministic debt simplification, settlement exclusion from spending, roles/audit, REST/sync, and focused tests before adding native collaboration UI.
+
+## 2026-08-13 — Miravo identity and strict installment-bootstrap validation
+
+### Owner inputs received
+
+- The final product name is **Miravo**.
+- The owner supplied and authorized publishing to `https://github.com/sstojani/Miravo.git`.
+- The final bundle identifier remains unresolved, so the centralized `com.example.projectledger` placeholder is unchanged and explicitly provisional.
+
+### Material work
+
+- Changed the native display/product name, login/lock/recovery/Shortcut/reminder copy, backend public name, API schema title, top-level documentation, sample environment, systemd descriptions, and English/Albanian resources to Miravo. Preserved the `ProjectLedger` Swift target/module, source layout, environment prefix, storage identifiers, and service slug as stable internal names.
+- Updated unsigned-device CI to locate `Miravo.app`, validate `CFBundleDisplayName`, package `Payload/Miravo.app` into `Miravo-UNSIGNED.ipa`, emit Miravo checksum/dSYM names, and include the app name in the build manifest. The target module remains explicitly `ProjectLedger` so existing source/test imports do not change.
+- Refactored installment wire validation into reusable plan/schedule/payment shape validators. Paginated bootstrap now validates complete money totals, schedule/state shapes, timestamps, and payment math even when an unresolved local plan mutation causes publication to preserve that plan and its projected schedule.
+- Strengthened bootstrap relationship checks between an installment payment, plan account/currency, `source=installment` expense transaction, primary movement, and optional schedule row. Added a native regression proving a corrupt preserved-parent snapshot cannot advance the durable cursor.
+- Regenerated the committed OpenAPI schema as Miravo and added a public-config regression for the final product name. Updated durable decisions, status, signing, Shortcut, user, and test-matrix documentation.
+
+### Commands and outcomes
+
+- `gh --version` / `gh auth status`: **blocked** — `gh` is not installed in this environment. Per the GitHub publishing workflow, no staging, remote mutation, push, or draft PR was attempted.
+- `make schema`: **passed locally** and regenerated a valid Miravo OpenAPI schema.
+- First `make check`: backend code/type checks passed and 79 tests passed; one newly added assertion incorrectly expected `bundle_id` in the intentionally minimal public-config response. The assertion was removed without expanding that API.
+- Second `make check`: **passed locally** — 80 tests, 81.51% branch-aware coverage, Ruff format/lint, Django checks, strict mypy over 93 source files, and byte-current validated OpenAPI.
+- `PROJECT_LEDGER_ENV=test PROJECT_LEDGER_DATABASE_URL=sqlite:///:memory: .venv/bin/python backend/manage.py makemigrations --check --dry-run`: **no changes detected**.
+- `.venv/bin/python -m compileall -q backend`: **passed locally**.
+- `./ios/check-localizations.sh`: **passed locally** — 544 literal UI keys, identical English/Albanian key sets, and compatible placeholders.
+- `python3 ios/check-project-contract.py`: **passed locally**, including Miravo product identity, transport/privacy, reminder, and installment recovery contracts.
+- `tree-sitter-swift` 0.7.1 parsed all 84 Swift application/test files: **no syntax-tree errors or missing nodes**. One initial invocation accidentally passed directories to the single-file harness and failed with `EISDIR`; the corrected `rg --files | xargs` aggregate command produced the reported result.
+- `git diff --check`: **passed locally**.
+
+### Verification boundary
+
+- Miravo naming, generated OpenAPI, backend behavior, migration drift, Python compilation, localization parity, static iOS contracts, Swift syntax-tree structure, and whitespace are **verified locally on Linux**.
+- XcodeGen regeneration, Swift 6 compilation/native tests, actual `Miravo.app` naming, unsigned IPA packaging, GitHub Actions, signing, and physical-device display remain **unverified until a macOS runner and signer/device are available**.
+- The repository destination is known and publishing is authorized, but the required GitHub CLI is absent. No remote was configured or contacted, and no branch/PR was published.
+
+### Next exact action
+
+Commit the completed native-installment/Miravo checkpoint locally. Continue Milestone 8 locally with participants, split semantics, deterministic balances, and settlements. Once `gh` is installed and authenticated, configure the supplied remote, create the required `agent/...` branch if appropriate, push, and open a draft PR.
+## 2026-08-13 — Milestone 8 server collaboration domain
+
+### Acceptance checkpoint
+
+- Each active tracker member has one registered participant; editors can create normalized persistent guests and admins can merge a guest into a registered identity without losing financial history.
+- Expense payer amounts and equal/exact/percentage shares each resolve to the exact integer transaction total with deterministic rounding and relational revision history.
+- Per-currency participant balances and simplified debts are derived, zero-sum, and stable; settlements reduce only a current debt, never count as spending/income, and optionally own one protected account movement.
+- Participant, embedded split, and settlement representations work through authenticated REST plus idempotent push/pull/bootstrap without relying on WebSocket delivery.
+- Viewer/editor/admin boundaries, duplicate/replay behavior, migration freshness, OpenAPI freshness, and the complete existing backend regression suite pass locally.
+
+### Implementation
+
+- Added relational `Participant`, `SplitPayment`, `SplitShare`, `Settlement`, `SplitPaymentRevision`, and `SplitShareRevision` models with positive/shape/uniqueness constraints, admin integration, and a migration that backfills one registered participant per active existing membership.
+- Tracker creation and invite acceptance now create registered participants. Guest lifecycle is versioned and audited; registered participants cannot be archived, and an explicit admin merge consolidates payer/share/settlement references, snapshots affected transactions, tombstones the guest, and converts a collapsed equal split to truthful exact shares.
+- Added strict nested split commands to transaction create/replace and a versioned replace/clear endpoint. Multiple payers are supported. Equal remainder goes to ascending UUIDs; percentage floors are reconciled by largest remainder then UUID; exact paid and owed totals are enforced before any write.
+- Added deterministic per-currency balances and debt simplification plus immutable settlement create/delete/restore. A settlement is capped at the current sender debt/recipient credit. Optional linked account movements use an ordinary `kind=settlement` ledger transaction, carry no category allocation, and cannot be edited, voided, or deleted outside the settlement lifecycle.
+- Extended revision serialization, change signals, bootstrap ordering, pull presentation, and strict sync mutation payloads. Participant and settlement are roots; payer/share children remain embedded under the transaction so a partial split can never synchronize.
+- Added five focused API/sync tests spanning registered/guest lifecycle, viewer denial, multiple payers, deterministic exact/equal/percentage rounding, revisions, zero-sum debts, partial/final/excess settlement, account movement protection and atomic restore, guest merge, replay, and bootstrap.
+- Updated the generated OpenAPI schema and architecture/data/API/sync/security/user/test/status documentation; recorded D-034.
+
+### Commands and outcomes
+
+- `PROJECT_LEDGER_ENV=test PROJECT_LEDGER_DATABASE_URL=sqlite:///:memory: ../.venv/bin/python manage.py makemigrations ledger sync`: generated ledger migration `0004` and sync migration `0005`; the ledger migration was extended with the registered-participant data backfill.
+- `... manage.py makemigrations --check --dry-run`: **passed locally** — no model/migration drift.
+- `... manage.py migrate --noinput` against an empty in-memory SQLite database: **passed locally**, including the new schema/backfill migration.
+- `uv run ruff format ...`, `uv run ruff check ...`, and strict `mypy backend/config backend/apps`: **passed locally** over 95 source files.
+- `uv run pytest backend/tests/test_splits_and_settlements.py -q`: **5 passed locally**.
+- `make schema && make check`: **passed locally** — 85 tests, 84.82% branch-aware coverage, Ruff format/lint, Django system checks, strict mypy over 95 source files, OpenAPI validation, and byte-for-byte schema freshness.
+
+### Verification boundary and next exact action
+
+- The relational models, clean migration path, REST/domain behavior, roles, audit, financial invariants, offline server push/bootstrap, and full Django/SQLite regression gate are **verified locally on Linux**.
+- PostgreSQL constraint/concurrency behavior, Redis/Channels invalidation, Docker, and GitHub Actions remain unverified. Correctness does not depend on WebSockets: normal authenticated pull/bootstrap exposes every collaboration record.
+- Native participant/split/settlement storage, outbox commands, balance calculation, conflict recovery, views, and two-device execution are not implemented yet. The next exact action is to add the scoped SwiftData models and strict wire snapshots, then extend bootstrap/pull reconciliation before building the transaction split and settlement UI.
+- Publishing to `https://github.com/sstojani/Miravo.git` remains authorized but paused because `gh` is absent; no remote was mutated.
+
+## 2026-08-13 — Milestone 8 native collaboration source checkpoint
+
+### Acceptance checkpoint
+
+- Participants, complete transaction splits, and immutable settlements are scoped SwiftData records whose local financial commands commit with exactly one durable owning outbox mutation.
+- Equal/exact/percentage share calculation, participant balances, and debt simplification match the server's integer and UUID tie-breaking rules; a settlement cannot exceed the direct live debt and never enters spending totals.
+- Pull/bootstrap validate and apply participants, embedded split children, settlements, tombstones, and linked settlement transactions atomically while preserving unresolved local projections.
+- The app exposes role-aware guest management, expense split editing, per-currency balances, partial/full settlements, one-time invites, member role/removal, invite acceptance, and a guarded guest-to-registered merge.
+- Connected authority actions use only the normal short-lived app session. Raw invite values are redacted, memory-only, explicitly copied to a local-only five-minute pasteboard item, and excluded from persistence.
+- Linux-verifiable localization/privacy/contracts, targeted syntax parsing, and the full backend regression suite pass. Swift compilation, simulator tests, and two-device execution remain external.
+
+### Implementation
+
+- Added `LocalParticipant`, `LocalSplitPayment`, `LocalSplitShare`, and `LocalSettlement` to both app ModelContainers and all comprehensive test containers. Added strict participant/settlement wire snapshots and mutation payloads; transaction split payloads distinguish omitted/preserved from explicit `null` removal.
+- Extended `LedgerSyncActor` bootstrap/pull ordering, relationship/total validation, upsert/tombstone/cleanup, pending projection protection, and accepted/rejected/conflict state propagation for collaboration roots and transaction-owned split children.
+- Added `LocalSplitCalculator` with overflow-safe payer/share totals, UUID-stable equal remainder, basis-point largest-remainder percentage allocation, per-participant balances, and deterministic debt simplification.
+- Extended `LocalLedgerRepository` with offline guest lifecycle, atomic split create/replace/remove/duplicate, local balance derivation, bounded balance-only or account-linked settlements, protected linked movements, and one-root settlement delete/restore commands. Viewer and linked-transaction escape paths fail before any local write.
+- Added the transaction split editor, split detail presentation, Plans split-balance/settlement section, and Local Data participant management. Added native tests for calculator determinism, atomic offline/relaunch lifecycle, permissions, wire decoding, and pull/bootstrap relationships.
+- Added ordinary-access-token collaboration transport/controller/UI for listing/creating/revoking one-time invitations, accepting an invite code/link, changing/removing eligible members, and merging a synchronized guest into a registered member. Guest merge requires a clean scope, fresh sync, explicit irreversible confirmation, and authoritative participant versions.
+- Added `CollaborationTests.swift` for narrow/redacted invite DTOs, token parsing, one-time state, input validation, revoke/accept, role/removal calls, and synchronized merge guards. Expanded the Linux project contract to reject invite persistence and regressions in clipboard, merge, transport, and model registration controls.
+- Centralized `TrackerRole.displayName`, restored full English/Albanian parity at 661 literal keys, updated user/API/sync/security/threat/accessibility/status documentation, and recorded D-035.
+
+### Commands and outcomes
+
+- `./ios/check-localizations.sh`: **passed locally** — 661 literal UI keys, identical English/Albanian sets, and compatible format placeholders.
+- `python3 ios/check-project-contract.py`: **passed locally** — Miravo identity, ATS/privacy, reminder/installment, collaboration model/transport, one-time invite, clipboard, no-persistence, and merge-preflight contracts are intact.
+- `tree-sitter-swift` 0.7.1 parsed the seven new/modified non-macro collaboration/split source and test files: **no syntax-tree errors**. A full 93-file scan leaves only the established grammar gaps in 24 SwiftData macro/preprocessor files; this is not a substitute for Swift type checking.
+- `make schema && make check`: **passed locally** — 85 tests, 81.20% branch-aware coverage, Ruff format/lint, Django system checks, strict mypy over 95 source files, OpenAPI validation, and byte-for-byte schema freshness.
+- `git diff --check`: **passed locally**.
+- `swift --version`: **unavailable** — the Linux image has no Swift toolchain, so no Swift type check or XCTest result is claimed.
+- `git remote add origin https://github.com/sstojani/Miravo.git` and `git switch -c agent/milestone-8-native-collaboration`: **completed locally** without rewriting `main`.
+- `GIT_TERMINAL_PROMPT=0 git ls-remote --heads origin`: **blocked at authentication** — GitHub was reachable, but no HTTPS username/credential is configured.
+- GitHub app `get_repo(sstojani/Miravo)` returned 404 and `list_installed_accounts` returned an empty set: the connector is not installed for this repository/account, so it cannot publish the branch or open a draft PR.
+
+### Verification boundary and next exact action
+
+- Backend domain/sync behavior and the generated schema are **verified locally on Linux/SQLite**. Native source structure, privacy/localization contracts, and non-macro syntax are **verified locally on Linux**.
+- Swift 6/XcodeGen compilation, SwiftData migrations/runtime, XCTest/XCUITest, simulator accessibility/performance, two-account invite/split/settlement/merge, no-WebSocket fallback, and physical-device behavior are **not yet verified**. PostgreSQL/Redis/Docker and hosted CI are also still open.
+- Commit this verified checkpoint on `agent/milestone-8-native-collaboration`. Publishing requires the owner to install the connected GitHub app for `sstojani/Miravo` or authenticate Git/`gh` in the workspace; no token belongs in source. Continue locally into Milestone 9 with the private attachment/upload protocol before camera/OCR UI.

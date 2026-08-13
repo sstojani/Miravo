@@ -1,8 +1,8 @@
-# Project Ledger implementation plan
+# Miravo implementation plan
 
 Last updated: 2026-08-13. A checked item is complete; its verification tier is recorded in `IMPLEMENT.md`. Items are not checked merely because scaffolding exists.
 
-Current focus: **Milestone 7 — native installments**. The authoritative installment terms/schedule/payment/revision REST and sync domain now passes locally, alongside budgets and recurrence/subscriptions. Next is the scoped SwiftData cache, atomic outbox commands, matching schedule/progress calculator, and role-aware Plans UI. Actual notification delivery, Swift compilation, simulator behavior, Wallet-trigger mapping, queue-file behavior, Docker, and hosted CI remain explicit external checks.
+Current focus: **Milestone 8 — native verification and two-device collaboration**. Miravo is the final product name and the owner supplied `https://github.com/sstojani/Miravo.git`; publishing is paused because this workspace lacks an authenticated GitHub CLI/credential. The server and iPhone source now cover explicit participants, atomic payer/share splits, deterministic balances, offline settlements, guest lifecycle, direct authenticated invite/role/member management, and a guarded guest-to-member merge. Linux contracts/localization and backend tests pass; Swift compilation, simulator tests, two-device execution, Docker, hosted CI, Wallet automation, and notification delivery remain explicit external checks.
 
 ## Milestone 0 — Discovery and durable project plan
 
@@ -63,8 +63,8 @@ Current acceptance: an authenticated device can push an ordered offline tracker/
 ## Milestone 5 — Complete core app experience
 
 - [x] Overview, fast amount-first quick add, transaction detail/list/filter/search, transfers, refunds, and undo (source implemented; macOS/device verification pending).
-- [x] Tracker/account/category/tag settings, synchronized offline collaborator roster, role-aware local states, and owner/admin tracker presentation/default/reordering (source implemented; online invite/role mutation remains Milestone 8 and macOS verification is pending).
-- [x] Complete implemented-screen English/Albanian strings, source accessibility/state audit, explicit empty/offline/error/permission/conflict presentation, and authored 50k-record performance check (356 strings and static checks pass locally; simulator/device audit and timing remain unverified).
+- [x] Tracker/account/category/tag settings, synchronized offline collaborator roster, role-aware local states, owner/admin tracker presentation/default/reordering, and connected invite/member management (source implemented; macOS verification is pending).
+- [x] Complete implemented-screen English/Albanian strings, source accessibility/state audit, explicit empty/offline/error/permission/conflict presentation, and authored 50k-record performance check (661 literal UI keys and static checks pass locally; simulator/device audit and timing remain unverified).
 
 ## Milestone 6 — Shortcut automation
 
@@ -76,14 +76,16 @@ Current acceptance: an authenticated device can push an ordered offline tracker/
 
 - [x] Budget periods, rollover, thresholds, historical reproducibility, explicit partial conversion, synchronized offline progress, and Plans UI (backend passing locally; native source/tests authored, macOS execution pending).
 - [x] Idempotent recurrence/subscription materialization, pause/skip/edit/end, bounded catch-up, deterministic occurrence identity, offline native rule cache/outbox, cost normalization, and role-aware Plans UI (backend passing locally; native source/tests authored, macOS execution pending).
-- [x] Optional local recurrence reminders with explicit permission, privacy-safe content, bounded scheduling, and denial/revocation states (source/tests implemented; macOS/device delivery pending).
+- [x] Optional local plan reminders with explicit permission, privacy-safe content, one bounded recurrence/installment queue, and denial/revocation states (source/tests implemented; macOS/device delivery pending).
 - [x] Authoritative installment terms, exact component schedules, immutable revisions, regular/extra payments, skip/reschedule, early payoff, confirmed overpayment, REST, audit, and offline sync transport (backend passing locally).
-- [ ] Scoped native installment cache/outbox, matching calculator, Plans create/detail/payment/payoff experience, reminders, localization, and authored tests.
+- [x] Scoped native installment cache/outbox, matching calculator, Plans create/detail/payment/payoff experience, reminders, localization, and authored tests (Linux source/parser/contracts pass; macOS execution pending).
 
 ## Milestone 8 — Splits and realtime collaboration
 
-- [ ] Participants/guest merge, multiple payers, equal/exact/percentage shares, deterministic debt simplification, and settlements.
-- [ ] End-to-end viewer/editor/admin/owner and no-WebSocket collaboration cases.
+- [x] Backend participants/guest merge, multiple payers, equal/exact/percentage shares, deterministic debt simplification, bounded settlements, revisions, audit, REST, and offline sync.
+- [x] Backend viewer/editor/admin/owner boundaries and ordinary pull/bootstrap behavior that does not depend on WebSockets.
+- [x] Scoped native participant/split/settlement cache, atomic offline commands, deterministic balances, guarded guest merge/invite/member management, and transaction/settlement UI (source/tests/contracts implemented; macOS execution pending).
+- [ ] macOS/two-device end-to-end collaboration and no-WebSocket execution.
 
 ## Milestone 9 — Receipts, OCR, analytics, and exports
 

@@ -295,6 +295,47 @@ class Merchant(SyncableModel):
         return self.display_name
 
 
+class Participant(SyncableModel):
+    tracker = models.ForeignKey(Tracker, on_delete=models.PROTECT, related_name="participants")
+    linked_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="tracker_participants",
+    )
+    display_name = models.CharField(max_length=120)
+    normalized_name = models.CharField(max_length=120, editable=False)
+    archived_at = models.DateTimeField(null=True, blank=True, db_index=True)
+
+    class Meta:
+        ordering = ("display_name", "id")
+        constraints = [
+            models.CheckConstraint(
+                condition=~Q(normalized_name=""),
+                name="participant_name_not_empty",
+            ),
+            models.UniqueConstraint(
+                fields=("tracker", "linked_user"),
+                condition=Q(linked_user__isnull=False, deleted_at__isnull=True),
+                name="unique_linked_participant_per_tracker",
+            ),
+            models.UniqueConstraint(
+                fields=("tracker", "normalized_name"),
+                condition=Q(linked_user__isnull=True, deleted_at__isnull=True),
+                name="unique_guest_participant_name_per_tracker",
+            ),
+        ]
+        indexes = [models.Index(fields=("tracker", "archived_at", "deleted_at"))]
+
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        self.normalized_name = normalized_label(self.display_name)
+        super().save(*args, **kwargs)
+
+    def __str__(self) -> str:
+        return self.display_name
+
+
 class Transaction(SyncableModel):
     class Kind(models.TextChoices):
         EXPENSE = "expense", "Expense"
@@ -441,6 +482,148 @@ class TransactionTag(SyncableModel):
         ]
 
 
+class SplitPayment(SyncableModel):
+    transaction = models.ForeignKey(
+        Transaction,
+        on_delete=models.CASCADE,
+        related_name="split_payments",
+    )
+    participant = models.ForeignKey(
+        Participant,
+        on_delete=models.PROTECT,
+        related_name="split_payments",
+    )
+    amount_minor = models.PositiveBigIntegerField()
+
+    class Meta:
+        ordering = ("participant_id", "id")
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(amount_minor__gt=0),
+                name="split_payment_amount_gt_0",
+            ),
+            models.UniqueConstraint(
+                fields=("transaction", "participant"),
+                condition=Q(deleted_at__isnull=True),
+                name="unique_active_split_payment_participant",
+            ),
+        ]
+
+
+class SplitShare(SyncableModel):
+    class Method(models.TextChoices):
+        EQUAL = "equal", "Equal"
+        EXACT = "exact", "Exact amounts"
+        PERCENTAGE = "percentage", "Percentages"
+
+    transaction = models.ForeignKey(
+        Transaction,
+        on_delete=models.CASCADE,
+        related_name="split_shares",
+    )
+    participant = models.ForeignKey(
+        Participant,
+        on_delete=models.PROTECT,
+        related_name="split_shares",
+    )
+    amount_minor = models.PositiveBigIntegerField()
+    method = models.CharField(max_length=16, choices=Method.choices)
+    percentage_basis_points = models.PositiveIntegerField(null=True, blank=True)
+
+    class Meta:
+        ordering = ("participant_id", "id")
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(amount_minor__gt=0),
+                name="split_share_amount_gt_0",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    Q(
+                        method="percentage",
+                        percentage_basis_points__gt=0,
+                        percentage_basis_points__lte=10_000,
+                    )
+                    | Q(
+                        method__in=("equal", "exact"),
+                        percentage_basis_points__isnull=True,
+                    )
+                ),
+                name="split_share_percentage_shape",
+            ),
+            models.UniqueConstraint(
+                fields=("transaction", "participant"),
+                condition=Q(deleted_at__isnull=True),
+                name="unique_active_split_share_participant",
+            ),
+        ]
+
+
+class Settlement(SyncableModel):
+    tracker = models.ForeignKey(Tracker, on_delete=models.PROTECT, related_name="settlements")
+    from_participant = models.ForeignKey(
+        Participant,
+        on_delete=models.PROTECT,
+        related_name="settlements_sent",
+    )
+    to_participant = models.ForeignKey(
+        Participant,
+        on_delete=models.PROTECT,
+        related_name="settlements_received",
+    )
+    amount_minor = models.PositiveBigIntegerField()
+    currency = models.CharField(max_length=3)
+    currency_exponent = models.PositiveSmallIntegerField()
+    occurred_at = models.DateTimeField(db_index=True)
+    note = models.TextField(blank=True, max_length=5000)
+    transaction = models.OneToOneField(
+        Transaction,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="settlement_record",
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="settlements_created",
+    )
+    last_editor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="settlements_edited",
+    )
+
+    class Meta:
+        ordering = ("-occurred_at", "-created_at")
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(amount_minor__gt=0),
+                name="settlement_amount_gt_0",
+            ),
+            models.CheckConstraint(
+                condition=~Q(from_participant=F("to_participant")),
+                name="settlement_distinct_participants",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=("tracker", "currency", "deleted_at")),
+        ]
+
+    def clean(self) -> None:
+        super().clean()
+        if self.from_participant_id and self.from_participant.tracker_id != self.tracker_id:
+            raise ValidationError({"from_participant": "Participant must use this tracker."})
+        if self.to_participant_id and self.to_participant.tracker_id != self.tracker_id:
+            raise ValidationError({"to_participant": "Participant must use this tracker."})
+        if (
+            self.transaction_id
+            and self.transaction is not None
+            and self.transaction.tracker_id != self.tracker_id
+        ):
+            raise ValidationError({"transaction": "Transaction must use this tracker."})
+
+
 class TransactionRevision(UUIDTimestampedModel):
     """Immutable financially material snapshot captured before a parent change."""
 
@@ -521,6 +704,42 @@ class AllocationRevision(UUIDTimestampedModel):
 
     class Meta:
         ordering = ("created_at",)
+
+
+class SplitPaymentRevision(UUIDTimestampedModel):
+    revision = models.ForeignKey(
+        TransactionRevision,
+        on_delete=models.CASCADE,
+        related_name="split_payments",
+    )
+    participant = models.ForeignKey(
+        Participant,
+        on_delete=models.PROTECT,
+        related_name="split_payment_revisions",
+    )
+    amount_minor = models.PositiveBigIntegerField()
+
+    class Meta:
+        ordering = ("participant_id", "id")
+
+
+class SplitShareRevision(UUIDTimestampedModel):
+    revision = models.ForeignKey(
+        TransactionRevision,
+        on_delete=models.CASCADE,
+        related_name="split_shares",
+    )
+    participant = models.ForeignKey(
+        Participant,
+        on_delete=models.PROTECT,
+        related_name="split_share_revisions",
+    )
+    amount_minor = models.PositiveBigIntegerField()
+    method = models.CharField(max_length=16, choices=SplitShare.Method.choices)
+    percentage_basis_points = models.PositiveIntegerField(null=True, blank=True)
+
+    class Meta:
+        ordering = ("participant_id", "id")
 
 
 class CategoryRevision(UUIDTimestampedModel):

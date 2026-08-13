@@ -142,6 +142,8 @@ struct PlansView: View {
 
                 if let selectedTracker {
                     RecurringPlansSection(scopeKey: scopeKey, tracker: selectedTracker)
+                    InstallmentPlansSection(scopeKey: scopeKey, tracker: selectedTracker)
+                    SplitBalancesSection(scopeKey: scopeKey, tracker: selectedTracker)
                 }
             }
             .padding()

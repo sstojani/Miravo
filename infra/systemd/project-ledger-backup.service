@@ -1,5 +1,5 @@
 [Unit]
-Description=Project Ledger encrypted backup
+Description=Miravo encrypted backup
 After=docker.service
 Requires=docker.service
 
@@ -14,4 +14,3 @@ PrivateTmp=true
 NoNewPrivileges=true
 ProtectSystem=strict
 ReadWritePaths=/var/backups/projectledger
-

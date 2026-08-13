@@ -46,6 +46,11 @@ struct SettingsView: View {
                     Label("Trackers, accounts, and categories", systemImage: "square.stack.3d.up")
                 }
                 NavigationLink {
+                    CollaborationSettingsView(scopeKey: scopeKey)
+                } label: {
+                    Label("Collaboration", systemImage: "person.2")
+                }
+                NavigationLink {
                     ShortcutSettingsView(scopeKey: scopeKey)
                 } label: {
                     Label("Apple Wallet Shortcut", systemImage: "bolt.horizontal.circle")

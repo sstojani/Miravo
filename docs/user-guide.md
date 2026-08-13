@@ -1,6 +1,6 @@
 # User guide
 
-Project Ledger remains useful without internet and without a Wallet Shortcut.
+Miravo remains useful without internet and without a Wallet Shortcut.
 
 ## First use
 
@@ -12,7 +12,9 @@ Open Quick Add, choose expense, income, or transfer, and enter the amount. Track
 
 Save commits the transaction, derived account movements, optional category allocation, conversion snapshot, and ordered outbox mutation locally without a network request. The confirmation bar offers Undo for eight seconds; Undo records a normal recoverable deletion and never waits for synchronization.
 
-Open an expense's detail screen to record a linked full or partial refund. A refund adds money back to the selected account while keeping its relationship to the historical expense. Tags can be created in Local Data, selected during entry/editing, searched, and filtered. Archiving a tag prevents new assignment while retaining it on historical transactions. Settlement, receipts, and splits arrive in their scheduled milestones.
+Open an expense's detail screen to record a linked full or partial refund. A refund adds money back to the selected account while keeping its relationship to the historical expense. Tags can be created in Local Data, selected during entry/editing, searched, and filtered. Archiving a tag prevents new assignment while retaining it on historical transactions. Receipt capture remains scheduled for Milestone 9.
+
+For a shared expense, open its detail and choose Add/Edit split. Select one or more payers, then divide what is owed equally, by exact minor-unit amounts, or by percentages with at most two decimal places. Paid and owed totals must each equal the expense exactly. The complete split and transaction update commit locally as one outbox command. Plans → Split balances derives who owes whom per currency from local posted expenses and settlements. An editor can record a partial/full settlement offline, with an optional same-currency account movement; linked settlement movements can be deleted/restored only through the settlement action.
 
 ## Finding transactions
 
@@ -32,17 +34,27 @@ Each budget retains its own currency, exponent, IANA time zone, civil start/end 
 
 Plans also keeps recurring expenses, recurring income, and subscriptions in the local store. Editors can create or edit a rule, pause or resume it, skip the next due date, end it, archive/restore it, or delete it while offline. The visible due pointer updates immediately and the command enters the outbox. Posted and skipped occurrence history remains server-authored; an offline skip does not fabricate a history row.
 
-Local reminders are optional and off by default. Enabling the toggle is the only action that asks iOS for notification permission. Choose the due time, one day, three days, or one week before; Project Ledger schedules the earliest 50 active future rules and refreshes them after local changes and successful synchronization. The lock-screen text is generic and never includes the amount, currency, merchant, note, rule name, or subscription provider. Plans shows permission and scheduled-count states, including a route to iOS Settings after denial. Turning reminders off or signing out removes the applicable pending requests. A missed or disabled notification never changes rule materialization or financial records.
+Local reminders are optional and off by default. Enabling the toggle is the only action that asks iOS for notification permission. Choose the due time, one day, three days, or one week before; recurring rules and installment next-due rows share the earliest 50 requests and refresh after local changes and successful synchronization. The lock-screen text is generic and never includes the amount, currency, merchant, note, rule, subscription, or installment name. Plans shows permission and scheduled-count states, including a route to iOS Settings after denial. Turning reminders off or signing out removes the applicable pending requests. A missed or disabled notification never changes financial records.
+
+## Installment plans
+
+Editors can create a weekly or monthly plan in Plans with principal, optional interest/fees, count or regular amount, start date, IANA time zone, account, and optional expense category. The app builds the exact schedule immediately and keeps the original monthly day anchor. Terms may be replaced only before any synchronized or pending payment; metadata can still be edited. Individual unpaid rows can be rescheduled or skipped, and skip appends a replacement at the end without erasing the original due date.
+
+Regular, extra, and payoff actions create the expense and account movement locally before any network request. If the plan and account use different currencies, enter the exact account-currency amount; if the plan differs from the tracker reporting currency, also enter the exact base amount. Miravo never invents either rate. Confirmed overpayment posts the full tender but applies only the remaining plan value. Until acknowledgement, the transaction shows pending and authoritative payment history remains empty; rejection/conflict is visible and unrelated synchronization continues.
 
 ## Shared trackers
 
-Owner controls ownership/deletion; admin manages settings/members; editor changes financial records; viewer is read-only. The synchronized collaborator roster and roles remain visible offline. The repository rejects viewer writes even if a stale screen attempts one; a role change received during pull updates the local permission state. Creating invitations and changing roles remain online collaboration work for Milestone 8. Expenses can eventually be split among registered/guest participants, and settlements will not count as spending.
+Owner controls ownership/deletion; admin manages settings/members; editor changes financial records; viewer is read-only. The synchronized collaborator roster and roles remain visible offline. The repository rejects viewer writes even if a stale screen attempts one; a role change received during pull updates the local permission state. Settings → Local Data manages persistent guest participants offline. The server creates one registered participant for each active invited member.
+
+Settings → Collaboration contains the deliberately online authority actions. Any signed-in user can enter an invitation code/link addressed to their account email. An owner/admin can select a tracker, create a 1–30 day admin/editor/viewer invitation, copy its one-time code for five minutes, list safe invitation metadata, and revoke a pending invitation. Eligible member roles can be changed or removed; the server remains authoritative and the app pulls the resulting roster. The app never stores the raw invitation code.
+
+When a guest later becomes a registered member, an admin can choose Merge guest into member. First synchronize or resolve every pending/failed/conflicting operation. Miravo requires synchronized versions for both identities, shows an irreversible confirmation, sends the authoritative merge, and then pulls the revised splits/settlements. Historical rows and revisions remain auditable. Ordinary split and settlement entry does not require connectivity; invitation, role, removal, and identity-merge actions do.
 
 ## Optional Apple Wallet Shortcut
 
 The app never needs the Shortcut for ordinary entry. When the server is reachable, Settings → Apple Wallet Shortcut can create a credential restricted to one editable tracker, show its account/category defaults, list active/expired/revoked credentials, create a replacement, and revoke an old token. The three fixed permissions can read expense categories/accounts and create expenses; they cannot read transaction history or use the normal app session.
 
-The raw token appears only after creation. Copy it into the Shortcut authorization header, then close the screen; Project Ledger does not persist it. The clipboard copy is local-only and expires after five minutes, but screenshots, keyboards, or other local software remain risks. During rotation, test the replacement before revoking the old credential. See `docs/shortcut-setup.md` for the versioned online and bounded queue flows. Those physical-iPhone construction steps remain unverified until a signed build and HTTPS server are available.
+The raw token appears only after creation. Copy it into the Shortcut authorization header, then close the screen; Miravo does not persist it. The clipboard copy is local-only and expires after five minutes, but screenshots, keyboards, or other local software remain risks. During rotation, test the replacement before revoking the old credential. See `docs/shortcut-setup.md` for the versioned online and bounded queue flows. Those physical-iPhone construction steps remain unverified until a signed build and HTTPS server are available.
 
 ## Privacy and recovery
 

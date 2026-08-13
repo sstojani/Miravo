@@ -21,6 +21,8 @@ from apps.ledger.models import (
     Account,
     Category,
     Merchant,
+    Participant,
+    Settlement,
     Tag,
     Tracker,
     TrackerMembership,
@@ -41,10 +43,18 @@ from apps.ledger.serializers import (
     MembershipSerializer,
     MembershipUpdateSerializer,
     MerchantSerializer,
+    ParticipantBalanceSerializer,
+    ParticipantMergeSerializer,
+    ParticipantSerializer,
+    SettlementSerializer,
+    SettlementWriteSerializer,
+    SimplifiedDebtSerializer,
+    SplitBalanceResponseSerializer,
     TagSerializer,
     TrackerSerializer,
     TransactionReadSerializer,
     TransactionRevisionSerializer,
+    TransactionSplitUpdateSerializer,
     TransactionWriteSerializer,
     TransferOwnershipSerializer,
 )
@@ -54,6 +64,17 @@ from apps.ledger.services.collaboration import (
     create_tracker,
     request_id,
     transfer_tracker_ownership,
+)
+from apps.ledger.services.settlements import (
+    create_settlement,
+    restore_settlement,
+    tombstone_settlement,
+)
+from apps.ledger.services.splitting import (
+    merge_guest_participant,
+    participant_balances,
+    replace_transaction_split,
+    simplify_debts,
 )
 from apps.ledger.services.taxonomy import merge_category, snapshot_category
 from apps.ledger.services.transactions import (
@@ -684,6 +705,204 @@ class MerchantViewSet(viewsets.ModelViewSet):  # type: ignore[type-arg]
         )
 
 
+class ParticipantViewSet(viewsets.ModelViewSet):  # type: ignore[type-arg]
+    serializer_class = ParticipantSerializer
+    queryset = Participant.objects.none()
+
+    def get_queryset(self) -> QuerySet[Participant]:
+        queryset = Participant.objects.filter(
+            tracker__in=visible_trackers(_user(self.request)),
+            deleted_at__isnull=True,
+        ).select_related("tracker", "linked_user")
+        tracker_id = self.request.query_params.get("tracker_id")
+        if tracker_id:
+            queryset = queryset.filter(tracker_id=tracker_id)
+        if self.action != "restore" and not _include_archived(self.request):
+            queryset = queryset.filter(archived_at__isnull=True)
+        return queryset
+
+    def perform_create(self, serializer: ParticipantSerializer) -> None:  # type: ignore[override]
+        tracker = cast(Tracker, serializer.validated_data["tracker"])
+        require_tracker_role(_user(self.request), tracker, TrackerMembership.Role.EDITOR)
+        participant = cast(Participant, serializer.save())
+        record_audit_event(
+            actor=_user(self.request),
+            tracker_id=tracker.id,
+            action="participant.guest_created",
+            target_type="participant",
+            target_id=participant.id,
+            request_id=request_id(self.request),
+        )
+
+    def perform_update(self, serializer: ParticipantSerializer) -> None:  # type: ignore[override]
+        participant = cast(Participant, self.get_object())
+        minimum_role = (
+            TrackerMembership.Role.ADMIN
+            if participant.linked_user_id is not None
+            else TrackerMembership.Role.EDITOR
+        )
+        require_tracker_role(_user(self.request), participant.tracker, minimum_role)
+        if serializer.validated_data.get("tracker", participant.tracker) != participant.tracker:
+            raise ValidationError({"tracker_id": "A participant cannot change tracker."})
+        serializer.save(version=participant.version + 1)
+        record_audit_event(
+            actor=_user(self.request),
+            tracker_id=participant.tracker_id,
+            action="participant.updated",
+            target_type="participant",
+            target_id=participant.id,
+            request_id=request_id(self.request),
+        )
+
+    def perform_destroy(self, instance: Participant) -> None:
+        if instance.linked_user_id is not None:
+            raise ValidationError(
+                {"participant": "Registered participants remain available for shared history."}
+            )
+        require_tracker_role(_user(self.request), instance.tracker, TrackerMembership.Role.EDITOR)
+        if instance.archived_at is None:
+            instance.archived_at = timezone.now()
+            instance.version += 1
+            instance.save(update_fields=("archived_at", "version", "updated_at"))
+            record_audit_event(
+                actor=_user(self.request),
+                tracker_id=instance.tracker_id,
+                action="participant.archived",
+                target_type="participant",
+                target_id=instance.id,
+                request_id=request_id(self.request),
+            )
+
+    @extend_schema(responses=ParticipantSerializer)
+    @action(detail=True, methods=["post"], url_path="restore")
+    def restore(self, request: Request, pk: str | None = None) -> Response:
+        del pk
+        participant = self.get_object()
+        require_tracker_role(_user(request), participant.tracker, TrackerMembership.Role.EDITOR)
+        if participant.archived_at is not None:
+            participant.archived_at = None
+            participant.version += 1
+            participant.save(update_fields=("archived_at", "version", "updated_at"))
+            record_audit_event(
+                actor=_user(request),
+                tracker_id=participant.tracker_id,
+                action="participant.restored",
+                target_type="participant",
+                target_id=participant.id,
+                request_id=request_id(request),
+            )
+        return Response(self.get_serializer(participant).data)
+
+    @extend_schema(request=ParticipantMergeSerializer, responses=ParticipantSerializer)
+    @action(detail=True, methods=["post"], url_path="merge")
+    def merge(self, request: Request, pk: str | None = None) -> Response:
+        del pk
+        source = self.get_object()
+        serializer = ParticipantMergeSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        target = get_object_or_404(
+            Participant.objects.select_related("tracker", "linked_user"),
+            id=serializer.validated_data["target_participant_id"],
+            tracker=source.tracker,
+            deleted_at__isnull=True,
+        )
+        merged = merge_guest_participant(
+            source=source,
+            target=target,
+            actor=_user(request),
+            base_version=serializer.validated_data["base_version"],
+            request=request,
+        )
+        return Response(ParticipantSerializer(merged).data)
+
+
+class SettlementViewSet(viewsets.ModelViewSet):  # type: ignore[type-arg]
+    queryset = Settlement.objects.none()
+    http_method_names = ["get", "post", "delete", "head", "options"]
+
+    def get_queryset(self) -> QuerySet[Settlement]:
+        queryset = Settlement.objects.filter(
+            tracker__in=visible_trackers(_user(self.request))
+        ).select_related(
+            "tracker",
+            "from_participant",
+            "to_participant",
+            "transaction",
+            "created_by",
+            "last_editor",
+        )
+        if (
+            self.action != "restore"
+            and self.request.query_params.get("include_deleted", "").lower() != "true"
+        ):
+            queryset = queryset.filter(deleted_at__isnull=True)
+        for parameter in ("tracker_id", "currency", "from_participant_id", "to_participant_id"):
+            value = self.request.query_params.get(parameter)
+            if value:
+                queryset = queryset.filter(**{parameter: value})
+        return queryset
+
+    def get_serializer_class(self) -> type[SettlementWriteSerializer | SettlementSerializer]:
+        return SettlementWriteSerializer if self.action == "create" else SettlementSerializer
+
+    @extend_schema(request=SettlementWriteSerializer, responses={201: SettlementSerializer})
+    def create(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        del args, kwargs
+        serializer = SettlementWriteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        values = dict(serializer.validated_data)
+        values.pop("base_version", None)
+        settlement = create_settlement(data=values, actor=_user(request), request=request)
+        return Response(SettlementSerializer(settlement).data, status=status.HTTP_201_CREATED)
+
+    def destroy(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        del args, kwargs
+        serializer = BaseVersionSerializer(
+            data={"base_version": request.query_params.get("base_version")}
+        )
+        serializer.is_valid(raise_exception=True)
+        tombstone_settlement(
+            settlement=self.get_object(),
+            actor=_user(request),
+            base_version=serializer.validated_data["base_version"],
+            request=request,
+        )
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @extend_schema(request=BaseVersionSerializer, responses=SettlementSerializer)
+    @action(detail=True, methods=["post"], url_path="restore")
+    def restore(self, request: Request, pk: str | None = None) -> Response:
+        del pk
+        serializer = BaseVersionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        settlement = restore_settlement(
+            settlement=self.get_object(),
+            actor=_user(request),
+            base_version=serializer.validated_data["base_version"],
+            request=request,
+        )
+        return Response(SettlementSerializer(settlement).data)
+
+
+class SplitBalanceView(APIView):
+    @extend_schema(responses=SplitBalanceResponseSerializer)
+    def get(self, request: Request) -> Response:
+        tracker_id = request.query_params.get("tracker_id")
+        if not tracker_id:
+            raise ValidationError({"tracker_id": "This filter is required."})
+        tracker = get_object_or_404(visible_trackers(_user(request)), id=tracker_id)
+        require_tracker_role(_user(request), tracker, TrackerMembership.Role.VIEWER)
+        balances = participant_balances(tracker)
+        debts = simplify_debts(balances)
+        return Response(
+            {
+                "tracker_id": str(tracker.id),
+                "balances": ParticipantBalanceSerializer(cast(Any, balances), many=True).data,
+                "simplified_debts": SimplifiedDebtSerializer(cast(Any, debts), many=True).data,
+            }
+        )
+
+
 class TransactionViewSet(viewsets.ModelViewSet):  # type: ignore[type-arg]
     queryset = Transaction.objects.none()
     http_method_names = ["get", "post", "put", "delete", "head", "options"]
@@ -692,7 +911,13 @@ class TransactionViewSet(viewsets.ModelViewSet):  # type: ignore[type-arg]
         queryset = (
             Transaction.objects.filter(tracker__in=visible_trackers(_user(self.request)))
             .select_related("tracker", "merchant", "creator", "last_editor", "refund_of")
-            .prefetch_related("movements", "allocations", "transaction_tags")
+            .prefetch_related(
+                "movements",
+                "allocations",
+                "transaction_tags",
+                "split_payments__participant",
+                "split_shares__participant",
+            )
         )
         if self.request.query_params.get("include_deleted", "").lower() != "true":
             queryset = queryset.filter(deleted_at__isnull=True)
@@ -765,13 +990,56 @@ class TransactionViewSet(viewsets.ModelViewSet):  # type: ignore[type-arg]
         )
         return Response(TransactionReadSerializer(record).data)
 
+    @extend_schema(
+        request=TransactionSplitUpdateSerializer,
+        responses=TransactionReadSerializer,
+    )
+    @action(detail=True, methods=["put"], url_path="split")
+    def split(self, request: Request, pk: str | None = None) -> Response:
+        del pk
+        serializer = TransactionSplitUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        record = replace_transaction_split(
+            record=self.get_object(),
+            value=serializer.validated_data["split"],
+            actor=_user(request),
+            base_version=serializer.validated_data["base_version"],
+            request=request,
+        )
+        return Response(TransactionReadSerializer(record).data)
+
+    @extend_schema(
+        parameters=[OpenApiParameter("base_version", OpenApiTypes.INT, OpenApiParameter.QUERY)],
+        responses={204: None},
+    )
+    @split.mapping.delete
+    def clear_split(self, request: Request, pk: str | None = None) -> Response:
+        del pk
+        serializer = BaseVersionSerializer(
+            data={"base_version": request.query_params.get("base_version")}
+        )
+        serializer.is_valid(raise_exception=True)
+        replace_transaction_split(
+            record=self.get_object(),
+            value=None,
+            actor=_user(request),
+            base_version=serializer.validated_data["base_version"],
+            request=request,
+        )
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
     @extend_schema(responses=TransactionRevisionSerializer(many=True))
     @action(detail=True, methods=["get"], url_path="revisions")
     def revisions(self, request: Request, pk: str | None = None) -> Response:
         del pk
         record = self.get_object()
         require_tracker_role(_user(request), record.tracker, TrackerMembership.Role.ADMIN)
-        revisions = record.revisions.prefetch_related("movements", "allocations")
+        revisions = record.revisions.prefetch_related(
+            "movements",
+            "allocations",
+            "split_payments",
+            "split_shares",
+        )
         return Response(TransactionRevisionSerializer(revisions, many=True).data)
 
 

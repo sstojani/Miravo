@@ -4,7 +4,7 @@ import calendar
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from decimal import Decimal
-from uuid import UUID
+from uuid import UUID, uuid5
 
 from django.db import IntegrityError, transaction
 from django.db.models import Sum
@@ -25,6 +25,7 @@ from apps.planning.models import (
 from apps.users.models import User
 
 MAX_INSTALLMENT_COUNT = 600
+INSTALLMENT_SCHEDULE_NAMESPACE = UUID("d8c75720-0d53-4cfa-9f9a-c89a78737760")
 
 
 @dataclass(frozen=True)
@@ -56,6 +57,13 @@ class InstallmentProgress:
             "next_due_on": self.next_due_on,
             "estimated_payoff_on": self.estimated_payoff_on,
         }
+
+
+def schedule_item_id(plan_id: UUID, revision_number: int, sequence: int) -> UUID:
+    if revision_number < 1 or sequence < 1:
+        raise ValueError("Installment schedule identity requires positive revision and sequence.")
+    name = f"project-ledger:installment-schedule:{plan_id}:{revision_number}:{sequence}"
+    return uuid5(INSTALLMENT_SCHEDULE_NAMESPACE, name)
 
 
 def planned_total_minor(principal_minor: int, interest_minor: int, fees_minor: int) -> int:
@@ -208,6 +216,7 @@ def create_schedule_items(plan: InstallmentPlan) -> list[InstallmentScheduleItem
     )
     return [
         InstallmentScheduleItem.objects.create(
+            id=schedule_item_id(plan.id, plan.revision_number, row.sequence),
             plan=plan,
             tracker=plan.tracker,
             revision_number=plan.revision_number,
@@ -456,6 +465,7 @@ def skip_installment_item(
         anchor_day=locked.anchor_day,
     )
     replacement = InstallmentScheduleItem.objects.create(
+        id=schedule_item_id(locked.id, new_revision, int(last_sequence) + 1),
         plan=locked,
         tracker=locked.tracker,
         revision_number=new_revision,

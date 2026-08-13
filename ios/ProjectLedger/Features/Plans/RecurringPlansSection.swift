@@ -121,12 +121,6 @@ struct RecurringPlansSection: View {
 
             reminderSettingsCard
 
-            Label(
-                "Installment plans are the next planning slice.",
-                systemImage: "calendar.badge.plus"
-            )
-            .font(.caption)
-            .foregroundStyle(.secondary)
         }
         .sheet(item: $sheet) { destination in
             RecurringRuleEditorView(
@@ -158,7 +152,7 @@ struct RecurringPlansSection: View {
     private var reminderSettingsCard: some View {
         VStack(alignment: .leading, spacing: LedgerTheme.smallSpacing) {
             Toggle(
-                "Local recurring reminders",
+                "Local plan reminders",
                 isOn: Binding(
                     get: { reminders.isEnabled },
                     set: { enabled in
@@ -202,7 +196,7 @@ struct RecurringPlansSection: View {
                 .buttonStyle(.bordered)
             }
 
-            Text("Reminder notifications use generic text and never show an amount, merchant, note, or subscription name.")
+            Text("Reminder notifications use generic text and never show an amount, merchant, note, subscription, or installment name.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
 

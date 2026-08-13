@@ -79,7 +79,7 @@ private struct LocalStoreRecoveryView: View {
         ContentUnavailableView {
             Label("Local data needs attention", systemImage: "externaldrive.badge.exclamationmark")
         } description: {
-            Text("Project Ledger did not erase or replace the persistent store. Do not delete the app if it may contain unsynchronized records. Restart once, then use the documented recovery steps if this message returns.")
+            Text("Miravo did not erase or replace the persistent store. Do not delete the app if it may contain unsynchronized records. Restart once, then use the documented recovery steps if this message returns.")
         } actions: {
             Text("Support code: local_store_unavailable")
                 .font(.caption.monospaced())

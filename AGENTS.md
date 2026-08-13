@@ -1,4 +1,4 @@
-# Project Ledger agent runbook
+# Miravo (Project Ledger) agent runbook
 
 This repository contains a high-sensitivity, offline-first personal-finance system. Read `PROMPT.md`, `PLAN.md`, `IMPLEMENT.md`, `DECISIONS.md`, `SECURITY.md`, and the relevant documentation before making material changes.
 
@@ -41,4 +41,3 @@ iOS builds and tests require macOS/Xcode and are executed by GitHub Actions unti
 ## Stop conditions
 
 Ask before real deployment, DNS/Funnel/firewall/SSH/user changes, production secret changes, destructive real-data migration, remote pushes/releases, paid services, or final brand/bundle decisions.
-

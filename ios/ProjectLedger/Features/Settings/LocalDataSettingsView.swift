@@ -6,10 +6,12 @@ private enum LocalDataSheet: Identifiable {
     case addAccount
     case addCategory
     case addTag
+    case addParticipant
     case editTracker(LocalTracker)
     case renameAccount(LocalAccount)
     case renameCategory(LocalCategory)
     case renameTag(LocalTag)
+    case renameParticipant(LocalParticipant)
 
     var id: String {
         switch self {
@@ -17,10 +19,12 @@ private enum LocalDataSheet: Identifiable {
         case .addAccount: "add-account"
         case .addCategory: "add-category"
         case .addTag: "add-tag"
+        case .addParticipant: "add-participant"
         case let .editTracker(item): "tracker-\(item.id)"
         case let .renameAccount(item): "account-\(item.id)"
         case let .renameCategory(item): "category-\(item.id)"
         case let .renameTag(item): "tag-\(item.id)"
+        case let .renameParticipant(item): "participant-\(item.id)"
         }
     }
 }
@@ -36,6 +40,7 @@ struct LocalDataSettingsView: View {
     @Query private var accounts: [LocalAccount]
     @Query private var categories: [LocalCategory]
     @Query private var tags: [LocalTag]
+    @Query private var participants: [LocalParticipant]
     @State private var sheet: LocalDataSheet?
     @State private var safeError: String?
 
@@ -67,6 +72,10 @@ struct LocalDataSettingsView: View {
             filter: #Predicate { $0.scopeKey == scopeKey && $0.deletedAt == nil },
             sort: \LocalTag.name
         )
+        _participants = Query(
+            filter: #Predicate { $0.scopeKey == scopeKey && $0.deletedAt == nil },
+            sort: \LocalParticipant.displayName
+        )
     }
 
     private var activeTrackers: [LocalTracker] {
@@ -94,6 +103,11 @@ struct LocalDataSettingsView: View {
     private var visibleTags: [LocalTag] {
         let trackerIDs = Set(trackers.map(\.id))
         return tags.filter { trackerIDs.contains($0.trackerID) }
+    }
+
+    private var visibleParticipants: [LocalParticipant] {
+        let trackerIDs = Set(trackers.map(\.id))
+        return participants.filter { trackerIDs.contains($0.trackerID) }
     }
 
     var body: some View {
@@ -139,6 +153,34 @@ struct LocalDataSettingsView: View {
                 }
             } footer: {
                 Text("The synchronized roster remains visible offline. Invitations and role changes require a connection.")
+            }
+
+            Section("Split participants") {
+                ForEach(visibleParticipants) { participant in
+                    EntityRow(
+                        name: participant.displayName,
+                        detail: "\(trackerName(id: participant.trackerID)) · \(participant.isRegistered ? String(localized: "Registered member") : String(localized: "Guest participant"))",
+                        symbol: participant.isRegistered ? "person.crop.circle.badge.checkmark" : "person.crop.circle.badge.plus",
+                        colorHex: "#6E56CF",
+                        archived: participant.archivedAt != nil
+                    )
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        if canRename(participant) { sheet = .renameParticipant(participant) }
+                    }
+                    .swipeActions {
+                        if !participant.isRegistered && canEdit(trackerID: participant.trackerID) {
+                            archiveButton(archived: participant.archivedAt != nil) {
+                                try repository.setParticipantArchived(
+                                    participant,
+                                    archived: participant.archivedAt == nil
+                                )
+                            }
+                        }
+                    }
+                }
+            } footer: {
+                Text("Guests can share costs without an account. Registered members are synchronized from the tracker roster.")
             }
 
             Section("Accounts") {
@@ -241,6 +283,10 @@ struct LocalDataSettingsView: View {
                     sheet = .addTag
                 }
                 .disabled(editableTrackers.isEmpty)
+                Button("New guest participant", systemImage: "person.badge.plus") {
+                    sheet = .addParticipant
+                }
+                .disabled(editableTrackers.isEmpty)
             } label: {
                 Label("Add", systemImage: "plus")
             }
@@ -255,6 +301,8 @@ struct LocalDataSettingsView: View {
                 AddCategorySheet(scopeKey: scopeKey, trackers: editableTrackers)
             case .addTag:
                 AddTagSheet(scopeKey: scopeKey, trackers: editableTrackers)
+            case .addParticipant:
+                AddParticipantSheet(scopeKey: scopeKey, trackers: editableTrackers)
             case let .editTracker(item):
                 TrackerEditorSheet(
                     tracker: item,
@@ -276,6 +324,14 @@ struct LocalDataSettingsView: View {
                     try repository.renameTag(item, name: name)
                     requestSync()
                 }
+            case let .renameParticipant(item):
+                RenameSheet(
+                    title: "Rename participant",
+                    currentName: item.displayName
+                ) { name in
+                    try repository.renameParticipant(item, displayName: name)
+                    requestSync()
+                }
             }
         }
         .alert("Could not save", isPresented: Binding(
@@ -294,6 +350,14 @@ struct LocalDataSettingsView: View {
 
     private func canEdit(trackerID: UUID) -> Bool {
         trackers.first { $0.id == trackerID }?.role.canEditFinancialData == true
+    }
+
+    private func canRename(_ participant: LocalParticipant) -> Bool {
+        guard let tracker = trackers.first(where: { $0.id == participant.trackerID }) else {
+            return false
+        }
+        return participant.isRegistered
+            ? tracker.role.canManageTracker : tracker.role.canEditFinancialData
     }
 
     private func trackerName(id: UUID) -> String {
@@ -786,6 +850,55 @@ private struct AddTagSheet: View {
     }
 }
 
+private struct AddParticipantSheet: View {
+    let scopeKey: String
+    let trackers: [LocalTracker]
+
+    @Environment(\.modelContext) private var modelContext
+    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var session: SessionController
+    @EnvironmentObject private var sync: SyncController
+    @State private var name = ""
+    @State private var trackerID: UUID?
+    @State private var safeError: String?
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                TextField("Participant name", text: $name)
+                Picker("Tracker", selection: $trackerID) {
+                    ForEach(trackers) { tracker in
+                        Text(tracker.name).tag(Optional(tracker.id))
+                    }
+                }
+                Text("A guest can participate in splits without creating a Miravo account.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                if let safeError { Text(safeError).foregroundStyle(LedgerTheme.negative) }
+            }
+            .navigationTitle("New guest participant")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { editorToolbar(save: save, dismiss: dismiss) }
+            .onAppear { trackerID = trackerID ?? trackers.first?.id }
+        }
+    }
+
+    private func save() {
+        guard let tracker = trackers.first(where: { $0.id == trackerID }) else { return }
+        do {
+            try LocalLedgerRepository(context: modelContext).createGuestParticipant(
+                scopeKey: scopeKey,
+                tracker: tracker,
+                displayName: name
+            )
+            Task { await sync.synchronize(session: session) }
+            dismiss()
+        } catch {
+            safeError = String(localized: "Enter a unique nonempty participant name.")
+        }
+    }
+}
+
 @ToolbarContentBuilder
 private func editorToolbar(save: @escaping () -> Void, dismiss: DismissAction) -> some ToolbarContent {
     ToolbarItem(placement: .cancellationAction) {
@@ -814,17 +927,6 @@ private extension LocalCategoryKind {
         switch self {
         case .expense: String(localized: "Expense")
         case .income: String(localized: "Income")
-        }
-    }
-}
-
-private extension TrackerRole {
-    var displayName: String {
-        switch self {
-        case .owner: String(localized: "Owner")
-        case .admin: String(localized: "Admin")
-        case .editor: String(localized: "Editor")
-        case .viewer: String(localized: "Viewer")
         }
     }
 }

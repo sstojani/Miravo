@@ -99,7 +99,7 @@ struct LoginView: View {
                 .frame(maxWidth: 620)
                 .frame(maxWidth: .infinity)
             }
-            .navigationTitle("Project Ledger")
+            .navigationTitle("Miravo")
             .navigationBarTitleDisplayMode(.inline)
             .onAppear {
                 if serverURL.isEmpty { serverURL = session.preferences.serverURLString }

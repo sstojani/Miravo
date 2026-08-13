@@ -18,6 +18,7 @@ from apps.audit.services import record_audit_event
 from apps.ledger.currency import normalize_currency
 from apps.ledger.models import (
     Category,
+    Participant,
     Tracker,
     TrackerInvite,
     TrackerMembership,
@@ -47,6 +48,37 @@ def request_id(request: Any | None) -> str:
     return str(getattr(request, "request_id", ""))
 
 
+def participant_name_for_user(user: User) -> str:
+    profile = getattr(user, "profile", None)
+    display_name = str(getattr(profile, "display_name", "")).strip()
+    return (display_name or user.email)[:120]
+
+
+def ensure_registered_participant(
+    *,
+    tracker: Tracker,
+    user: User,
+    actor: User,
+    request: Any | None = None,
+) -> Participant:
+    participant, created = Participant.objects.get_or_create(
+        tracker=tracker,
+        linked_user=user,
+        deleted_at__isnull=True,
+        defaults={"display_name": participant_name_for_user(user)},
+    )
+    if created:
+        record_audit_event(
+            actor=actor,
+            tracker_id=tracker.id,
+            action="participant.registered_created",
+            target_type="participant",
+            target_id=participant.id,
+            request_id=request_id(request),
+        )
+    return participant
+
+
 @transaction.atomic
 def create_tracker(
     *,
@@ -65,6 +97,12 @@ def create_tracker(
         role=TrackerMembership.Role.OWNER,
         state=TrackerMembership.State.ACTIVE,
         joined_at=timezone.now(),
+    )
+    ensure_registered_participant(
+        tracker=tracker,
+        user=owner,
+        actor=owner,
+        request=request,
     )
     for index, (kind, name, icon, color) in enumerate(DEFAULT_CATEGORIES):
         Category.objects.create(
@@ -221,6 +259,12 @@ def accept_invite(*, user: User, raw_token: str, request: Any | None = None) -> 
     invite.accepted_by = user
     invite.accepted_at = now
     invite.save(update_fields=("accepted_by", "accepted_at", "updated_at"))
+    ensure_registered_participant(
+        tracker=invite.tracker,
+        user=user,
+        actor=user,
+        request=request,
+    )
     record_audit_event(
         actor=user,
         tracker_id=invite.tracker_id,

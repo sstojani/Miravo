@@ -15,9 +15,9 @@ Safe local code/docs/tests/fixtures/CI work is authorized. Stop before real Ubun
 | Input | Value |
 |---|---|
 | Internal codename | Project Ledger |
-| Final app name | Configurable; provisional Project Ledger |
+| Final app name | Miravo |
 | Bundle ID | Configurable; provisional `com.example.projectledger` |
-| Repository URL | Unknown/blank |
+| Repository URL | `https://github.com/sstojani/Miravo.git` |
 | Public API URL | Configurable HTTPS `*.ts.net`; unknown/blank |
 | Server | Owner’s Ubuntu Linux home server; deployment later |
 | Connectivity | Tailscale installed; Funnel access later |
@@ -208,4 +208,3 @@ All required features implemented or owner-accepted deferral; useful without Sho
 - GitHub Apple certificates: https://docs.github.com/actions/use-cases-and-examples/deploying/installing-an-apple-certificate-on-macos-runners-for-xcode-development
 - Codex best practices: https://learn.chatgpt.com/guides/best-practices
 - Codex long-horizon workflow: https://developers.openai.com/blog/run-long-horizon-tasks-with-codex
-

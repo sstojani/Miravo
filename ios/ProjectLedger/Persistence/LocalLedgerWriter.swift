@@ -6,7 +6,14 @@ enum LocalLedgerError: Error, Equatable {
     case invalidReference
     case archivedReference
     case invalidTransactionKind
+    case invalidSplit
+    case settlementExceedsDebt
     case permissionDenied
+}
+
+private struct PreparedLocalSplit {
+    let payments: [LocalSplitPaymentInput]
+    let shares: [LocalResolvedSplitShare]
 }
 
 @MainActor
@@ -323,6 +330,376 @@ struct LocalLedgerRepository {
             tag.archivedAt = archived ? .now : nil
             touch(tag)
             try enqueue(tag, command: archived ? .archive : .restore)
+        }
+    }
+
+    @discardableResult
+    func createGuestParticipant(
+        scopeKey: String,
+        tracker: LocalTracker,
+        displayName: String
+    ) throws -> LocalParticipant {
+        try validate(tracker: tracker, scopeKey: scopeKey)
+        let name = try validatedName(displayName)
+        try ensureUniqueGuestParticipantName(
+            name,
+            trackerID: tracker.id,
+            scopeKey: scopeKey
+        )
+        let participant = LocalParticipant(
+            scopeKey: scopeKey,
+            trackerID: tracker.id,
+            displayName: name
+        )
+        try commit {
+            context.insert(participant)
+            try enqueue(participant, command: .create)
+        }
+        return participant
+    }
+
+    func renameParticipant(
+        _ participant: LocalParticipant,
+        displayName: String
+    ) throws {
+        let tracker = try tracker(id: participant.trackerID, scopeKey: participant.scopeKey)
+        if participant.isRegistered {
+            try validateManagementAccess(to: tracker, scopeKey: participant.scopeKey)
+        } else {
+            try validateEditorAccess(to: tracker, scopeKey: participant.scopeKey)
+        }
+        guard participant.deletedAt == nil else { throw LocalLedgerError.invalidReference }
+        let name = try validatedName(displayName)
+        if !participant.isRegistered {
+            try ensureUniqueGuestParticipantName(
+                name,
+                trackerID: participant.trackerID,
+                scopeKey: participant.scopeKey,
+                excluding: participant.id
+            )
+        }
+        try commit {
+            participant.displayName = name
+            touch(participant)
+            try enqueue(participant, command: .update)
+        }
+    }
+
+    func setParticipantArchived(
+        _ participant: LocalParticipant,
+        archived: Bool
+    ) throws {
+        try validateTrackerAccess(id: participant.trackerID, scopeKey: participant.scopeKey)
+        guard !participant.isRegistered,
+              participant.deletedAt == nil
+        else {
+            throw LocalLedgerError.invalidReference
+        }
+        try commit {
+            participant.archivedAt = archived ? .now : nil
+            touch(participant)
+            try enqueue(participant, command: archived ? .archive : .restore)
+        }
+    }
+
+    func replaceTransactionSplit(
+        _ transaction: LedgerTransaction,
+        split: LocalTransactionSplitInput?
+    ) throws {
+        try validateTrackerAccess(id: transaction.trackerID, scopeKey: transaction.scopeKey)
+        try validateSplittableTransaction(transaction)
+        let prepared = try split.map {
+            try prepareSplit(
+                $0,
+                amountMinor: transaction.amountMinor,
+                trackerID: transaction.trackerID,
+                scopeKey: transaction.scopeKey
+            )
+        }
+        try commit {
+            try applySplit(prepared, to: transaction)
+            transaction.updatedAt = .now
+            transaction.syncStateRaw = LocalSyncState.pending.rawValue
+            let splitMutation: TransactionSplitMutationValue
+            if prepared == nil {
+                splitMutation = .none
+            } else {
+                splitMutation = try mutationSplitValue(for: transaction)
+            }
+            try enqueue(
+                transaction,
+                command: .update,
+                splitMutation: splitMutation
+            )
+        }
+    }
+
+    func participantBalances(
+        tracker: LocalTracker
+    ) throws -> [LocalParticipantBalance] {
+        try validateAccess(to: tracker, scopeKey: tracker.scopeKey)
+        let scopeKey = tracker.scopeKey
+        let trackerID = tracker.id
+        let participants = try context.fetch(
+            FetchDescriptor<LocalParticipant>(
+                predicate: #Predicate {
+                    $0.scopeKey == scopeKey &&
+                        $0.trackerID == trackerID &&
+                        $0.deletedAt == nil
+                }
+            )
+        )
+        let names = Dictionary(uniqueKeysWithValues: participants.map { ($0.id, $0.displayName) })
+        let transactions = try context.fetch(
+            FetchDescriptor<LedgerTransaction>(
+                predicate: #Predicate {
+                    $0.scopeKey == scopeKey &&
+                        $0.trackerID == trackerID &&
+                        $0.deletedAt == nil
+                }
+            )
+        ).filter {
+            $0.kind == .expense && ($0.status == .posted || $0.status == .reconciled)
+        }
+        let transactionByID = Dictionary(uniqueKeysWithValues: transactions.map { ($0.id, $0) })
+        var contributions = [LocalBalanceContribution]()
+        for payment in try context.fetch(
+            FetchDescriptor<LocalSplitPayment>(
+                predicate: #Predicate { $0.scopeKey == scopeKey }
+            )
+        ) {
+            guard let transaction = transactionByID[payment.transactionID] else { continue }
+            guard payment.amountMinor > 0, names[payment.participantID] != nil else {
+                throw LocalLedgerError.invalidSplit
+            }
+            contributions.append(
+                LocalBalanceContribution(
+                    participantID: payment.participantID,
+                    currencyCode: transaction.currencyCode,
+                    currencyExponent: transaction.currencyExponent,
+                    amountMinor: payment.amountMinor
+                )
+            )
+        }
+        for share in try context.fetch(
+            FetchDescriptor<LocalSplitShare>(
+                predicate: #Predicate { $0.scopeKey == scopeKey }
+            )
+        ) {
+            guard let transaction = transactionByID[share.transactionID] else { continue }
+            guard share.amountMinor > 0, names[share.participantID] != nil else {
+                throw LocalLedgerError.invalidSplit
+            }
+            contributions.append(
+                LocalBalanceContribution(
+                    participantID: share.participantID,
+                    currencyCode: transaction.currencyCode,
+                    currencyExponent: transaction.currencyExponent,
+                    amountMinor: -share.amountMinor
+                )
+            )
+        }
+        for settlement in try context.fetch(
+            FetchDescriptor<LocalSettlement>(
+                predicate: #Predicate {
+                    $0.scopeKey == scopeKey &&
+                        $0.trackerID == trackerID &&
+                        $0.deletedAt == nil
+                }
+            )
+        ) {
+            guard settlement.amountMinor > 0,
+                  names[settlement.fromParticipantID] != nil,
+                  names[settlement.toParticipantID] != nil
+            else {
+                throw LocalLedgerError.invalidReference
+            }
+            contributions.append(
+                LocalBalanceContribution(
+                    participantID: settlement.fromParticipantID,
+                    currencyCode: settlement.currencyCode,
+                    currencyExponent: settlement.currencyExponent,
+                    amountMinor: settlement.amountMinor
+                )
+            )
+            contributions.append(
+                LocalBalanceContribution(
+                    participantID: settlement.toParticipantID,
+                    currencyCode: settlement.currencyCode,
+                    currencyExponent: settlement.currencyExponent,
+                    amountMinor: -settlement.amountMinor
+                )
+            )
+        }
+        return try LocalSplitCalculator.balances(
+            contributions: contributions,
+            names: names
+        )
+    }
+
+    func simplifiedDebts(tracker: LocalTracker) throws -> [LocalSimplifiedDebt] {
+        try LocalSplitCalculator.simplifyDebts(
+            balances: participantBalances(tracker: tracker)
+        )
+    }
+
+    @discardableResult
+    func createSettlement(
+        scopeKey: String,
+        tracker: LocalTracker,
+        from: LocalParticipant,
+        to: LocalParticipant,
+        money: Money,
+        occurredAt: Date = .now,
+        note: String = "",
+        account: LocalAccount? = nil,
+        accountMoney: Money? = nil,
+        baseMoney: Money? = nil,
+        settlementID: UUID = UUID(),
+        transactionID: UUID = UUID()
+    ) throws -> LocalSettlement {
+        try validate(tracker: tracker, scopeKey: scopeKey)
+        try validateActiveParticipant(from, tracker: tracker, scopeKey: scopeKey)
+        try validateActiveParticipant(to, tracker: tracker, scopeKey: scopeKey)
+        guard from.id != to.id, money.minorUnits > 0 else {
+            throw LocalLedgerError.invalidReference
+        }
+        let maximum = try maximumSettlementAmount(
+            tracker: tracker,
+            fromParticipantID: from.id,
+            toParticipantID: to.id,
+            currencyCode: money.currencyCode,
+            currencyExponent: money.exponent
+        )
+        guard money.minorUnits <= maximum else {
+            throw LocalLedgerError.settlementExceedsDebt
+        }
+        guard try localSettlement(id: settlementID, scopeKey: scopeKey) == nil else {
+            throw LocalLedgerError.invalidReference
+        }
+        let cleanNote = try validatedOptionalText(note, maximumLength: 5_000)
+        let projection: (
+            account: LocalAccount,
+            amountMinor: Int64,
+            conversion: ReportingConversionSnapshot,
+            transaction: LedgerTransaction
+        )?
+        if let account {
+            try validate(account: account, tracker: tracker, scopeKey: scopeKey)
+            guard try transaction(id: transactionID, scopeKey: scopeKey) == nil else {
+                throw LocalLedgerError.invalidReference
+            }
+            let accountAmount = try validatedRecurringAccountAmount(
+                money: money,
+                account: account,
+                accountMoney: accountMoney
+            )
+            let conversion = try ReportingConversionSnapshot.resolved(
+                original: money,
+                baseCurrencyCode: tracker.baseCurrencyCode,
+                baseCurrencyExponent: tracker.baseCurrencyExponent,
+                manualBaseMoney: baseMoney,
+                effectiveAt: occurredAt
+            )
+            let transaction = LedgerTransaction(
+                id: transactionID,
+                scopeKey: scopeKey,
+                trackerID: tracker.id,
+                accountID: account.id,
+                kind: .settlement,
+                money: money,
+                accountAmountMinor: accountAmount,
+                source: .manual,
+                status: .posted,
+                merchant: to.displayName,
+                note: cleanNote,
+                occurredAt: occurredAt
+            )
+            transaction.baseAmountMinor = conversion.baseAmountMinor
+            transaction.baseCurrencyCode = conversion.baseCurrencyCode
+            transaction.rateSnapshot = conversion.rateSnapshot
+            transaction.rateSource = conversion.rateSource
+            transaction.rateEffectiveAt = conversion.effectiveAt
+            projection = (account, accountAmount, conversion, transaction)
+        } else {
+            guard accountMoney == nil, baseMoney == nil else {
+                throw LocalLedgerError.invalidReference
+            }
+            projection = nil
+        }
+        let settlement = LocalSettlement(
+            id: settlementID,
+            scopeKey: scopeKey,
+            trackerID: tracker.id,
+            fromParticipantID: from.id,
+            toParticipantID: to.id,
+            money: money,
+            occurredAt: occurredAt,
+            note: cleanNote,
+            transactionID: projection?.transaction.id
+        )
+        try commit {
+            if let projection {
+                context.insert(projection.transaction)
+                try insertChildren(
+                    for: projection.transaction,
+                    account: projection.account,
+                    destinationAccount: nil,
+                    category: nil,
+                    tags: []
+                )
+            }
+            context.insert(settlement)
+            try enqueue(
+                settlement,
+                command: .create,
+                accountID: projection?.account.id,
+                accountAmountMinor: projection?.amountMinor,
+                conversion: projection?.conversion,
+                transactionID: projection?.transaction.id
+            )
+        }
+        return settlement
+    }
+
+    func setSettlementDeleted(_ settlement: LocalSettlement, deleted: Bool) throws {
+        try validateTrackerAccess(id: settlement.trackerID, scopeKey: settlement.scopeKey)
+        guard (deleted && settlement.deletedAt == nil) ||
+            (!deleted && settlement.deletedAt != nil)
+        else {
+            throw LocalLedgerError.invalidReference
+        }
+        if !deleted {
+            guard let tracker = try context.fetch(
+                FetchDescriptor<LocalTracker>(
+                    predicate: #Predicate {
+                        $0.scopeKey == settlement.scopeKey && $0.id == settlement.trackerID
+                    }
+                )
+            ).first,
+            try maximumSettlementAmount(
+                tracker: tracker,
+                fromParticipantID: settlement.fromParticipantID,
+                toParticipantID: settlement.toParticipantID,
+                currencyCode: settlement.currencyCode,
+                currencyExponent: settlement.currencyExponent
+            ) >= settlement.amountMinor else {
+                throw LocalLedgerError.settlementExceedsDebt
+            }
+        }
+        let linkedTransaction = try settlement.transactionID.flatMap {
+            try transaction(id: $0, scopeKey: settlement.scopeKey)
+        }
+        try commit {
+            let changedAt = deleted ? Date.now : nil
+            settlement.deletedAt = changedAt
+            touch(settlement)
+            if let linkedTransaction {
+                linkedTransaction.deletedAt = changedAt
+                linkedTransaction.updatedAt = .now
+                linkedTransaction.syncStateRaw = LocalSyncState.pending.rawValue
+            }
+            try enqueue(settlement, command: deleted ? .delete : .restore)
         }
     }
 
@@ -790,6 +1167,355 @@ struct LocalLedgerRepository {
     }
 
     @discardableResult
+    func createInstallmentPlan(
+        scopeKey: String,
+        tracker: LocalTracker,
+        account: LocalAccount,
+        category: LocalCategory?,
+        name: String,
+        principal: Money,
+        interestMinor: Int64 = 0,
+        feesMinor: Int64 = 0,
+        installmentCount: Int,
+        plannedInstallmentMinor: Int64? = nil,
+        cadence: InstallmentCadence,
+        timeZoneIdentifier: String,
+        startsOn: Date
+    ) throws -> LocalInstallmentPlan {
+        try validate(tracker: tracker, scopeKey: scopeKey)
+        try validate(account: account, tracker: tracker, scopeKey: scopeKey)
+        try validate(
+            category: category,
+            tracker: tracker,
+            scopeKey: scopeKey,
+            kind: .expense
+        )
+        let values = try validatedInstallmentValues(
+            principal: principal,
+            interestMinor: interestMinor,
+            feesMinor: feesMinor,
+            installmentCount: installmentCount,
+            plannedInstallmentMinor: plannedInstallmentMinor,
+            cadence: cadence,
+            timeZoneIdentifier: timeZoneIdentifier,
+            startsOn: startsOn
+        )
+        let plan = LocalInstallmentPlan(
+            scopeKey: scopeKey,
+            trackerID: tracker.id,
+            name: try validatedName(name),
+            accountID: account.id,
+            categoryID: category?.id,
+            principalMinor: principal.minorUnits,
+            interestMinor: interestMinor,
+            feesMinor: feesMinor,
+            plannedTotalMinor: values.totalMinor,
+            currencyCode: principal.currencyCode,
+            currencyExponent: principal.exponent,
+            installmentCount: installmentCount,
+            plannedInstallmentMinor: plannedInstallmentMinor,
+            cadence: cadence,
+            timeZoneIdentifier: timeZoneIdentifier,
+            startsOn: values.startsOn,
+            anchorDay: values.anchorDay
+        )
+        try commit {
+            context.insert(plan)
+            try insertInstallmentSchedule(values.schedule, for: plan)
+            try enqueue(plan, command: .create)
+        }
+        return plan
+    }
+
+    func updateInstallmentPlan(
+        _ plan: LocalInstallmentPlan,
+        tracker: LocalTracker,
+        account: LocalAccount,
+        category: LocalCategory?,
+        name: String,
+        principal: Money,
+        interestMinor: Int64,
+        feesMinor: Int64,
+        installmentCount: Int,
+        plannedInstallmentMinor: Int64?,
+        cadence: InstallmentCadence,
+        timeZoneIdentifier: String,
+        startsOn: Date
+    ) throws {
+        guard plan.scopeKey == tracker.scopeKey,
+              plan.trackerID == tracker.id,
+              plan.deletedAt == nil,
+              plan.state == .active
+        else {
+            throw LocalLedgerError.invalidReference
+        }
+        try validate(tracker: tracker, scopeKey: plan.scopeKey)
+        try validate(account: account, tracker: tracker, scopeKey: plan.scopeKey)
+        try validate(
+            category: category,
+            tracker: tracker,
+            scopeKey: plan.scopeKey,
+            kind: .expense
+        )
+        let values = try validatedInstallmentValues(
+            principal: principal,
+            interestMinor: interestMinor,
+            feesMinor: feesMinor,
+            installmentCount: installmentCount,
+            plannedInstallmentMinor: plannedInstallmentMinor,
+            cadence: cadence,
+            timeZoneIdentifier: timeZoneIdentifier,
+            startsOn: startsOn
+        )
+        let cleanName = try validatedName(name)
+        let scheduleChanged = plan.principalMinor != principal.minorUnits ||
+            plan.interestMinor != interestMinor || plan.feesMinor != feesMinor ||
+            plan.installmentCount != installmentCount ||
+            plan.plannedInstallmentMinor != plannedInstallmentMinor ||
+            plan.cadence != cadence || plan.startsOn != values.startsOn ||
+            plan.currencyCode != principal.currencyCode ||
+            plan.currencyExponent != principal.exponent
+        if scheduleChanged {
+            let payments = try installmentPayments(for: plan)
+            let hasPayments = !payments.isEmpty
+            let hasPendingPayment = try hasPendingInstallmentPayment(for: plan)
+            guard !hasPayments, !hasPendingPayment else {
+                throw LocalLedgerError.invalidReference
+            }
+        }
+        let revisionChanged = scheduleChanged || plan.name != cleanName ||
+            plan.accountID != account.id || plan.categoryID != category?.id ||
+            plan.timeZoneIdentifier != timeZoneIdentifier
+        try commit {
+            if scheduleChanged {
+                try supersedeInstallmentSchedule(for: plan)
+            }
+            plan.name = cleanName
+            plan.accountID = account.id
+            plan.categoryID = category?.id
+            plan.principalMinor = principal.minorUnits
+            plan.interestMinor = interestMinor
+            plan.feesMinor = feesMinor
+            plan.plannedTotalMinor = values.totalMinor
+            plan.currencyCode = principal.currencyCode
+            plan.currencyExponent = principal.exponent
+            plan.installmentCount = installmentCount
+            plan.plannedInstallmentMinor = plannedInstallmentMinor
+            plan.cadenceRaw = cadence.rawValue
+            plan.timeZoneIdentifier = timeZoneIdentifier
+            plan.startsOn = values.startsOn
+            plan.anchorDay = values.anchorDay
+            if revisionChanged { plan.revisionNumber += 1 }
+            touch(plan)
+            if scheduleChanged {
+                try insertInstallmentSchedule(values.schedule, for: plan)
+            }
+            try enqueue(plan, command: .update)
+        }
+    }
+
+    func setInstallmentPlanArchived(
+        _ plan: LocalInstallmentPlan,
+        archived: Bool
+    ) throws {
+        try validateAvailableInstallmentPlan(plan, permittingArchived: true)
+        try commit {
+            plan.archivedAt = archived ? .now : nil
+            touch(plan)
+            try enqueue(plan, command: archived ? .archive : .restore)
+        }
+    }
+
+    func cancelInstallmentPlan(_ plan: LocalInstallmentPlan) throws {
+        try validateAvailableInstallmentPlan(plan)
+        guard plan.state == .active else { throw LocalLedgerError.invalidReference }
+        try commit {
+            plan.stateRaw = InstallmentPlanState.cancelled.rawValue
+            plan.cancelledAt = .now
+            plan.paidOffAt = nil
+            touch(plan)
+            try enqueue(plan, command: .cancel)
+        }
+    }
+
+    func deleteInstallmentPlan(_ plan: LocalInstallmentPlan) throws {
+        try validateAvailableInstallmentPlan(plan, permittingArchived: true)
+        guard plan.deletedAt == nil else { return }
+        let now = Date.now
+        try commit {
+            plan.stateRaw = InstallmentPlanState.cancelled.rawValue
+            plan.cancelledAt = now
+            plan.paidOffAt = nil
+            plan.archivedAt = now
+            plan.deletedAt = now
+            touch(plan)
+            try enqueue(plan, command: .delete)
+        }
+    }
+
+    func skipInstallmentPayment(
+        _ item: LocalInstallmentScheduleItem,
+        in plan: LocalInstallmentPlan
+    ) throws {
+        try validateAvailableInstallmentPlan(plan)
+        guard plan.state == .active,
+              item.scopeKey == plan.scopeKey,
+              item.planID == plan.id,
+              item.trackerID == plan.trackerID,
+              item.deletedAt == nil,
+              item.supersededAt == nil,
+              item.state == .planned
+        else {
+            throw LocalLedgerError.invalidReference
+        }
+        let active = try activeInstallmentSchedule(for: plan)
+        guard let last = active.sorted(by: installmentScheduleOrder).last else {
+            throw LocalLedgerError.invalidReference
+        }
+        let replacementDue = try LocalInstallmentCalculator.dueDate(
+            startsOn: last.dueOn,
+            cadence: plan.cadence,
+            sequence: 2,
+            anchorDay: plan.anchorDay
+        )
+        let replacement = LocalInstallmentScheduleItem(
+            id: try LocalInstallmentCalculator.scheduleItemID(
+                planID: plan.id,
+                revisionNumber: plan.revisionNumber + 1,
+                sequence: last.sequence + 1
+            ),
+            scopeKey: plan.scopeKey,
+            trackerID: plan.trackerID,
+            planID: plan.id,
+            revisionNumber: plan.revisionNumber + 1,
+            sequence: last.sequence + 1,
+            originalDueOn: item.originalDueOn,
+            dueOn: replacementDue,
+            plannedPrincipalMinor: item.plannedPrincipalMinor,
+            plannedInterestMinor: item.plannedInterestMinor,
+            plannedFeesMinor: item.plannedFeesMinor,
+            plannedTotalMinor: item.plannedTotalMinor
+        )
+        try commit {
+            plan.revisionNumber += 1
+            item.stateRaw = InstallmentScheduleState.skipped.rawValue
+            item.skippedAt = .now
+            item.revisionNumber = plan.revisionNumber
+            item.updatedAt = .now
+            context.insert(replacement)
+            touch(plan)
+            try enqueue(plan, command: .skipPayment, scheduleItemID: item.id)
+        }
+    }
+
+    func rescheduleInstallmentPayment(
+        _ item: LocalInstallmentScheduleItem,
+        in plan: LocalInstallmentPlan,
+        dueOn: Date
+    ) throws {
+        try validateAvailableInstallmentPlan(plan)
+        guard plan.state == .active,
+              item.scopeKey == plan.scopeKey,
+              item.planID == plan.id,
+              item.trackerID == plan.trackerID,
+              item.deletedAt == nil,
+              item.supersededAt == nil,
+              item.state != .paid,
+              item.state != .skipped,
+              let canonicalDue = BudgetDateCodec.canonicalDate(from: dueOn),
+              canonicalDue >= plan.startsOn
+        else {
+            throw LocalLedgerError.invalidReference
+        }
+        try commit {
+            plan.revisionNumber += 1
+            item.dueOn = canonicalDue
+            item.revisionNumber = plan.revisionNumber
+            item.updatedAt = .now
+            touch(plan)
+            try enqueue(
+                plan,
+                command: .reschedulePayment,
+                scheduleItemID: item.id,
+                rescheduledDueOn: canonicalDue
+            )
+        }
+    }
+
+    @discardableResult
+    func recordInstallmentPayment(
+        in plan: LocalInstallmentPlan,
+        tracker: LocalTracker,
+        account: LocalAccount,
+        scheduleItem: LocalInstallmentScheduleItem?,
+        amount: Money,
+        accountMoney: Money? = nil,
+        baseMoney: Money? = nil,
+        occurredAt: Date = .now,
+        extraPayment: Bool = false,
+        confirmOverpayment: Bool = false,
+        paymentID: UUID = UUID(),
+        transactionID: UUID = UUID()
+    ) throws -> LedgerTransaction {
+        try queueInstallmentPayment(
+            in: plan,
+            tracker: tracker,
+            account: account,
+            scheduleItem: scheduleItem,
+            amount: amount,
+            accountMoney: accountMoney,
+            baseMoney: baseMoney,
+            occurredAt: occurredAt,
+            extraPayment: extraPayment,
+            confirmOverpayment: confirmOverpayment,
+            paymentID: paymentID,
+            transactionID: transactionID,
+            command: .recordPayment
+        )
+    }
+
+    @discardableResult
+    func payOffInstallmentPlan(
+        _ plan: LocalInstallmentPlan,
+        tracker: LocalTracker,
+        account: LocalAccount,
+        amount: Money? = nil,
+        accountMoney: Money? = nil,
+        baseMoney: Money? = nil,
+        occurredAt: Date = .now,
+        confirmOverpayment: Bool = false,
+        paymentID: UUID = UUID(),
+        transactionID: UUID = UUID()
+    ) throws -> LedgerTransaction {
+        let remaining = try projectedInstallmentRemaining(for: plan)
+        let tender: Money
+        if let amount {
+            tender = amount
+        } else {
+            tender = try Money(
+                minorUnits: remaining,
+                currencyCode: plan.currencyCode,
+                exponent: plan.currencyExponent
+            )
+        }
+        return try queueInstallmentPayment(
+            in: plan,
+            tracker: tracker,
+            account: account,
+            scheduleItem: nil,
+            amount: tender,
+            accountMoney: accountMoney,
+            baseMoney: baseMoney,
+            occurredAt: occurredAt,
+            extraPayment: true,
+            confirmOverpayment: confirmOverpayment,
+            paymentID: paymentID,
+            transactionID: transactionID,
+            command: .payoff
+        )
+    }
+
+    @discardableResult
     func createTransaction(
         scopeKey: String,
         tracker: LocalTracker,
@@ -804,7 +1530,8 @@ struct LocalLedgerRepository {
         destinationMoney: Money? = nil,
         refundOf: LedgerTransaction? = nil,
         baseMoney: Money? = nil,
-        tags: [LocalTag] = []
+        tags: [LocalTag] = [],
+        split: LocalTransactionSplitInput? = nil
     ) throws -> LedgerTransaction {
         guard [.expense, .income, .transfer, .refund].contains(kind) else {
             throw LocalLedgerError.invalidTransactionKind
@@ -848,6 +1575,17 @@ struct LocalLedgerRepository {
             manualBaseMoney: baseMoney,
             effectiveAt: occurredAt
         )
+        if split != nil, kind != .expense {
+            throw LocalLedgerError.invalidSplit
+        }
+        let preparedSplit = try split.map {
+            try prepareSplit(
+                $0,
+                amountMinor: money.minorUnits,
+                trackerID: tracker.id,
+                scopeKey: scopeKey
+            )
+        }
 
         let transaction = LedgerTransaction(
             scopeKey: scopeKey,
@@ -877,10 +1615,15 @@ struct LocalLedgerRepository {
                 category: category,
                 tags: validatedTags
             )
+            try applySplit(preparedSplit, to: transaction)
+            let splitMutation = try preparedSplit.map { _ in
+                try mutationSplitValue(for: transaction)
+            }
             try enqueue(
                 transaction,
                 command: .create,
-                tagIDs: validatedTags.map(\.id)
+                tagIDs: validatedTags.map(\.id),
+                splitMutation: splitMutation
             )
         }
         return transaction
@@ -898,8 +1641,10 @@ struct LocalLedgerRepository {
         destinationAccount: LocalAccount? = nil,
         destinationMoney: Money? = nil,
         baseMoney: Money? = nil,
-        tags: [LocalTag]
+        tags: [LocalTag],
+        splitChange: LocalTransactionSplitChange = .unchanged
     ) throws {
+        try ensureTransactionIsNotSettlementProjection(transaction)
         guard money.minorUnits > 0 else { throw MoneyError.nonPositiveAmount }
         try validate(tracker: tracker, scopeKey: transaction.scopeKey)
         guard tracker.id == transaction.trackerID else {
@@ -952,6 +1697,28 @@ struct LocalLedgerRepository {
             manualBaseMoney: baseMoney,
             effectiveAt: occurredAt
         )
+        let existingSplit = try hasSplit(transaction)
+        let preparedSplit: PreparedLocalSplit?
+        switch splitChange {
+        case .unchanged:
+            if existingSplit,
+               (transaction.amountMinor != money.minorUnits ||
+                   transaction.currencyCode != money.currencyCode ||
+                   transaction.currencyExponent != money.exponent) {
+                throw LocalLedgerError.invalidSplit
+            }
+            preparedSplit = nil
+        case .remove:
+            preparedSplit = nil
+        case let .replace(split):
+            guard transaction.kind == .expense else { throw LocalLedgerError.invalidSplit }
+            preparedSplit = try prepareSplit(
+                split,
+                amountMinor: money.minorUnits,
+                trackerID: transaction.trackerID,
+                scopeKey: transaction.scopeKey
+            )
+        }
         try commit {
             transaction.accountID = account.id
             transaction.destinationAccountID = destinationAccount?.id
@@ -978,15 +1745,29 @@ struct LocalLedgerRepository {
                 category: category,
                 tags: validatedTags
             )
+            if splitChange != .unchanged {
+                try applySplit(preparedSplit, to: transaction)
+            }
+            let splitMutation: TransactionSplitMutationValue?
+            switch splitChange {
+            case .unchanged:
+                splitMutation = nil
+            case .remove:
+                splitMutation = .none
+            case .replace:
+                splitMutation = try mutationSplitValue(for: transaction)
+            }
             try enqueue(
                 transaction,
                 command: .update,
-                tagIDs: validatedTags.map(\.id)
+                tagIDs: validatedTags.map(\.id),
+                splitMutation: splitMutation
             )
         }
     }
 
     func setTransactionDeleted(_ transaction: LedgerTransaction, deleted: Bool) throws {
+        try ensureTransactionIsNotSettlementProjection(transaction)
         try validateTrackerAccess(id: transaction.trackerID, scopeKey: transaction.scopeKey)
         try commit {
             transaction.deletedAt = deleted ? .now : nil
@@ -998,7 +1779,11 @@ struct LocalLedgerRepository {
 
     @discardableResult
     func duplicate(_ transaction: LedgerTransaction) throws -> LedgerTransaction {
+        try ensureTransactionIsNotSettlementProjection(transaction)
         try validateTrackerAccess(id: transaction.trackerID, scopeKey: transaction.scopeKey)
+        guard [.expense, .income, .transfer, .refund].contains(transaction.kind) else {
+            throw LocalLedgerError.invalidTransactionKind
+        }
         guard let money = transaction.money else {
             throw MoneyError.invalidAmount
         }
@@ -1056,6 +1841,15 @@ struct LocalLedgerRepository {
             throw LocalLedgerError.invalidReference
         }
         let tags = try tags(for: transaction).filter { $0.archivedAt == nil && $0.deletedAt == nil }
+        let split = try splitInput(for: transaction)
+        let preparedSplit = try split.map {
+            try prepareSplit(
+                $0,
+                amountMinor: copy.amountMinor,
+                trackerID: copy.trackerID,
+                scopeKey: copy.scopeKey
+            )
+        }
         try commit {
             context.insert(copy)
             try insertChildren(
@@ -1065,7 +1859,16 @@ struct LocalLedgerRepository {
                 category: category,
                 tags: tags
             )
-            try enqueue(copy, command: .create, tagIDs: tags.map(\.id))
+            try applySplit(preparedSplit, to: copy)
+            let splitMutation = try preparedSplit.map { _ in
+                try mutationSplitValue(for: copy)
+            }
+            try enqueue(
+                copy,
+                command: .create,
+                tagIDs: tags.map(\.id),
+                splitMutation: splitMutation
+            )
         }
         return copy
     }
@@ -1225,6 +2028,333 @@ struct LocalLedgerRepository {
             )
     }
 
+    private func tracker(id: UUID, scopeKey: String) throws -> LocalTracker {
+        guard let value = try context.fetch(
+            FetchDescriptor<LocalTracker>(
+                predicate: #Predicate { $0.scopeKey == scopeKey && $0.id == id }
+            )
+        ).first else {
+            throw LocalLedgerError.invalidReference
+        }
+        return value
+    }
+
+    private func transaction(id: UUID, scopeKey: String) throws -> LedgerTransaction? {
+        try context.fetch(
+            FetchDescriptor<LedgerTransaction>(
+                predicate: #Predicate { $0.scopeKey == scopeKey && $0.id == id }
+            )
+        ).first
+    }
+
+    private func localSettlement(id: UUID, scopeKey: String) throws -> LocalSettlement? {
+        try context.fetch(
+            FetchDescriptor<LocalSettlement>(
+                predicate: #Predicate { $0.scopeKey == scopeKey && $0.id == id }
+            )
+        ).first
+    }
+
+    private func ensureUniqueGuestParticipantName(
+        _ name: String,
+        trackerID: UUID,
+        scopeKey: String,
+        excluding excludedID: UUID? = nil
+    ) throws {
+        let normalized = normalizedTagName(name)
+        let candidates = try context.fetch(
+            FetchDescriptor<LocalParticipant>(
+                predicate: #Predicate {
+                    $0.scopeKey == scopeKey &&
+                        $0.trackerID == trackerID &&
+                        $0.linkedUserID == nil &&
+                        $0.deletedAt == nil
+                }
+            )
+        )
+        guard !candidates.contains(where: {
+            $0.id != excludedID && normalizedTagName($0.displayName) == normalized
+        }) else {
+            throw LocalLedgerError.invalidReference
+        }
+    }
+
+    private func validateActiveParticipant(
+        _ participant: LocalParticipant,
+        tracker: LocalTracker,
+        scopeKey: String
+    ) throws {
+        guard participant.scopeKey == scopeKey,
+              participant.trackerID == tracker.id,
+              participant.archivedAt == nil,
+              participant.deletedAt == nil
+        else {
+            throw LocalLedgerError.invalidReference
+        }
+    }
+
+    private func validateSplittableTransaction(
+        _ transaction: LedgerTransaction
+    ) throws {
+        guard transaction.kind == .expense,
+              transaction.status != .voided,
+              transaction.deletedAt == nil
+        else {
+            throw LocalLedgerError.invalidSplit
+        }
+        try ensureTransactionIsNotSettlementProjection(transaction)
+    }
+
+    private func maximumSettlementAmount(
+        tracker: LocalTracker,
+        fromParticipantID: UUID,
+        toParticipantID: UUID,
+        currencyCode: String,
+        currencyExponent: Int
+    ) throws -> Int64 {
+        let balances = try participantBalances(tracker: tracker)
+        let fromNet = balances.first {
+            $0.participantID == fromParticipantID &&
+                $0.currencyCode == currencyCode &&
+                $0.currencyExponent == currencyExponent
+        }?.netMinor ?? 0
+        let toNet = balances.first {
+            $0.participantID == toParticipantID &&
+                $0.currencyCode == currencyCode &&
+                $0.currencyExponent == currencyExponent
+        }?.netMinor ?? 0
+        guard fromNet < 0, toNet > 0, fromNet != Int64.min else { return 0 }
+        return min(-fromNet, toNet)
+    }
+
+    private func ensureTransactionIsNotSettlementProjection(
+        _ transaction: LedgerTransaction
+    ) throws {
+        let transactionID = transaction.id
+        let scopeKey = transaction.scopeKey
+        let linked = try context.fetch(
+            FetchDescriptor<LocalSettlement>(
+                predicate: #Predicate {
+                    $0.scopeKey == scopeKey && $0.transactionID == transactionID
+                }
+            )
+        )
+        guard linked.isEmpty else { throw LocalLedgerError.invalidReference }
+    }
+
+    private func prepareSplit(
+        _ split: LocalTransactionSplitInput,
+        amountMinor: Int64,
+        trackerID: UUID,
+        scopeKey: String
+    ) throws -> PreparedLocalSplit {
+        let payments: [LocalSplitPaymentInput]
+        let shares: [LocalResolvedSplitShare]
+        do {
+            payments = try LocalSplitCalculator.resolvePayments(
+                amountMinor: amountMinor,
+                payments: split.payments
+            )
+            shares = try LocalSplitCalculator.resolveShares(
+                amountMinor: amountMinor,
+                method: split.method,
+                shares: split.shares
+            )
+        } catch {
+            throw LocalLedgerError.invalidSplit
+        }
+        let participantIDs = Set(payments.map(\.participantID) + shares.map(\.participantID))
+        let participants = try context.fetch(
+            FetchDescriptor<LocalParticipant>(
+                predicate: #Predicate { $0.scopeKey == scopeKey }
+            )
+        ).filter { participantIDs.contains($0.id) }
+        guard participants.count == participantIDs.count,
+              participants.allSatisfy({
+                  $0.trackerID == trackerID && $0.archivedAt == nil && $0.deletedAt == nil
+              })
+        else {
+            throw LocalLedgerError.invalidSplit
+        }
+        return PreparedLocalSplit(payments: payments, shares: shares)
+    }
+
+    private func splitRows(
+        for transaction: LedgerTransaction
+    ) throws -> (payments: [LocalSplitPayment], shares: [LocalSplitShare]) {
+        let transactionID = transaction.id
+        let scopeKey = transaction.scopeKey
+        let payments = try context.fetch(
+            FetchDescriptor<LocalSplitPayment>(
+                predicate: #Predicate {
+                    $0.scopeKey == scopeKey && $0.transactionID == transactionID
+                }
+            )
+        )
+        let shares = try context.fetch(
+            FetchDescriptor<LocalSplitShare>(
+                predicate: #Predicate {
+                    $0.scopeKey == scopeKey && $0.transactionID == transactionID
+                }
+            )
+        )
+        guard payments.isEmpty == shares.isEmpty,
+              Set(payments.map(\.participantID)).count == payments.count,
+              Set(shares.map(\.participantID)).count == shares.count,
+              payments.allSatisfy({ $0.amountMinor > 0 }),
+              shares.allSatisfy({ $0.amountMinor > 0 })
+        else {
+            throw LocalLedgerError.invalidSplit
+        }
+        return (payments, shares)
+    }
+
+    private func hasSplit(_ transaction: LedgerTransaction) throws -> Bool {
+        let rows = try splitRows(for: transaction)
+        return !rows.payments.isEmpty
+    }
+
+    private func applySplit(
+        _ prepared: PreparedLocalSplit?,
+        to transaction: LedgerTransaction
+    ) throws {
+        let rows = try splitRows(for: transaction)
+        let paymentsByParticipant = Dictionary(
+            uniqueKeysWithValues: rows.payments.map { ($0.participantID, $0) }
+        )
+        let sharesByParticipant = Dictionary(
+            uniqueKeysWithValues: rows.shares.map { ($0.participantID, $0) }
+        )
+        let desiredPaymentIDs = Set(prepared?.payments.map(\.participantID) ?? [])
+        let desiredShareIDs = Set(prepared?.shares.map(\.participantID) ?? [])
+        for payment in rows.payments where !desiredPaymentIDs.contains(payment.participantID) {
+            context.delete(payment)
+        }
+        for share in rows.shares where !desiredShareIDs.contains(share.participantID) {
+            context.delete(share)
+        }
+        for input in prepared?.payments ?? [] {
+            if let existing = paymentsByParticipant[input.participantID] {
+                existing.amountMinor = input.amountMinor
+            } else {
+                context.insert(
+                    LocalSplitPayment(
+                        scopeKey: transaction.scopeKey,
+                        transactionID: transaction.id,
+                        participantID: input.participantID,
+                        amountMinor: input.amountMinor
+                    )
+                )
+            }
+        }
+        for input in prepared?.shares ?? [] {
+            if let existing = sharesByParticipant[input.participantID] {
+                existing.amountMinor = input.amountMinor
+                existing.methodRaw = input.method.rawValue
+                existing.percentageBasisPoints = input.percentageBasisPoints
+            } else {
+                context.insert(
+                    LocalSplitShare(
+                        scopeKey: transaction.scopeKey,
+                        transactionID: transaction.id,
+                        participantID: input.participantID,
+                        amountMinor: input.amountMinor,
+                        method: input.method,
+                        percentageBasisPoints: input.percentageBasisPoints
+                    )
+                )
+            }
+        }
+    }
+
+    private func splitInput(
+        for transaction: LedgerTransaction
+    ) throws -> LocalTransactionSplitInput? {
+        let rows = try splitRows(for: transaction)
+        guard let method = rows.shares.first?.method else { return nil }
+        guard !rows.payments.isEmpty,
+              rows.shares.allSatisfy({ $0.method == method })
+        else {
+            throw LocalLedgerError.invalidSplit
+        }
+        return LocalTransactionSplitInput(
+            method: method,
+            payments: rows.payments.map {
+                LocalSplitPaymentInput(
+                    participantID: $0.participantID,
+                    amountMinor: $0.amountMinor
+                )
+            },
+            shares: rows.shares.map {
+                LocalSplitShareInput(
+                    participantID: $0.participantID,
+                    amountMinor: method == .exact ? $0.amountMinor : nil,
+                    percentageBasisPoints: method == .percentage
+                        ? $0.percentageBasisPoints : nil
+                )
+            }
+        )
+    }
+
+    private func mutationSplitValue(
+        for transaction: LedgerTransaction
+    ) throws -> TransactionSplitMutationValue {
+        let rows = try splitRows(for: transaction)
+        guard let method = rows.shares.first?.method else { return .none }
+        guard !rows.payments.isEmpty,
+              rows.shares.allSatisfy({ $0.method == method })
+        else {
+            throw LocalLedgerError.invalidSplit
+        }
+        guard let input = try splitInput(for: transaction) else {
+            throw LocalLedgerError.invalidSplit
+        }
+        do {
+            _ = try LocalSplitCalculator.resolvePayments(
+                amountMinor: transaction.amountMinor,
+                payments: input.payments
+            )
+            let resolved = try LocalSplitCalculator.resolveShares(
+                amountMinor: transaction.amountMinor,
+                method: method,
+                shares: input.shares
+            )
+            let expected = Dictionary(
+                uniqueKeysWithValues: resolved.map { ($0.participantID, $0.amountMinor) }
+            )
+            guard rows.shares.allSatisfy({ expected[$0.participantID] == $0.amountMinor }) else {
+                throw LocalLedgerError.invalidSplit
+            }
+        } catch {
+            throw LocalLedgerError.invalidSplit
+        }
+        return .value(
+            TransactionSplitMutationPayload(
+                method: method.rawValue,
+                payments: rows.payments.sorted {
+                    $0.participantID.uuidString < $1.participantID.uuidString
+                }.map {
+                    SplitPaymentMutationPayload(
+                        id: $0.id,
+                        participantID: $0.participantID,
+                        amountMinor: $0.amountMinor
+                    )
+                },
+                shares: rows.shares.sorted {
+                    $0.participantID.uuidString < $1.participantID.uuidString
+                }.map {
+                    SplitShareMutationPayload(
+                        id: $0.id,
+                        participantID: $0.participantID,
+                        amountMinor: method == .exact ? $0.amountMinor : nil,
+                        percentageBasisPoints: method == .percentage
+                            ? $0.percentageBasisPoints : nil
+                    )
+                }
+            )
+        )
+    }
+
     private func tags(for transaction: LedgerTransaction) throws -> [LocalTag] {
         let transactionID = transaction.id
         let scopeKey = transaction.scopeKey
@@ -1331,6 +2461,11 @@ struct LocalLedgerRepository {
         tag.syncStateRaw = LocalSyncState.pending.rawValue
     }
 
+    private func touch(_ participant: LocalParticipant) {
+        participant.updatedAt = .now
+        participant.syncStateRaw = LocalSyncState.pending.rawValue
+    }
+
     private func touch(_ budget: LocalBudget) {
         budget.updatedAt = .now
         budget.syncStateRaw = LocalSyncState.pending.rawValue
@@ -1339,6 +2474,16 @@ struct LocalLedgerRepository {
     private func touch(_ rule: LocalRecurringRule) {
         rule.updatedAt = .now
         rule.syncStateRaw = LocalSyncState.pending.rawValue
+    }
+
+    private func touch(_ plan: LocalInstallmentPlan) {
+        plan.updatedAt = .now
+        plan.syncStateRaw = LocalSyncState.pending.rawValue
+    }
+
+    private func touch(_ settlement: LocalSettlement) {
+        settlement.updatedAt = .now
+        settlement.syncStateRaw = LocalSyncState.pending.rawValue
     }
 
     private var recurringStorageCalendar: Calendar {
@@ -1555,6 +2700,382 @@ struct LocalLedgerRepository {
         guard rule.deletedAt == nil, rule.archivedAt == nil else {
             throw LocalLedgerError.invalidReference
         }
+    }
+
+    private func validatedInstallmentValues(
+        principal: Money,
+        interestMinor: Int64,
+        feesMinor: Int64,
+        installmentCount: Int,
+        plannedInstallmentMinor: Int64?,
+        cadence: InstallmentCadence,
+        timeZoneIdentifier: String,
+        startsOn: Date
+    ) throws -> (
+        startsOn: Date,
+        anchorDay: Int,
+        totalMinor: Int64,
+        schedule: [LocalInstallmentScheduleAmount]
+    ) {
+        guard principal.minorUnits > 0,
+              TimeZone(identifier: timeZoneIdentifier) != nil,
+              let canonicalStart = BudgetDateCodec.canonicalDate(from: startsOn)
+        else {
+            throw LocalLedgerError.invalidReference
+        }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let anchorDay = calendar.component(.day, from: canonicalStart)
+        let total = try LocalInstallmentCalculator.plannedTotal(
+            principalMinor: principal.minorUnits,
+            interestMinor: interestMinor,
+            feesMinor: feesMinor
+        )
+        let schedule = try LocalInstallmentCalculator.buildSchedule(
+            principalMinor: principal.minorUnits,
+            interestMinor: interestMinor,
+            feesMinor: feesMinor,
+            installmentCount: installmentCount,
+            plannedInstallmentMinor: plannedInstallmentMinor,
+            cadence: cadence,
+            startsOn: canonicalStart,
+            anchorDay: anchorDay
+        )
+        return (canonicalStart, anchorDay, total, schedule)
+    }
+
+    private func insertInstallmentSchedule(
+        _ schedule: [LocalInstallmentScheduleAmount],
+        for plan: LocalInstallmentPlan
+    ) throws {
+        for row in schedule {
+            context.insert(
+                LocalInstallmentScheduleItem(
+                    id: try LocalInstallmentCalculator.scheduleItemID(
+                        planID: plan.id,
+                        revisionNumber: plan.revisionNumber,
+                        sequence: row.sequence
+                    ),
+                    scopeKey: plan.scopeKey,
+                    trackerID: plan.trackerID,
+                    planID: plan.id,
+                    revisionNumber: plan.revisionNumber,
+                    sequence: row.sequence,
+                    originalDueOn: row.dueOn,
+                    dueOn: row.dueOn,
+                    plannedPrincipalMinor: row.principalMinor,
+                    plannedInterestMinor: row.interestMinor,
+                    plannedFeesMinor: row.feesMinor,
+                    plannedTotalMinor: row.totalMinor
+                )
+            )
+        }
+    }
+
+    private func supersedeInstallmentSchedule(
+        for plan: LocalInstallmentPlan
+    ) throws {
+        let now = Date.now
+        for item in try activeInstallmentSchedule(for: plan) {
+            item.supersededAt = now
+            item.updatedAt = now
+        }
+    }
+
+    private func activeInstallmentSchedule(
+        for plan: LocalInstallmentPlan
+    ) throws -> [LocalInstallmentScheduleItem] {
+        let planID = plan.id
+        let scopeKey = plan.scopeKey
+        return try context.fetch(
+            FetchDescriptor<LocalInstallmentScheduleItem>(
+                predicate: #Predicate {
+                    $0.scopeKey == scopeKey &&
+                        $0.planID == planID &&
+                        $0.deletedAt == nil &&
+                        $0.supersededAt == nil
+                }
+            )
+        )
+    }
+
+    private func installmentPayments(
+        for plan: LocalInstallmentPlan
+    ) throws -> [LocalInstallmentPayment] {
+        let planID = plan.id
+        let scopeKey = plan.scopeKey
+        return try context.fetch(
+            FetchDescriptor<LocalInstallmentPayment>(
+                predicate: #Predicate {
+                    $0.scopeKey == scopeKey && $0.planID == planID && $0.deletedAt == nil
+                }
+            )
+        )
+    }
+
+    private func hasPendingInstallmentPayment(
+        for plan: LocalInstallmentPlan
+    ) throws -> Bool {
+        let scopeKey = plan.scopeKey
+        let planID = plan.id
+        let entityType = LocalMutationEntity.installmentPlan.rawValue
+        try context.fetch(
+            FetchDescriptor<OutboxMutation>(
+                predicate: #Predicate {
+                    $0.scopeKey == scopeKey &&
+                        $0.entityID == planID &&
+                        $0.entityType == entityType
+                }
+            )
+        ).contains {
+            $0.command == LocalMutationCommand.recordPayment.rawValue ||
+                $0.command == LocalMutationCommand.payoff.rawValue
+        }
+    }
+
+    private func validateAvailableInstallmentPlan(
+        _ plan: LocalInstallmentPlan,
+        permittingArchived: Bool = false
+    ) throws {
+        try validateTrackerAccess(id: plan.trackerID, scopeKey: plan.scopeKey)
+        guard plan.deletedAt == nil,
+              permittingArchived || plan.archivedAt == nil
+        else {
+            throw LocalLedgerError.invalidReference
+        }
+    }
+
+    private func projectedInstallmentRemaining(
+        for plan: LocalInstallmentPlan
+    ) throws -> Int64 {
+        var paid = Int64(0)
+        for item in try activeInstallmentSchedule(for: plan) {
+            let result = paid.addingReportingOverflow(item.paidMinor)
+            guard !result.overflow else { throw MoneyError.outOfRange }
+            paid = result.partialValue
+        }
+        let result = plan.plannedTotalMinor.subtractingReportingOverflow(paid)
+        guard !result.overflow, result.partialValue > 0 else {
+            throw LocalLedgerError.invalidReference
+        }
+        return result.partialValue
+    }
+
+    private func installmentScheduleOrder(
+        _ left: LocalInstallmentScheduleItem,
+        _ right: LocalInstallmentScheduleItem
+    ) -> Bool {
+        left.dueOn == right.dueOn ? left.sequence < right.sequence : left.dueOn < right.dueOn
+    }
+
+    private func queueInstallmentPayment(
+        in plan: LocalInstallmentPlan,
+        tracker: LocalTracker,
+        account: LocalAccount,
+        scheduleItem: LocalInstallmentScheduleItem?,
+        amount: Money,
+        accountMoney: Money?,
+        baseMoney: Money?,
+        occurredAt: Date,
+        extraPayment: Bool,
+        confirmOverpayment: Bool,
+        paymentID: UUID,
+        transactionID: UUID,
+        command: LocalMutationCommand
+    ) throws -> LedgerTransaction {
+        try validateAvailableInstallmentPlan(plan)
+        guard plan.state == .active,
+              plan.scopeKey == tracker.scopeKey,
+              plan.trackerID == tracker.id,
+              plan.accountID == account.id,
+              amount.minorUnits > 0,
+              amount.currencyCode == plan.currencyCode,
+              amount.exponent == plan.currencyExponent,
+              command == .recordPayment || command == .payoff
+        else {
+            throw LocalLedgerError.invalidReference
+        }
+        try validate(tracker: tracker, scopeKey: plan.scopeKey)
+        try validate(account: account, tracker: tracker, scopeKey: plan.scopeKey)
+        let remaining = try projectedInstallmentRemaining(for: plan)
+        let overpayment = max(amount.minorUnits - remaining, 0)
+        guard overpayment == 0 || confirmOverpayment else {
+            throw LocalLedgerError.invalidReference
+        }
+        let appliedAmount = min(amount.minorUnits, remaining)
+        if command == .payoff {
+            guard scheduleItem == nil, extraPayment else {
+                throw LocalLedgerError.invalidReference
+            }
+        } else if let scheduleItem {
+            guard scheduleItem.scopeKey == plan.scopeKey,
+                  scheduleItem.trackerID == plan.trackerID,
+                  scheduleItem.planID == plan.id,
+                  scheduleItem.deletedAt == nil,
+                  scheduleItem.supersededAt == nil,
+                  scheduleItem.state != .skipped,
+                  scheduleItem.state != .paid
+            else {
+                throw LocalLedgerError.invalidReference
+            }
+            let itemRemaining = scheduleItem.plannedTotalMinor - scheduleItem.paidMinor
+            guard extraPayment || appliedAmount <= itemRemaining else {
+                throw LocalLedgerError.invalidReference
+            }
+        } else if !extraPayment {
+            throw LocalLedgerError.invalidReference
+        }
+        let existingTransactionID = transactionID
+        let scopeKey = plan.scopeKey
+        let matchingTransactions = try context.fetch(
+            FetchDescriptor<LedgerTransaction>(
+                predicate: #Predicate {
+                    $0.scopeKey == scopeKey && $0.id == existingTransactionID
+                }
+            )
+        )
+        let transactionExists = !matchingTransactions.isEmpty
+        let paymentExists = try queuedInstallmentPaymentExists(
+            id: paymentID,
+            scopeKey: scopeKey
+        )
+        guard !transactionExists, !paymentExists else {
+            throw LocalLedgerError.invalidReference
+        }
+        let accountAmount = try validatedRecurringAccountAmount(
+            money: amount,
+            account: account,
+            accountMoney: accountMoney
+        )
+        let conversion = try ReportingConversionSnapshot.resolved(
+            original: amount,
+            baseCurrencyCode: tracker.baseCurrencyCode,
+            baseCurrencyExponent: tracker.baseCurrencyExponent,
+            manualBaseMoney: baseMoney,
+            effectiveAt: occurredAt
+        )
+        let category: LocalCategory?
+        if let categoryID = plan.categoryID {
+            category = try context.fetch(
+                FetchDescriptor<LocalCategory>(
+                    predicate: #Predicate {
+                        $0.scopeKey == scopeKey && $0.id == categoryID
+                    }
+                )
+            ).first
+            try validate(
+                category: category,
+                tracker: tracker,
+                scopeKey: plan.scopeKey,
+                kind: .expense
+            )
+        } else {
+            category = nil
+        }
+        let record = LedgerTransaction(
+            id: transactionID,
+            scopeKey: plan.scopeKey,
+            trackerID: plan.trackerID,
+            accountID: account.id,
+            categoryID: category?.id,
+            kind: .expense,
+            money: amount,
+            accountAmountMinor: accountAmount,
+            source: .installment,
+            status: .posted,
+            merchant: plan.name,
+            occurredAt: occurredAt
+        )
+        record.baseAmountMinor = conversion.baseAmountMinor
+        record.baseCurrencyCode = conversion.baseCurrencyCode
+        record.rateSnapshot = conversion.rateSnapshot
+        record.rateSource = conversion.rateSource
+        record.rateEffectiveAt = conversion.effectiveAt
+        try commit {
+            context.insert(record)
+            try insertChildren(
+                for: record,
+                account: account,
+                destinationAccount: nil,
+                category: category,
+                tags: []
+            )
+            try applyProjectedInstallmentPayment(
+                appliedAmount,
+                preferredItem: scheduleItem,
+                plan: plan
+            )
+            if appliedAmount == remaining {
+                plan.stateRaw = InstallmentPlanState.paidOff.rawValue
+                plan.paidOffAt = .now
+                plan.cancelledAt = nil
+            }
+            touch(plan)
+            try enqueue(
+                plan,
+                command: command,
+                paymentID: paymentID,
+                transactionID: transactionID,
+                scheduleItemID: scheduleItem?.id,
+                paymentAmountMinor: amount.minorUnits,
+                occurredAt: occurredAt,
+                extraPayment: extraPayment,
+                confirmOverpayment: confirmOverpayment,
+                accountAmountMinor: accountAmount,
+                conversion: conversion
+            )
+        }
+        return record
+    }
+
+    private func applyProjectedInstallmentPayment(
+        _ amount: Int64,
+        preferredItem: LocalInstallmentScheduleItem?,
+        plan: LocalInstallmentPlan
+    ) throws {
+        var items = try activeInstallmentSchedule(for: plan)
+            .filter { $0.state != .paid && $0.state != .skipped }
+            .sorted(by: installmentScheduleOrder)
+        if let preferredItem,
+           let index = items.firstIndex(where: { $0.id == preferredItem.id }) {
+            items.insert(items.remove(at: index), at: 0)
+        }
+        var remaining = amount
+        for item in items where remaining > 0 {
+            let available = item.plannedTotalMinor - item.paidMinor
+            let applied = min(remaining, available)
+            item.paidMinor += applied
+            item.stateRaw = item.paidMinor == item.plannedTotalMinor
+                ? InstallmentScheduleState.paid.rawValue
+                : InstallmentScheduleState.partiallyPaid.rawValue
+            item.skippedAt = nil
+            item.updatedAt = .now
+            remaining -= applied
+        }
+        guard remaining == 0 else { throw LocalLedgerError.invalidReference }
+    }
+
+    private func queuedInstallmentPaymentExists(id: UUID, scopeKey: String) throws -> Bool {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        for mutation in try context.fetch(
+            FetchDescriptor<OutboxMutation>(
+                predicate: #Predicate {
+                    $0.scopeKey == scopeKey && $0.entityType == "installment_plan"
+                }
+            )
+        ) where mutation.command == LocalMutationCommand.recordPayment.rawValue ||
+            mutation.command == LocalMutationCommand.payoff.rawValue {
+            guard let payload = try? decoder.decode(
+                InstallmentPlanMutationPayload.self,
+                from: mutation.payloadJSON
+            ) else {
+                throw LocalLedgerError.invalidReference
+            }
+            if payload.paymentID == id { return true }
+        }
+        return false
     }
 
     private func validatedBudgetValues(
@@ -1896,6 +3417,27 @@ struct LocalLedgerRepository {
     }
 
     private func enqueue(
+        _ participant: LocalParticipant,
+        command: LocalMutationCommand
+    ) throws {
+        let payload = ParticipantMutationPayload(
+            id: participant.id,
+            trackerID: participant.trackerID,
+            displayName: participant.displayName,
+            archivedAt: participant.archivedAt,
+            deletedAt: participant.deletedAt
+        )
+        try insertOutbox(
+            scopeKey: participant.scopeKey,
+            entityID: participant.id,
+            entity: .participant,
+            command: command,
+            baseServerVersion: participant.serverVersion,
+            payload: payload
+        )
+    }
+
+    private func enqueue(
         _ budget: LocalBudget,
         command: LocalMutationCommand,
         categoryIDs: [UUID],
@@ -1978,9 +3520,51 @@ struct LocalLedgerRepository {
     }
 
     private func enqueue(
+        _ plan: LocalInstallmentPlan,
+        command: LocalMutationCommand,
+        paymentID: UUID? = nil,
+        transactionID: UUID? = nil,
+        scheduleItemID: UUID? = nil,
+        paymentAmountMinor: Int64? = nil,
+        occurredAt: Date? = nil,
+        extraPayment: Bool? = nil,
+        confirmOverpayment: Bool? = nil,
+        accountAmountMinor: Int64? = nil,
+        conversion: ReportingConversionSnapshot? = nil,
+        rescheduledDueOn: Date? = nil
+    ) throws {
+        let payload = InstallmentPlanMutationPayload(
+            plan: plan,
+            paymentID: paymentID,
+            transactionID: transactionID,
+            scheduleItemID: scheduleItemID,
+            paymentAmountMinor: paymentAmountMinor,
+            occurredAt: occurredAt,
+            extraPayment: extraPayment,
+            confirmOverpayment: confirmOverpayment,
+            accountAmountMinor: accountAmountMinor,
+            baseAmountMinor: conversion?.baseAmountMinor,
+            baseCurrency: conversion?.baseCurrencyCode,
+            rateSnapshot: conversion?.rateSnapshot,
+            rateSource: conversion?.rateSource,
+            rateEffectiveAt: conversion?.effectiveAt,
+            rescheduledDueOn: rescheduledDueOn.map { BudgetDateCodec.string(from: $0) }
+        )
+        try insertOutbox(
+            scopeKey: plan.scopeKey,
+            entityID: plan.id,
+            entity: .installmentPlan,
+            command: command,
+            baseServerVersion: plan.serverVersion,
+            payload: payload
+        )
+    }
+
+    private func enqueue(
         _ transaction: LedgerTransaction,
         command: LocalMutationCommand,
-        tagIDs explicitTagIDs: [UUID]? = nil
+        tagIDs explicitTagIDs: [UUID]? = nil,
+        splitMutation: TransactionSplitMutationValue? = nil
     ) throws {
         let tagIDs: [UUID]
         if let explicitTagIDs {
@@ -2012,6 +3596,7 @@ struct LocalLedgerRepository {
             occurredAt: transaction.occurredAt,
             refundOfID: transaction.refundOfID,
             tagIDs: tagIDs,
+            split: splitMutation,
             deletedAt: transaction.deletedAt
         )
         try insertOutbox(
@@ -2020,6 +3605,44 @@ struct LocalLedgerRepository {
             entity: .transaction,
             command: command,
             baseServerVersion: transaction.serverVersion,
+            payload: payload
+        )
+    }
+
+    private func enqueue(
+        _ settlement: LocalSettlement,
+        command: LocalMutationCommand,
+        accountID: UUID? = nil,
+        accountAmountMinor: Int64? = nil,
+        conversion: ReportingConversionSnapshot? = nil,
+        transactionID: UUID? = nil
+    ) throws {
+        let payload = SettlementMutationPayload(
+            id: settlement.id,
+            trackerID: settlement.trackerID,
+            fromParticipantID: settlement.fromParticipantID,
+            toParticipantID: settlement.toParticipantID,
+            amountMinor: settlement.amountMinor,
+            currency: settlement.currencyCode,
+            currencyExponent: settlement.currencyExponent,
+            occurredAt: settlement.occurredAt,
+            note: settlement.note,
+            accountID: accountID,
+            accountAmountMinor: accountAmountMinor,
+            baseAmountMinor: conversion?.baseAmountMinor,
+            baseCurrency: conversion?.baseCurrencyCode,
+            rateSnapshot: conversion?.rateSnapshot,
+            rateSource: conversion?.rateSource,
+            rateEffectiveAt: conversion?.effectiveAt,
+            transactionID: transactionID,
+            deletedAt: settlement.deletedAt
+        )
+        try insertOutbox(
+            scopeKey: settlement.scopeKey,
+            entityID: settlement.id,
+            entity: .settlement,
+            command: command,
+            baseServerVersion: settlement.serverVersion,
             payload: payload
         )
     }

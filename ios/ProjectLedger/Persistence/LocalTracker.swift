@@ -18,6 +18,15 @@ enum TrackerRole: String, Codable, CaseIterable, Sendable {
     var canTransferOwnership: Bool {
         self == .owner
     }
+
+    var displayName: String {
+        switch self {
+        case .owner: String(localized: "Owner")
+        case .admin: String(localized: "Admin")
+        case .editor: String(localized: "Editor")
+        case .viewer: String(localized: "Viewer")
+        }
+    }
 }
 
 @Model

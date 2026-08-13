@@ -503,6 +503,161 @@ struct RecurringOccurrenceSnapshot: Decodable, Sendable {
     }
 }
 
+struct InstallmentProgressSnapshot: Decodable, Sendable {
+    let plannedTotalMinor: Int64
+    let paidMinor: Int64
+    let remainingMinor: Int64
+    let nextDueOn: String?
+    let estimatedPayoffOn: String?
+
+    enum CodingKeys: String, CodingKey {
+        case plannedTotalMinor = "planned_total_minor"
+        case paidMinor = "paid_minor"
+        case remainingMinor = "remaining_minor"
+        case nextDueOn = "next_due_on"
+        case estimatedPayoffOn = "estimated_payoff_on"
+    }
+}
+
+struct InstallmentPlanSnapshot: Decodable, Sendable {
+    let id: UUID
+    let trackerID: UUID
+    let name: String
+    let accountID: UUID
+    let categoryID: UUID?
+    let principalMinor: Int64
+    let interestMinor: Int64
+    let feesMinor: Int64
+    let plannedTotalMinor: Int64
+    let currency: String
+    let currencyExponent: Int
+    let installmentCount: Int
+    let plannedInstallmentMinor: Int64?
+    let cadence: String
+    let timeZone: String
+    let startsOn: String
+    let anchorDay: Int
+    let state: String
+    let revisionNumber: Int
+    let paidOffAt: String?
+    let cancelledAt: String?
+    let archivedAt: String?
+    let progress: InstallmentProgressSnapshot
+    let version: Int64
+    let createdAt: String
+    let updatedAt: String
+    let deletedAt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case trackerID = "tracker_id"
+        case name
+        case accountID = "account_id"
+        case categoryID = "category_id"
+        case principalMinor = "principal_minor"
+        case interestMinor = "interest_minor"
+        case feesMinor = "fees_minor"
+        case plannedTotalMinor = "planned_total_minor"
+        case currency
+        case currencyExponent = "currency_exponent"
+        case installmentCount = "installment_count"
+        case plannedInstallmentMinor = "planned_installment_minor"
+        case cadence
+        case timeZone = "time_zone"
+        case startsOn = "starts_on"
+        case anchorDay = "anchor_day"
+        case state
+        case revisionNumber = "revision_number"
+        case paidOffAt = "paid_off_at"
+        case cancelledAt = "cancelled_at"
+        case archivedAt = "archived_at"
+        case progress, version
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+        case deletedAt = "deleted_at"
+    }
+}
+
+struct InstallmentScheduleItemSnapshot: Decodable, Sendable {
+    let id: UUID
+    let trackerID: UUID
+    let planID: UUID
+    let revisionNumber: Int
+    let sequence: Int
+    let originalDueOn: String
+    let dueOn: String
+    let plannedPrincipalMinor: Int64
+    let plannedInterestMinor: Int64
+    let plannedFeesMinor: Int64
+    let plannedTotalMinor: Int64
+    let paidMinor: Int64
+    let state: String
+    let skippedAt: String?
+    let supersededAt: String?
+    let version: Int64
+    let createdAt: String
+    let updatedAt: String
+    let deletedAt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case trackerID = "tracker_id"
+        case planID = "plan_id"
+        case revisionNumber = "revision_number"
+        case sequence
+        case originalDueOn = "original_due_on"
+        case dueOn = "due_on"
+        case plannedPrincipalMinor = "planned_principal_minor"
+        case plannedInterestMinor = "planned_interest_minor"
+        case plannedFeesMinor = "planned_fees_minor"
+        case plannedTotalMinor = "planned_total_minor"
+        case paidMinor = "paid_minor"
+        case state
+        case skippedAt = "skipped_at"
+        case supersededAt = "superseded_at"
+        case version
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+        case deletedAt = "deleted_at"
+    }
+}
+
+struct InstallmentPaymentSnapshot: Decodable, Sendable {
+    let id: UUID
+    let trackerID: UUID
+    let planID: UUID
+    let scheduleItemID: UUID?
+    let transactionID: UUID
+    let amountMinor: Int64
+    let appliedAmountMinor: Int64
+    let overpaymentMinor: Int64
+    let extraPayment: Bool
+    let appliedAt: String
+    let createdByID: UUID
+    let version: Int64
+    let createdAt: String
+    let updatedAt: String
+    let deletedAt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case trackerID = "tracker_id"
+        case planID = "plan_id"
+        case scheduleItemID = "schedule_item_id"
+        case transactionID = "transaction_id"
+        case amountMinor = "amount_minor"
+        case appliedAmountMinor = "applied_amount_minor"
+        case overpaymentMinor = "overpayment_minor"
+        case extraPayment = "extra_payment"
+        case appliedAt = "applied_at"
+        case createdByID = "created_by_id"
+        case version
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+        case deletedAt = "deleted_at"
+    }
+}
+
 struct MembershipSnapshot: Decodable, Sendable {
     let id: UUID
     let userID: UUID
@@ -522,6 +677,32 @@ struct MembershipSnapshot: Decodable, Sendable {
         case trackerID = "tracker_id"
         case email, role, state
         case joinedAt = "joined_at"
+        case version
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+        case deletedAt = "deleted_at"
+    }
+}
+
+struct ParticipantSnapshot: Decodable, Sendable {
+    let id: UUID
+    let trackerID: UUID
+    let linkedUserID: UUID?
+    let linkedEmail: String?
+    let displayName: String
+    let archivedAt: String?
+    let version: Int64
+    let createdAt: String
+    let updatedAt: String
+    let deletedAt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case trackerID = "tracker_id"
+        case linkedUserID = "linked_user_id"
+        case linkedEmail = "linked_email"
+        case displayName = "display_name"
+        case archivedAt = "archived_at"
         case version
         case createdAt = "created_at"
         case updatedAt = "updated_at"
@@ -561,6 +742,52 @@ struct AllocationSnapshot: Decodable, Sendable {
     }
 }
 
+struct SplitPaymentSnapshot: Decodable, Sendable {
+    let id: UUID
+    let participantID: UUID
+    let amountMinor: Int64
+    let version: Int64
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case participantID = "participant_id"
+        case amountMinor = "amount_minor"
+        case version
+    }
+}
+
+struct SplitShareSnapshot: Decodable, Sendable {
+    let id: UUID
+    let participantID: UUID
+    let amountMinor: Int64
+    let method: String
+    let percentageBasisPoints: Int?
+    let version: Int64
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case participantID = "participant_id"
+        case amountMinor = "amount_minor"
+        case method
+        case percentageBasisPoints = "percentage_basis_points"
+        case version
+    }
+}
+
+struct TransactionSplitSnapshot: Decodable, Sendable {
+    let method: String
+    let payments: [SplitPaymentSnapshot]
+    let shares: [SplitShareSnapshot]
+    let totalPaidMinor: Int64
+    let totalOwedMinor: Int64
+
+    enum CodingKeys: String, CodingKey {
+        case method, payments, shares
+        case totalPaidMinor = "total_paid_minor"
+        case totalOwedMinor = "total_owed_minor"
+    }
+}
+
 struct TransactionSnapshot: Decodable, Sendable {
     let id: UUID
     let trackerID: UUID
@@ -585,6 +812,7 @@ struct TransactionSnapshot: Decodable, Sendable {
     let movements: [MovementSnapshot]
     let allocations: [AllocationSnapshot]
     let tagIDs: [UUID]
+    let split: TransactionSplitSnapshot?
     let version: Int64
     let createdAt: String
     let updatedAt: String
@@ -609,6 +837,45 @@ struct TransactionSnapshot: Decodable, Sendable {
         case refundOfID = "refund_of_id"
         case movements, allocations
         case tagIDs = "tag_ids"
+        case split
+        case version
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+        case deletedAt = "deleted_at"
+    }
+}
+
+struct SettlementSnapshot: Decodable, Sendable {
+    let id: UUID
+    let trackerID: UUID
+    let fromParticipantID: UUID
+    let toParticipantID: UUID
+    let amountMinor: Int64
+    let currency: String
+    let currencyExponent: Int
+    let occurredAt: String
+    let note: String
+    let transactionID: UUID?
+    let createdByID: UUID
+    let lastEditorID: UUID
+    let version: Int64
+    let createdAt: String
+    let updatedAt: String
+    let deletedAt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case trackerID = "tracker_id"
+        case fromParticipantID = "from_participant_id"
+        case toParticipantID = "to_participant_id"
+        case amountMinor = "amount_minor"
+        case currency
+        case currencyExponent = "currency_exponent"
+        case occurredAt = "occurred_at"
+        case note
+        case transactionID = "transaction_id"
+        case createdByID = "created_by_id"
+        case lastEditorID = "last_editor_id"
         case version
         case createdAt = "created_at"
         case updatedAt = "updated_at"

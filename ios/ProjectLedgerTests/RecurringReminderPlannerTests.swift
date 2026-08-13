@@ -64,6 +64,39 @@ struct RecurringReminderPlannerTests {
         })
     }
 
+    @Test func recurringAndInstallmentCandidatesShareOneBoundedPrivateQueue() {
+        let recurring = candidate(id: UUID(), dueOffset: 4 * 3_600)
+        let installmentID = UUID()
+        let plans = RecurringReminderPlanner.combinedPlans(
+            recurringCandidates: [recurring],
+            installmentCandidates: [
+                InstallmentReminderCandidate(
+                    planID: installmentID,
+                    nextDueAt: now.addingTimeInterval(2 * 3_600),
+                    state: .active,
+                    archivedAt: nil,
+                    deletedAt: nil
+                ),
+                InstallmentReminderCandidate(
+                    planID: UUID(),
+                    nextDueAt: now.addingTimeInterval(3 * 3_600),
+                    state: .paidOff,
+                    archivedAt: nil,
+                    deletedAt: nil
+                ),
+            ],
+            scopeKey: scope,
+            leadTime: .atDueTime,
+            now: now,
+            maximumCount: 2
+        )
+
+        #expect(plans.map(\.ruleID) == [installmentID, recurring.ruleID])
+        #expect(Set(plans.map(\.identifier)).count == 2)
+        #expect(plans.allSatisfy { !$0.identifier.contains(scope) })
+        #expect(plans.allSatisfy { !$0.identifier.contains($0.ruleID.uuidString) })
+    }
+
     private func candidate(
         id: UUID,
         dueOffset: TimeInterval,
