@@ -185,11 +185,12 @@ struct LocalSplittingRepositoryTests {
             try repository.simplifiedDebts(tracker: tracker).isEmpty
         }
         #expect(macroSafeExpectation3)
-        #expect(
-            context.fetch(FetchDescriptor<OutboxMutation>())
-                .filter { $0.entityID == linkedTransactionID }
-                .isEmpty
+        let linkedTransactionMutations = try context.fetch(
+            FetchDescriptor<OutboxMutation>()
         )
+        .filter { $0.entityID == linkedTransactionID }
+
+        #expect(linkedTransactionMutations.isEmpty)
         #expect(throws: LocalLedgerError.invalidReference) {
             try repository.setTransactionDeleted(linkedTransaction, deleted: true)
         }
