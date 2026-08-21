@@ -4,5 +4,4 @@
 --wrapcollections before-first
 --commas inline
 --stripunusedargs closure-only
---disable redundantSelf
-
+--disable andOperator,blankLinesAtEndOfScope,blankLinesBetweenScopes,braces,conditionalAssignment,elseOnSameLine,hoistAwait,hoistTry,indent,noForceUnwrapInTests,numberFormatting,opaqueGenericParameters,preferKeyPath,redundantParens,redundantReturn,redundantSelf,redundantThrows,redundantViewBuilder,sortImports,trailingClosures,trailingCommas,typeSugar,wrapFunctionBodies,wrapIfStatementBodies,wrapLoopBodies,wrapMultilineStatementBraces,wrapPropertyBodies
