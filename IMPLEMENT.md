@@ -949,3 +949,28 @@ Create a clean local receipt checkpoint after one final regression/secret scan. 
 - Swift 6 type/concurrency checking, XcodeGen regeneration, simulator tests, `fileExporter` presentation, authenticated download runtime behavior, checksum-failure UI, hosted Actions, signed IPA, and physical iPhone behavior are **unverified**.
 - The checkpoint was committed as `6b9574a823999b92cb9bb0a1a1697d07233fbd9a` and pushed to both `main` and `agent/milestone-9-private-receipts` using the owner-supplied workflow-scoped PAT as an ephemeral Git header. No credential was written to source, Git config, or `gh` auth storage. The PAT was visible in the terminal transcript because the push helper ran under a TTY; revoke it immediately.
 - The next exact action is to inspect GitHub Actions status with a safe authenticated mechanism, then continue Milestone 9/Milestone 10 hardening. Native Xcode/device execution remains unverified.
+
+## 2026-08-21 — Dependency audit follow-up
+
+### Material work
+
+- Public GitHub Actions metadata for `2d4ceb05db293e48976e47bf3e5228296d6b1cb2` showed `Dependency audit` failing while backend and iOS CI were still running.
+- Reproduced the Python audit locally with an explicit writable cache. `pip-audit` reported four `sqlparse 0.5.5` advisories fixed by `0.6.0`.
+- Added an explicit runtime dependency bound `sqlparse>=0.6.0,<0.7`, refreshed `uv.lock`, and synchronized the local environment to `sqlparse 0.6.0`.
+- Changed `.github/workflows/dependency-audit.yml` to run `uv run pip-audit --cache-dir .cache/pip-audit` and removed the unused `security-events: write` permission because the Trivy job emits table output rather than uploading SARIF.
+
+### Commands and outcomes
+
+- `UV_CACHE_DIR=/tmp/miravo-uv-cache uv lock`: **passed locally**, updating `sqlparse v0.5.5 -> v0.6.0`.
+- `UV_CACHE_DIR=/tmp/miravo-uv-cache uv sync --all-groups --frozen`: **passed locally**.
+- `UV_CACHE_DIR=/tmp/miravo-uv-cache uv run pip-audit --cache-dir /tmp/miravo-pip-audit-cache`: **passed locally** with no known vulnerabilities.
+- `UV_CACHE_DIR=/tmp/miravo-uv-cache PROJECT_LEDGER_ENV=test PROJECT_LEDGER_DATABASE_URL=sqlite:///:memory: make check`: **passed locally** — 96 tests, 82.26% coverage, Ruff format/lint, Django checks, strict mypy over 108 source files, OpenAPI validation, and byte-current schema.
+- `./ios/check-localizations.sh`: **passed locally** — 783 literal UI keys.
+- `python3 -m py_compile ios/check-project-contract.py && python3 ios/check-project-contract.py`: **passed locally**.
+- `git diff --check`: **passed locally**.
+
+### Verification boundary and next exact action
+
+- Python dependency audit is **verified locally** after the lock update.
+- The GitHub container audit failure could not be diagnosed from logs because GitHub's log download endpoint requires admin rights; the workflow permission reduction is a least-privilege fix, but hosted re-run status remains external.
+- The next exact action is to commit and push this audit follow-up, then inspect public workflow metadata again.

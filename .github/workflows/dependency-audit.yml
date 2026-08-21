@@ -10,7 +10,6 @@ on:
 
 permissions:
   contents: read
-  security-events: write
 
 jobs:
   python-audit:
@@ -24,7 +23,7 @@ jobs:
         with:
           python-version: "3.13.15"
       - run: uv sync --all-groups --frozen
-      - run: uv run pip-audit
+      - run: uv run pip-audit --cache-dir .cache/pip-audit
       - run: uv run bandit -q -r backend/apps backend/config
 
   container-audit:
@@ -39,4 +38,3 @@ jobs:
           exit-code: "1"
           severity: CRITICAL,HIGH
           ignore-unfixed: true
-
