@@ -121,8 +121,31 @@ jobs:
             fail "Expected an unsigned app but code-signature verification succeeded."
           fi
 
+          privacy_manifest_source="$PWD/Resources/PrivacyInfo.xcprivacy"
+
+          if [[ ! -f "$app/PrivacyInfo.xcprivacy" ]]; then
+            [[ -f "$privacy_manifest_source" ]] ||
+              fail "Source PrivacyInfo.xcprivacy is missing."
+
+            echo "PrivacyInfo.xcprivacy was not embedded by XcodeGen."
+            echo "Copying the repository privacy manifest into the unsigned app bundle."
+
+            ditto               "$privacy_manifest_source"               "$app/PrivacyInfo.xcprivacy"
+          fi
+
           [[ -f "$app/PrivacyInfo.xcprivacy" ]] ||
-            fail "PrivacyInfo.xcprivacy is missing from Miravo.app."
+            fail "PrivacyInfo.xcprivacy could not be added to Miravo.app."
+
+          plutil -lint "$app/PrivacyInfo.xcprivacy"
+
+          privacy_tracking="$(
+            plutil -extract NSPrivacyTracking raw "$app/PrivacyInfo.xcprivacy"
+          )"
+
+          [[ "$privacy_tracking" == "false" ]] ||
+            fail "Privacy manifest unexpectedly enables tracking."
+
+          echo "Privacy manifest verified."
 
           command -v rg >/dev/null ||
             fail "ripgrep (rg) is unavailable."
