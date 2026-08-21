@@ -30,13 +30,14 @@ struct InsightsView: View {
             sort: \LedgerTransaction.occurredAt,
             order: .reverse
         )
+        let trackerPredicate = #Predicate<LocalTracker> { tracker in
+            tracker.scopeKey == scopeKey &&
+                tracker.deletedAt == nil &&
+                tracker.archivedAt == nil &&
+                tracker.accessRevokedAt == nil
+        }
         _trackers = Query(
-            filter: #Predicate {
-                $0.scopeKey == scopeKey &&
-                    $0.deletedAt == nil &&
-                    $0.archivedAt == nil &&
-                    $0.accessRevokedAt == nil
-            },
+            filter: trackerPredicate,
             sort: \LocalTracker.sortOrder
         )
         _accounts = Query(
