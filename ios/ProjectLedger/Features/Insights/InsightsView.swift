@@ -19,27 +19,21 @@ struct InsightsView: View {
     @Query private var installmentPayments: [LocalInstallmentPayment]
     @Query private var participants: [LocalParticipant]
 
+    private let scopeKey: String
+
     @State private var selectedTrackerID: UUID?
     @State private var selectedAccountID: UUID?
     @State private var selectedCurrencyCode = ""
     @State private var selectedRange = AnalyticsRangePreset.thisMonth
 
     init(scopeKey: String) {
+        self.scopeKey = scopeKey
         _transactions = Query(
             filter: #Predicate { $0.scopeKey == scopeKey },
             sort: \LedgerTransaction.occurredAt,
             order: .reverse
         )
-        let trackerPredicate = #Predicate<LocalTracker> { tracker in
-            tracker.scopeKey == scopeKey &&
-                tracker.deletedAt == nil &&
-                tracker.archivedAt == nil &&
-                tracker.accessRevokedAt == nil
-        }
-        _trackers = Query(
-            filter: trackerPredicate,
-            sort: \LocalTracker.sortOrder
-        )
+        _trackers = Query(sort: \LocalTracker.sortOrder)
         _accounts = Query(
             filter: #Predicate { $0.scopeKey == scopeKey && $0.deletedAt == nil },
             sort: \LocalAccount.name
@@ -77,8 +71,17 @@ struct InsightsView: View {
         )
     }
 
+    private var availableTrackers: [LocalTracker] {
+        trackers.filter { tracker in
+            tracker.scopeKey == scopeKey &&
+                tracker.deletedAt == nil &&
+                tracker.archivedAt == nil &&
+                tracker.accessRevokedAt == nil
+        }
+    }
+
     private var selectedTracker: LocalTracker? {
-        trackers.first { $0.id == selectedTrackerID } ?? trackers.first
+        availableTrackers.first { $0.id == selectedTrackerID } ?? availableTrackers.first
     }
 
     private var trackerAccounts: [LocalAccount] {
@@ -170,7 +173,7 @@ struct InsightsView: View {
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: LedgerTheme.contentSpacing) {
-                if trackers.isEmpty {
+                if availableTrackers.isEmpty {
                     ContentUnavailableView(
                         "No available tracker",
                         systemImage: "chart.bar.xaxis",
@@ -200,7 +203,7 @@ struct InsightsView: View {
         }
         .navigationTitle("Insights")
         .task { normalizeSelections(resetCurrency: false) }
-        .onChange(of: trackers.map(\.id)) { _, _ in
+        .onChange(of: availableTrackers.map(\.id)) { _, _ in
             normalizeSelections(resetCurrency: false)
         }
         .onChange(of: selectedTrackerID) { _, _ in
@@ -213,7 +216,7 @@ struct InsightsView: View {
             Label("Report filters", systemImage: "line.3.horizontal.decrease.circle")
                 .font(.headline)
             Picker("Tracker", selection: $selectedTrackerID) {
-                ForEach(trackers) { tracker in
+                ForEach(availableTrackers) { tracker in
                     Text(tracker.name).tag(Optional(tracker.id))
                 }
             }
