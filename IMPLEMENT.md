@@ -1190,3 +1190,26 @@ Create a clean local receipt checkpoint after one final regression/secret scan. 
 
 - Backend CI and dependency/container audits are **verified on GitHub Actions** at commit `4ab3b6541ee10a8f79871a42a982726dab43c24e`.
 - The latest Swift compile fixes are **locally source-checked** but require the next hosted macOS run for compiler verification. The next exact action is to commit, push, and inspect iOS CI again.
+
+## 2026-08-21 — Hosted CI follow-up: UI test strict-concurrency fix
+
+### Material work
+
+- Pushed `738c98f7cd2383fb5a1c88db630645398fffa24b` to `main` and `agent/milestone-9-private-receipts`.
+- Hosted backend CI passed again.
+- Hosted dependency audit passed again.
+- Hosted iOS CI progressed past the app-target Swift diagnostics. The remaining hosted failure is now limited to `ProjectLedgerUITests.swift`: Xcode 16.4 treats `XCUIApplication` and UI query APIs as main-actor isolated, while the test methods and `XCTAssertTrue` autoclosures were nonisolated.
+- Annotated the UI test case with `@MainActor` and evaluated UI waits/query existence into local booleans before assertions.
+
+### Commands and outcomes
+
+- GitHub Actions runs for commit `738c98f7cd2383fb5a1c88db630645398fffa24b`: **inspected** through the GitHub API/logs.
+- Backend CI run `32495522148`: **passed on GitHub Actions**.
+- Dependency audit run `32495522002`: **passed on GitHub Actions**.
+- iOS CI run `32495521929`, job `96812870411`: **failed on GitHub Actions** at UI-test target compilation only.
+- `./ios/check-localizations.sh && python3 ios/check-project-contract.py && git diff --check`: **passed locally**.
+
+### Verification boundary and next exact action
+
+- Backend CI and dependency/container audits are **verified on GitHub Actions** at commit `738c98f7cd2383fb5a1c88db630645398fffa24b`.
+- The UI-test concurrency fix is **locally source-checked** but requires the next hosted macOS run for compiler/test verification. The next exact action is to commit, push, and inspect iOS CI again.
