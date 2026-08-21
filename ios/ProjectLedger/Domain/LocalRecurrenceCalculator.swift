@@ -258,7 +258,7 @@ enum LocalRecurrenceCalculator {
         let number = NSDecimalNumber(decimal: rounded)
         guard number != .notANumber,
               number.compare(NSDecimalNumber(value: Int64.max)) != .orderedDescending,
-              number.compare(.zero) == .orderedDescending
+              number.compare(NSDecimalNumber(value: 0)) == .orderedDescending
         else {
             throw RecurrenceCalculationError.overflow
         }

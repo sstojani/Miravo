@@ -296,12 +296,14 @@ enum LocalAnalyticsCalculator {
                     bucket: bucket,
                     into: &trend
                 )
-                let original = transaction.refundOfID.flatMap { originalID in
-                    guard let candidate = transactionByID[originalID],
-                          candidate.trackerID == transaction.trackerID,
-                          candidate.kind == .expense
-                    else { return nil }
-                    return candidate
+                let original: LocalAnalyticsTransactionInput?
+                if let originalID = transaction.refundOfID,
+                   let candidate = transactionByID[originalID],
+                   candidate.trackerID == transaction.trackerID,
+                   candidate.kind == .expense {
+                    original = candidate
+                } else {
+                    original = nil
                 }
                 let categoryOwner = original ?? transaction
                 try accumulateCategories(

@@ -1130,3 +1130,33 @@ Create a clean local receipt checkpoint after one final regression/secret scan. 
 
 - Backend CI and dependency/container audits are **verified on GitHub Actions** at commit `9fb4d2297382a7b06ca2b720b4fd70fc28c92d3e`.
 - The Settings section syntax fix is not yet hosted-verified. The next exact action is to run local source checks, commit, push, and inspect the next iOS CI result.
+
+## 2026-08-21 — Hosted CI follow-up: SwiftData predicate and older iOS compile fixes
+
+### Material work
+
+- Pushed `8287de06037ca0d007f82222d8251c24870d6d33` to `main` and `agent/milestone-9-private-receipts`.
+- Hosted backend CI passed again.
+- Hosted dependency audit passed again.
+- Hosted iOS CI passed localization, project contract, SwiftFormat, XcodeGen, and secret scan, then failed during simulator compilation with older source errors:
+  - a SwiftData predicate captured `LocalSettlement` model properties directly;
+  - one sync validation branch referenced stale `CategoryKind` instead of `LocalCategoryKind`;
+  - one tracker defaults `Section` used the incompatible titled+footer initializer;
+  - optional `if` expression branches in `LocalLedgerWriter` lacked contextual types;
+  - an installment pending-payment helper missed `return`;
+  - `NSDecimalNumber.compare(.zero)` was not accepted by the hosted Swift compiler;
+  - refund analytics used optional `flatMap` in a way the compiler could not infer.
+- Applied direct source fixes for those diagnostics.
+
+### Commands and outcomes
+
+- GitHub Actions jobs for run set `32494134536`, `32494134794`, and `32494134621`: **inspected** with the GitHub connector.
+- Backend CI job `96808437908`: **passed on GitHub Actions**.
+- Dependency audit jobs `96808438509` and `96808438711`: **passed on GitHub Actions**.
+- iOS simulator job `96808438100`: **failed on GitHub Actions** at Swift compile only; the diagnostics above are the actionable source failures.
+- `./ios/check-localizations.sh && python3 ios/check-project-contract.py && git diff --check`: **passed locally**.
+
+### Verification boundary and next exact action
+
+- Backend CI and dependency/container audits are **verified on GitHub Actions** at commit `8287de06037ca0d007f82222d8251c24870d6d33`.
+- The Swift compile fixes are **locally source-checked** but require the next hosted macOS run for compiler verification. The next exact action is to commit, push, and inspect iOS CI again.

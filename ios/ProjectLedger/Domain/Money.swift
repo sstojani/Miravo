@@ -66,7 +66,7 @@ struct ReportingConversionSnapshot: Equatable, Sendable {
         )
         let rate = baseMajor.dividing(by: originalMajor, withBehavior: rounding)
         guard rate != .notANumber,
-              rate.compare(.zero) == .orderedDescending
+              rate.compare(NSDecimalNumber(value: 0)) == .orderedDescending
         else {
             throw MoneyError.invalidAmount
         }

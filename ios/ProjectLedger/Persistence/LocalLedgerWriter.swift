@@ -670,20 +670,27 @@ struct LocalLedgerRepository {
             throw LocalLedgerError.invalidReference
         }
         if !deleted {
+            let scopeKey = settlement.scopeKey
+            let trackerID = settlement.trackerID
+            let fromParticipantID = settlement.fromParticipantID
+            let toParticipantID = settlement.toParticipantID
+            let currencyCode = settlement.currencyCode
+            let currencyExponent = settlement.currencyExponent
+            let amountMinor = settlement.amountMinor
             guard let tracker = try context.fetch(
                 FetchDescriptor<LocalTracker>(
                     predicate: #Predicate {
-                        $0.scopeKey == settlement.scopeKey && $0.id == settlement.trackerID
+                        $0.scopeKey == scopeKey && $0.id == trackerID
                     }
                 )
             ).first,
             try maximumSettlementAmount(
                 tracker: tracker,
-                fromParticipantID: settlement.fromParticipantID,
-                toParticipantID: settlement.toParticipantID,
-                currencyCode: settlement.currencyCode,
-                currencyExponent: settlement.currencyExponent
-            ) >= settlement.amountMinor else {
+                fromParticipantID: fromParticipantID,
+                toParticipantID: toParticipantID,
+                currencyCode: currencyCode,
+                currencyExponent: currencyExponent
+            ) >= amountMinor else {
                 throw LocalLedgerError.settlementExceedsDebt
             }
         }
@@ -1857,16 +1864,16 @@ struct LocalLedgerRepository {
                 predicate: #Predicate { $0.id == accountID && $0.scopeKey == scopeKey }
             )
         ).first
-        let category = if let categoryID = copy.categoryID {
+        let category: LocalCategory? = if let categoryID = copy.categoryID {
             try context.fetch(
                 FetchDescriptor<LocalCategory>(
                     predicate: #Predicate { $0.id == categoryID && $0.scopeKey == scopeKey }
                 )
             ).first
         } else {
-            nil
+            Optional<LocalCategory>.none
         }
-        let destinationAccount = if let destinationAccountID = copy.destinationAccountID {
+        let destinationAccount: LocalAccount? = if let destinationAccountID = copy.destinationAccountID {
             try context.fetch(
                 FetchDescriptor<LocalAccount>(
                     predicate: #Predicate {
@@ -1875,7 +1882,7 @@ struct LocalLedgerRepository {
                 )
             ).first
         } else {
-            nil
+            Optional<LocalAccount>.none
         }
         guard let account else { throw LocalLedgerError.invalidReference }
         if copy.destinationAccountID != nil, destinationAccount == nil {
@@ -2860,7 +2867,7 @@ struct LocalLedgerRepository {
         let scopeKey = plan.scopeKey
         let planID = plan.id
         let entityType = LocalMutationEntity.installmentPlan.rawValue
-        try context.fetch(
+        return try context.fetch(
             FetchDescriptor<OutboxMutation>(
                 predicate: #Predicate {
                     $0.scopeKey == scopeKey &&

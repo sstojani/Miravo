@@ -1001,7 +1001,7 @@ actor LedgerSyncActor {
                       accountTrackers[snapshot.accountID] == snapshot.trackerID,
                       snapshot.categoryID.map({
                           categoryTrackers[$0] == snapshot.trackerID &&
-                              categoryKinds[$0] == CategoryKind.expense.rawValue
+                              categoryKinds[$0] == LocalCategoryKind.expense.rawValue
                       }) ?? true
                 else {
                     throw SyncEngineError.invalidServerResponse

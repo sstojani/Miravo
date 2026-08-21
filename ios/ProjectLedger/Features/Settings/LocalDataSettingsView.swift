@@ -561,7 +561,7 @@ private struct TrackerEditorSheet: View {
                     }
                 }
 
-                Section("Defaults") {
+                Section {
                     Picker("Default account", selection: $defaultAccountID) {
                         Text("No default account").tag(UUID?.none)
                         ForEach(availableAccounts) { account in
@@ -576,6 +576,8 @@ private struct TrackerEditorSheet: View {
                         }
                     }
                     LabeledContent("Base currency", value: tracker.baseCurrencyCode)
+                } header: {
+                    Text("Defaults")
                 } footer: {
                     Text("Historical reporting currency cannot be changed here.")
                 }
