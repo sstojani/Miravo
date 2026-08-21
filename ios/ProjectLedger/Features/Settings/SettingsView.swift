@@ -108,8 +108,10 @@ struct SettingsView: View {
     }
 
     private var synchronizationSection: some View {
-        Section("Synchronization") {
+        Section {
             synchronizationRows
+        } header: {
+            Text("Synchronization")
         } footer: {
             Text("Local changes remain available while offline. Failed and conflicting operations stay on this iPhone until you retry or resolve them.")
         }

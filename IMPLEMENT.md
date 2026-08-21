@@ -1109,3 +1109,24 @@ Create a clean local receipt checkpoint after one final regression/secret scan. 
 
 - Backend CI is now **verified on GitHub Actions** at commit `09354bceddc2204e582e21dbf02c69271cc3bf46`.
 - The Docker metadata cleanup and Swift source fixes are **locally checked where possible** but not yet hosted-verified; the next exact action is to commit, push, and inspect the new Actions runs.
+
+## 2026-08-21 — Hosted CI follow-up: dependency audit green, Settings section syntax
+
+### Material work
+
+- Pushed `9fb4d2297382a7b06ca2b720b4fd70fc28c92d3e` to `main` and `agent/milestone-9-private-receipts`.
+- Hosted backend CI passed again, including the final Docker image build.
+- Hosted dependency audit passed completely. The runtime Dockerfile cleanup removed the stale global Python metadata that Trivy had reported.
+- Hosted iOS CI now passes source validation, XcodeGen, SwiftFormat, and secret scan, but simulator compilation failed in `SettingsView`: this Xcode/SwiftUI combination rejects `Section("Synchronization") { } footer: { }`. Converted that section to the explicit `Section { } header: { } footer: { }` initializer.
+
+### Commands and outcomes
+
+- GitHub Actions jobs for run set `32493751070`, `32493751071`, and `32493751073`: **inspected** with the GitHub connector.
+- Backend CI job `96807216724`: **passed on GitHub Actions**.
+- Dependency audit jobs `96807216614` and `96807216720`: **passed on GitHub Actions**.
+- iOS simulator job `96807216332`: **failed on GitHub Actions** at Swift compile only; the failing diagnostic was isolated to the synchronization section initializer.
+
+### Verification boundary and next exact action
+
+- Backend CI and dependency/container audits are **verified on GitHub Actions** at commit `9fb4d2297382a7b06ca2b720b4fd70fc28c92d3e`.
+- The Settings section syntax fix is not yet hosted-verified. The next exact action is to run local source checks, commit, push, and inspect the next iOS CI result.
