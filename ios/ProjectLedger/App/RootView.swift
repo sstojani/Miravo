@@ -46,25 +46,24 @@ struct RootView: View {
             case .authenticated:
                 if let scopeKey = session.scopeKey {
                     MainTabView(scopeKey: scopeKey)
-                        .task {
-                            #if DEBUG
-                                if ProcessInfo.processInfo.arguments.contains(
-                                    "-ui-testing-authenticated"
-                                ) {
-                                    try? LocalLedgerRepository(context: modelContext)
-                                        .bootstrapDefaults(scopeKey: scopeKey)
-                                    await sync.startForegroundTriggers(session: session)
-                                    return
-                                }
-                            #endif
+                        .task(id: scopeKey) {
+                            if !session.hasServerConnection {
+                                try? LocalLedgerRepository(context: modelContext)
+                                    .bootstrapDefaults(scopeKey: scopeKey)
+                                return
+                            }
+
                             await sync.refreshDiagnostics(scopeKey: scopeKey)
                             let needsInitialProvisioning = sync.diagnostics.bootstrapRequired
                             await sync.synchronize(session: session)
-                            if needsInitialProvisioning && !sync.diagnostics.bootstrapRequired {
+
+                            if needsInitialProvisioning &&
+                                !sync.diagnostics.bootstrapRequired {
                                 try? LocalLedgerRepository(context: modelContext)
                                     .bootstrapDefaults(scopeKey: scopeKey)
                                 await sync.synchronize(session: session)
                             }
+
                             await sync.startForegroundTriggers(session: session)
                         }
                 } else {
@@ -142,6 +141,11 @@ private struct MainTabView: View {
         }
         .task(id: scopeKey) {
             await reminders.configure(scopeKey: scopeKey)
+
+            guard session.hasServerConnection else {
+                return
+            }
+
             let clock = ContinuousClock()
             while !Task.isCancelled {
                 do {

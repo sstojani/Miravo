@@ -42,12 +42,9 @@ final class SessionController: ObservableObject {
                 return
             }
             if ProcessInfo.processInfo.arguments.contains("-ui-testing-authenticated") {
-                let testScope = "https://ui-test.invalid|00000000-0000-0000-0000-000000000001"
+                let testScope = "local|ui-testing"
                 preferences.hasCompletedOnboarding = true
-                preferences.hasAuthenticatedBefore = true
-                preferences.isSignedOut = false
-                preferences.currentScopeKey = testScope
-                preferences.serverURLString = "https://ui-test.invalid"
+                preferences.beginLocalProfile(scopeKey: testScope)
                 scopeKey = testScope
                 phase = .authenticated
                 return
@@ -57,12 +54,28 @@ final class SessionController: ObservableObject {
     }
 
     var canOpenOffline: Bool {
-        preferences.hasAuthenticatedBefore &&
-            !preferences.isSignedOut &&
+        !preferences.isSignedOut &&
             preferences.currentScopeKey != nil
     }
 
     var configuredServerURL: String { preferences.serverURLString }
+
+    var hasServerConnection: Bool {
+        guard phase == .authenticated,
+              !preferences.isSignedOut,
+              let scopeKey
+        else {
+            return false
+        }
+
+        if preferences.hasExplicitServerConnectionPreference {
+            return preferences.serverConnectionEnabled
+        }
+
+        return preferences.hasAuthenticatedBefore &&
+            !preferences.serverURLString.isEmpty &&
+            !SessionScope.isLocal(scopeKey)
+    }
 
     var appLockEnabled: Bool { preferences.appLockEnabled }
 
@@ -83,8 +96,27 @@ final class SessionController: ObservableObject {
     }
 
     func completeOnboarding() {
+        startLocalOnly()
+    }
+
+    func configureServerAfterOnboarding() {
         preferences.hasCompletedOnboarding = true
+        errorMessage = nil
+        requestID = nil
         phase = .signIn
+    }
+
+    func startLocalOnly() {
+        let localScope = SessionScope.localKey(deviceID: preferences.deviceID)
+
+        preferences.hasCompletedOnboarding = true
+        preferences.beginLocalProfile(scopeKey: localScope)
+
+        scopeKey = localScope
+        errorMessage = nil
+        requestID = nil
+        logoutWarning = nil
+        phase = preferences.appLockEnabled ? .locked : .authenticated
     }
 
     func signIn(serverURL: String, email: String, password: String) async {
@@ -125,14 +157,42 @@ final class SessionController: ObservableObject {
                     statusCode: nil
                 )
             }
-            let newScopeKey = SessionScope.key(serverURL: baseURL, userID: userID)
-            try await tokenStore.save(tokens, scopeKey: newScopeKey)
+            let remoteIdentityKey = SessionScope.key(
+                serverURL: baseURL,
+                userID: userID
+            )
+
+            let existingScope = scopeKey ?? preferences.currentScopeKey
+            let activeScopeKey: String
+
+            if let existingScope,
+               SessionScope.isLocal(existingScope) {
+                let existingRemoteIdentity = preferences.remoteIdentityKey
+
+                if !existingRemoteIdentity.isEmpty,
+                   existingRemoteIdentity != remoteIdentityKey {
+                    errorMessage = String(
+                        localized: "This local profile is already linked to a different server account."
+                    )
+                    requestID = nil
+                    return
+                }
+
+                activeScopeKey = existingScope
+            } else {
+                activeScopeKey = remoteIdentityKey
+            }
+
+            try await tokenStore.save(tokens, scopeKey: activeScopeKey)
+
             preferences.recordAuthentication(
                 serverURL: baseURL,
                 email: email,
-                scopeKey: newScopeKey
+                scopeKey: activeScopeKey,
+                remoteIdentityKey: remoteIdentityKey
             )
-            scopeKey = newScopeKey
+
+            scopeKey = activeScopeKey
             phase = .authenticated
         } catch let error as APIClientError {
             errorMessage = localizedMessage(for: error)
@@ -175,6 +235,42 @@ final class SessionController: ObservableObject {
         preferences.appLockEnabled = enabled
     }
 
+    func disconnectServer() async {
+        guard let currentScope = scopeKey else { return }
+
+        logoutWarning = nil
+
+        let savedTokens: SessionTokenBundle?
+        do {
+            savedTokens = try await tokenStore.load(scopeKey: currentScope)
+        } catch {
+            savedTokens = nil
+        }
+
+        if let baseURL = try? ServerURLPolicy.validated(preferences.serverURLString),
+           let tokens = savedTokens {
+            do {
+                try await APIClient(baseURL: baseURL)
+                    .logout(accessToken: tokens.accessToken)
+            } catch {
+                logoutWarning = String(
+                    localized: "This phone disconnected locally, but the server session could not be revoked while offline."
+                )
+            }
+        }
+
+        do {
+            try await tokenStore.delete(scopeKey: currentScope)
+        } catch {
+            // The local ledger remains usable even if Keychain cleanup fails.
+        }
+
+        preferences.recordServerDisconnect()
+        errorMessage = nil
+        requestID = nil
+        phase = .authenticated
+    }
+
     func signOut() async {
         guard let currentScope = scopeKey else {
             finishLocalSignOut()
@@ -210,7 +306,9 @@ final class SessionController: ObservableObject {
             phase = .onboarding
             return
         }
-        guard canOpenOffline, let savedScope = preferences.currentScopeKey else {
+        guard !preferences.isSignedOut,
+              let savedScope = preferences.currentScopeKey
+        else {
             phase = .signIn
             return
         }

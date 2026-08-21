@@ -57,27 +57,36 @@ struct OnboardingView: View {
                 }
                 .tabViewStyle(.page(indexDisplayMode: .always))
 
-                Button {
-                    if page == pages.count - 1 {
-                        session.completeOnboarding()
-                    } else {
+                if page == pages.count - 1 {
+                    VStack(spacing: 12) {
+                        Button("Continue without server") {
+                            session.completeOnboarding()
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.large)
+                        .frame(maxWidth: .infinity)
+
+                        Button("Configure server") {
+                            session.configureServerAfterOnboarding()
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.large)
+                        .frame(maxWidth: .infinity)
+                    }
+                    .padding(.horizontal, 28)
+                } else {
+                    Button("Continue") {
                         if reduceMotion {
                             page += 1
                         } else {
                             withAnimation { page += 1 }
                         }
                     }
-                } label: {
-                    if page == pages.count - 1 {
-                        Text("Configure server")
-                    } else {
-                        Text("Continue")
-                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    .padding(.horizontal, 28)
+                    .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                .padding(.horizontal, 28)
-                .frame(maxWidth: .infinity)
             }
             .padding(.vertical)
         }

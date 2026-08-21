@@ -23,9 +23,18 @@ enum BackgroundSyncScheduler {
                 return
             }
             let operation = Task { @MainActor in
+                guard sessionController.hasServerConnection else {
+                    refreshTask.setTaskCompleted(success: true)
+                    return
+                }
+
                 _ = schedule()
-                let success = await syncController.synchronize(session: sessionController)
-                refreshTask.setTaskCompleted(success: success && !Task.isCancelled)
+                let success = await syncController.synchronize(
+                    session: sessionController
+                )
+                refreshTask.setTaskCompleted(
+                    success: success && !Task.isCancelled
+                )
             }
             refreshTask.expirationHandler = {
                 operation.cancel()

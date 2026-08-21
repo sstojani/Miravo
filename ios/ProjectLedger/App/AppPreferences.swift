@@ -13,6 +13,8 @@ final class AppPreferences {
         static let lastEmail = "session.lastEmail"
         static let recurringReminderLeadHours = "planning.recurringReminderLeadHours."
         static let recurringRemindersEnabled = "planning.recurringRemindersEnabled."
+        static let remoteIdentity = "server.remoteIdentity"
+        static let serverConnectionEnabled = "server.connectionEnabled"
         static let serverURL = "server.baseURL"
         static let signedOut = "session.signedOut"
     }
@@ -31,6 +33,20 @@ final class AppPreferences {
     var serverURLString: String {
         get { defaults.string(forKey: Key.serverURL) ?? "" }
         set { defaults.set(newValue, forKey: Key.serverURL) }
+    }
+
+    var serverConnectionEnabled: Bool {
+        get { defaults.bool(forKey: Key.serverConnectionEnabled) }
+        set { defaults.set(newValue, forKey: Key.serverConnectionEnabled) }
+    }
+
+    var hasExplicitServerConnectionPreference: Bool {
+        defaults.object(forKey: Key.serverConnectionEnabled) != nil
+    }
+
+    var remoteIdentityKey: String {
+        get { defaults.string(forKey: Key.remoteIdentity) ?? "" }
+        set { defaults.set(newValue, forKey: Key.remoteIdentity) }
     }
 
     var lastEmail: String {
@@ -98,11 +114,33 @@ final class AppPreferences {
         return created
     }
 
-    func recordAuthentication(serverURL: URL, email: String, scopeKey: String) {
+    func beginLocalProfile(scopeKey: String) {
+        serverURLString = ""
+        lastEmail = ""
+        remoteIdentityKey = ""
+        serverConnectionEnabled = false
+        currentScopeKey = scopeKey
+        hasAuthenticatedBefore = false
+        isSignedOut = false
+    }
+
+    func recordAuthentication(
+        serverURL: URL,
+        email: String,
+        scopeKey: String,
+        remoteIdentityKey: String? = nil
+    ) {
         serverURLString = serverURL.absoluteString
         lastEmail = email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         currentScopeKey = scopeKey
+        self.remoteIdentityKey = remoteIdentityKey ?? scopeKey
+        serverConnectionEnabled = true
         hasAuthenticatedBefore = true
+        isSignedOut = false
+    }
+
+    func recordServerDisconnect() {
+        serverConnectionEnabled = false
         isSignedOut = false
     }
 
@@ -118,6 +156,8 @@ final class AppPreferences {
             Key.currentScopeKey,
             Key.hasAuthenticated,
             Key.lastEmail,
+            Key.remoteIdentity,
+            Key.serverConnectionEnabled,
             Key.serverURL,
             Key.signedOut,
         ] {

@@ -12,6 +12,7 @@ struct SettingsView: View {
     @Query private var conflicts: [SyncConflict]
     @Query private var attachmentTransfers: [AttachmentTransfer]
     @State private var signingOut = false
+    @State private var showingServerSetup = false
 
     init(scopeKey: String) {
         self.scopeKey = scopeKey
@@ -43,9 +44,14 @@ struct SettingsView: View {
             privacySection
             synchronizationSection
             advancedSection
-            signOutSection
+            if session.hasServerConnection {
+                serverConnectionSection
+            }
         }
         .navigationTitle("Settings")
+        .sheet(isPresented: $showingServerSetup) {
+            LoginView(allowsDismiss: true)
+        }
         .task {
             await sync.refreshDiagnostics(scopeKey: scopeKey)
         }
@@ -74,15 +80,21 @@ struct SettingsView: View {
             } label: {
                 Label("Trackers, accounts, and categories", systemImage: "square.stack.3d.up")
             }
-            NavigationLink {
-                CollaborationSettingsView(scopeKey: scopeKey)
-            } label: {
-                Label("Collaboration", systemImage: "person.2")
-            }
-            NavigationLink {
-                ShortcutSettingsView(scopeKey: scopeKey)
-            } label: {
-                Label("Apple Wallet Shortcut", systemImage: "bolt.horizontal.circle")
+            if session.hasServerConnection {
+                NavigationLink {
+                    CollaborationSettingsView(scopeKey: scopeKey)
+                } label: {
+                    Label("Collaboration", systemImage: "person.2")
+                }
+
+                NavigationLink {
+                    ShortcutSettingsView(scopeKey: scopeKey)
+                } label: {
+                    Label(
+                        "Apple Wallet Shortcut",
+                        systemImage: "bolt.horizontal.circle"
+                    )
+                }
             }
             NavigationLink {
                 ExportSettingsView(scopeKey: scopeKey)
@@ -109,11 +121,28 @@ struct SettingsView: View {
 
     private var synchronizationSection: some View {
         Section {
-            synchronizationRows
+            if session.hasServerConnection {
+                synchronizationRows
+            } else {
+                Label("Local data", systemImage: "iphone")
+
+                Button {
+                    showingServerSetup = true
+                } label: {
+                    Label(
+                        "Configure server",
+                        systemImage: "externaldrive.connected.to.line.below"
+                    )
+                }
+            }
         } header: {
             Text("Synchronization")
         } footer: {
-            Text("Local changes remain available while offline. Failed and conflicting operations stay on this iPhone until you retry or resolve them.")
+            if session.hasServerConnection {
+                Text("Local changes remain available while offline. Failed and conflicting operations stay on this iPhone until you retry or resolve them.")
+            } else {
+                Text("Financial records stay on this iPhone and synchronize only with the self-hosted server you choose.")
+            }
         }
     }
 
@@ -189,9 +218,13 @@ struct SettingsView: View {
     private var advancedSection: some View {
         Section("Advanced") {
             LabeledContent("Server") {
-                Text(session.configuredServerURL)
-                    .multilineTextAlignment(.trailing)
-                    .textSelection(.enabled)
+                Text(
+                    session.hasServerConnection
+                        ? session.configuredServerURL
+                        : String(localized: "Not connected")
+                )
+                .multilineTextAlignment(.trailing)
+                .textSelection(.enabled)
             }
             LabeledContent("Local scope") {
                 Text(scopeKey.split(separator: "|").last.map(String.init) ?? "—")
@@ -201,24 +234,26 @@ struct SettingsView: View {
         }
     }
 
-    private var signOutSection: some View {
+    private var serverConnectionSection: some View {
         Section {
             Button(role: .destructive) {
                 signingOut = true
                 Task {
-                    await session.signOut()
-                    await reminders.deactivate()
+                    await sync.stopForegroundTriggers()
+                    await session.disconnectServer()
                     signingOut = false
                 }
             } label: {
                 HStack {
-                    if signingOut { ProgressView() }
-                    Text("Sign out")
+                    if signingOut {
+                        ProgressView()
+                    }
+                    Text("Disconnect server")
                 }
             }
             .disabled(signingOut)
         } footer: {
-            Text("Signing out does not erase local records. Another account cannot see them because every cached object is scoped to its server and user.")
+            Text("Financial records stay on this iPhone and synchronize only with the self-hosted server you choose.")
         }
     }
 

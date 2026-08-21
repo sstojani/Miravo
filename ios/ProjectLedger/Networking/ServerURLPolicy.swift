@@ -50,6 +50,14 @@ enum SessionScope {
     static func key(serverURL: URL, userID: UUID) -> String {
         "\(serverURL.absoluteString)|\(userID.uuidString.lowercased())"
     }
+
+    static func localKey(deviceID: String) -> String {
+        "local|\(deviceID.lowercased())"
+    }
+
+    static func isLocal(_ scopeKey: String) -> Bool {
+        scopeKey.hasPrefix("local|")
+    }
 }
 
 enum JWTSubjectParser {
