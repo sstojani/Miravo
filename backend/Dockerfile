@@ -20,7 +20,7 @@ WORKDIR /app
 RUN python -m pip install --no-cache-dir --upgrade "setuptools>=78.1.1,<81"
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project \
-    && python -m pip uninstall -y setuptools \
+    && /usr/local/bin/python -m pip uninstall -y setuptools \
     && rm -rf /root/.cache/uv /root/.cache/pip /usr/local/lib/python*/site-packages/pkg_resources/tests
 
 COPY --chown=projectledger:projectledger backend ./backend

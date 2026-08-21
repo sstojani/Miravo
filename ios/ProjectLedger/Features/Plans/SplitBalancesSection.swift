@@ -253,7 +253,7 @@ private struct SettlementEntrySheet: View {
                     TextField("Note", text: $note, axis: .vertical)
                 }
 
-                Section("Account movement") {
+                Section {
                     Toggle("Also subtract from an account", isOn: $includeAccountMovement)
                         .disabled(accounts.isEmpty)
                     if includeAccountMovement {
@@ -270,6 +270,8 @@ private struct SettlementEntrySheet: View {
                             }
                         }
                     }
+                } header: {
+                    Text("Account movement")
                 } footer: {
                     Text("A balance-only settlement changes who owes whom. The optional account movement also updates an account balance without counting as spending.")
                 }

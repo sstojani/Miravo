@@ -96,7 +96,7 @@ struct ShortcutSettingsView: View {
                 }
             }
 
-            Section("Capture defaults") {
+            Section {
                 if eligibleTrackers.isEmpty {
                     Label("No editable tracker is available", systemImage: "person.crop.circle.badge.exclamationmark")
                     Text("An editor, admin, or owner role is required to create expenses with a Shortcut token.")
@@ -127,11 +127,13 @@ struct ShortcutSettingsView: View {
                         Label("Edit tracker defaults", systemImage: "slider.horizontal.3")
                     }
                 }
+            } header: {
+                Text("Capture defaults")
             } footer: {
                 Text("A tracker-restricted token is safer. Tracker defaults are shared settings and still follow your current server role.")
             }
 
-            Section("Active Shortcut tokens") {
+            Section {
                 if controller.isWorking && controller.credentials.isEmpty {
                     HStack {
                         ProgressView()
@@ -166,6 +168,8 @@ struct ShortcutSettingsView: View {
                     Label("Create Shortcut token", systemImage: "key.fill")
                 }
                 .disabled(eligibleTrackers.isEmpty || controller.isWorking || sync.isRunning)
+            } header: {
+                Text("Active Shortcut tokens")
             } footer: {
                 Text("Creating and revoking tokens requires the server. Existing automations are unchanged while this iPhone is offline.")
             }
@@ -184,7 +188,7 @@ struct ShortcutSettingsView: View {
                 }
             }
 
-            Section("Setup and recovery") {
+            Section {
                 LabeledContent("API host") {
                     Text(session.configuredServerURL)
                         .multilineTextAlignment(.trailing)
@@ -198,6 +202,8 @@ struct ShortcutSettingsView: View {
                 Label("The raw token is shown once and is never saved by Miravo.", systemImage: "eye.slash")
                 Label("Use the same event UUID for retries and queued flushes.", systemImage: "arrow.triangle.2.circlepath")
                 Label("Wallet capture is not bank reconciliation.", systemImage: "exclamationmark.shield")
+            } header: {
+                Text("Setup and recovery")
             } footer: {
                 Text("When rotating, copy and test the replacement in Shortcuts before revoking the old token.")
             }
@@ -413,7 +419,7 @@ private struct ShortcutCredentialCreateView: View {
                     }
                 }
             }
-            Section("Token details") {
+            Section {
                 TextField("Name", text: $name)
                     .textInputAutocapitalization(.sentences)
                     .autocorrectionDisabled()
@@ -425,14 +431,18 @@ private struct ShortcutCredentialCreateView: View {
                         }
                     }
                 }
+            } header: {
+                Text("Token details")
             } footer: {
                 Text("The recommended tracker restriction limits the token if it is leaked. An unrestricted token follows every tracker where you can edit.")
             }
 
-            Section("Permissions") {
+            Section {
                 Label("Read expense categories", systemImage: "tag")
                 Label("Read accounts", systemImage: "wallet.pass")
                 Label("Create expenses", systemImage: "plus.circle")
+            } header: {
+                Text("Permissions")
             } footer: {
                 Text("The token cannot read transactions, change settings, move money, or use your normal app session.")
             }

@@ -691,7 +691,7 @@ private struct TransactionEditorView: View {
     ) throws -> Money? {
         if account.currencyCode == tracker.baseCurrencyCode,
            account.currencyExponent == tracker.baseCurrencyExponent {
-            return nil
+            return Optional<Money>.none
         }
         if transaction.kind == .transfer,
            let destinationMoney,

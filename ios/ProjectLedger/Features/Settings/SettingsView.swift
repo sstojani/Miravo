@@ -211,11 +211,11 @@ struct SettingsView: View {
 
     private var backgroundRefreshStatus: String {
         switch sync.backgroundRefreshScheduled {
-        case true:
+        case .some(true):
             String(localized: "Requested")
-        case false:
+        case .some(false):
             String(localized: "Unavailable")
-        case nil:
+        case .none:
             String(localized: "Not requested")
         }
     }

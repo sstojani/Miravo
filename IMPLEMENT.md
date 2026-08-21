@@ -1055,3 +1055,32 @@ Create a clean local receipt checkpoint after one final regression/secret scan. 
 - Backend/schema behavior is **verified locally** against SQLite and should be deterministic on hosted PostgreSQL because the serializers now define bounds explicitly.
 - Docker image cleanup and iOS test-host behavior are **designed from hosted Actions logs** but require the next GitHub Actions run for verification because this workspace has no Docker daemon or Xcode.
 - The next exact action is to commit and push this fix, then inspect the new hosted Backend CI, Dependency audit, and iOS CI runs.
+
+## 2026-08-21 — Hosted CI follow-up: Docker pip path and first Swift compile errors
+
+### Material work
+
+- Pushed `9522f2364ff9ed41f8082b0bb215d941e59e615d`; latest Actions proved the PostgreSQL schema diff and Python audit are fixed, then failed later.
+- Backend CI and container audit both failed during Docker build because the Dockerfile ran `python -m pip uninstall` after `uv sync`; at that point `PATH` resolves `python` to `/app/.venv/bin/python`, and the uv-created venv intentionally has no `pip`. Changed the uninstall to `/usr/local/bin/python -m pip uninstall -y setuptools`.
+- iOS CI now gets past XcodeGen, localization, SwiftFormat, secret scan, and test-host setup. The next compile failures were real Swift source errors. Applied focused source fixes:
+  - optional Bool switch in `SettingsView` now matches `.some(true)`, `.some(false)`, and `.none`;
+  - titled `Section` instances that also have footers now use the explicit `Section { } header: { } footer: { }` initializer in Shortcut and settlement forms;
+  - `TransactionsView.filteredTransactions` explicitly returns the filtered array;
+  - a `Money?` nil return in `TransactionDetailView` is explicit for Swift type inference.
+
+### Commands and outcomes
+
+- GitHub Actions logs for run set `32492605034`, `32492605085`, and `32492605121`: **inspected** with the GitHub connector; no PAT was re-entered for log access.
+- `UV_CACHE_DIR=/tmp/miravo-uv-cache PROJECT_LEDGER_ENV=test PROJECT_LEDGER_DATABASE_URL=sqlite:///:memory: uv run python backend/manage.py spectacular --file /tmp/openapi-schema-final.yml --validate && diff -u backend/openapi-schema.yml /tmp/openapi-schema-final.yml`: **passed locally**.
+- `UV_CACHE_DIR=/tmp/miravo-uv-cache uv lock --check`: **passed locally**.
+- `UV_CACHE_DIR=/tmp/miravo-uv-cache uv run pip-audit --cache-dir /tmp/miravo-pip-audit-cache`: **passed locally** with no known vulnerabilities.
+- `./ios/check-localizations.sh`: **passed locally** — 783 literal UI keys.
+- `python3 ios/check-project-contract.py`: **passed locally**.
+- `git diff --check`: **passed locally**.
+- `swiftformat --version`: **not available** in this Linux workspace; macOS runner remains the formatting/Swift compile verifier.
+
+### Verification boundary and next exact action
+
+- These are **source/local checks only** for the Swift fixes; the next macOS Actions run must verify SwiftFormat and Xcode compilation.
+- Docker build remains **unverified locally** because this workspace has no Docker daemon. The next Actions run must verify the absolute-pip Dockerfile fix and Trivy scan.
+- The next exact action is to commit and push the follow-up, then inspect GitHub Actions again.

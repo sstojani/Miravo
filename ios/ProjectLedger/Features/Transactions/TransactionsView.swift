@@ -76,7 +76,7 @@ struct TransactionsView: View {
         )
         let now = Date.now
         let calendar = Calendar.autoupdatingCurrent
-        transactions.filter { transaction in
+        return transactions.filter { transaction in
             let deletionMatches = showDeleted ? transaction.deletedAt != nil : transaction.deletedAt == nil
             return visibleTrackerIDs.contains(transaction.trackerID) &&
                 deletionMatches &&
