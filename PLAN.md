@@ -2,7 +2,7 @@
 
 Last updated: 2026-08-21. A checked item is complete; its verification tier is recorded in `IMPLEMENT.md`. Items are not checked merely because scaffolding exists.
 
-Current focus: **Milestone 9/10 — hosted CI hardening for native export checkpoint**. Miravo is the final product name and `https://github.com/sstojani/Miravo.git` is populated. A user-local GitHub CLI is installed at `../tools/gh`; pushes used an ephemeral PAT header and did not store credentials. Remote `main` and `agent/milestone-9-private-receipts` contain the native export source checkpoint plus follow-up CI fixes through the current pushed revision. The attachment API, isolated storage, sync metadata, native protected-file queue, camera/photo/file capture, metadata-stripped image/PDF preparation, on-device OCR review, authenticated checksum-verified preview/download, deterministic backend analytics API, matching offline native analytics calculator/UI source, backend CSV/PDF/full export jobs, and native export browsing/download source are implemented at the local/source tier. Xcode execution, physical camera/OCR/export testing, hosted CI, unsigned IPA, and device validation remain external until Actions and user-side signing/device checks pass.
+Current focus: **Milestone 9/10 — hosted CI hardening for native export checkpoint**. Miravo is the final product name and `https://github.com/sstojani/Miravo.git` is populated. A user-local GitHub CLI is installed at `../tools/gh`; pushes used an ephemeral PAT header and did not store credentials. Remote `main` and `agent/milestone-9-private-receipts` contain the native export source checkpoint plus follow-up CI fixes through `09354bceddc2204e582e21dbf02c69271cc3bf46`. Backend CI is green on GitHub Actions at that revision; the remaining hosted failures are the container Trivy metadata scan and iOS simulator Swift compilation. The attachment API, isolated storage, sync metadata, native protected-file queue, camera/photo/file capture, metadata-stripped image/PDF preparation, on-device OCR review, authenticated checksum-verified preview/download, deterministic backend analytics API, matching offline native analytics calculator/UI source, backend CSV/PDF/full export jobs, and native export browsing/download source are implemented at the local/source tier. Xcode execution, physical camera/OCR/export testing, unsigned IPA, and device validation remain external until Actions and user-side signing/device checks pass.
 
 ## Milestone 0 — Discovery and durable project plan
 
@@ -27,7 +27,7 @@ Current focus: **Milestone 9/10 — hosted CI hardening for native export checkp
 - [x] Generate and commit migrations and OpenAPI schema.
 - [x] Pass local format, lint, type, unit/integration, Django, migration, and schema checks.
 - [ ] Pass PostgreSQL/Redis integration checks in Docker.
-- [ ] Pass backend GitHub Actions on a remote repository.
+- [x] Pass backend GitHub Actions on a remote repository.
 
 Acceptance: a clean clone starts the development stack, creates an owner, authenticates, rotates/revokes sessions correctly, passes health checks, emits valid OpenAPI, and passes CI.
 

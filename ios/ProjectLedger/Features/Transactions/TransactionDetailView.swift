@@ -836,7 +836,7 @@ private struct RefundEntryView: View {
                 exponent: account.currencyExponent,
                 locale: .current
             )
-            let reportingBaseMoney = if requiresBaseAmount {
+            let reportingBaseMoney: Money? = if requiresBaseAmount {
                 try Money.positive(
                     majorUnits: baseAmount,
                     currencyCode: tracker.baseCurrencyCode,
@@ -844,7 +844,7 @@ private struct RefundEntryView: View {
                     locale: .current
                 )
             } else {
-                nil
+                Optional<Money>.none
             }
             let category = availableCategories.first { $0.id == categoryID }
             try LocalLedgerRepository(context: modelContext).createTransaction(

@@ -1084,3 +1084,28 @@ Create a clean local receipt checkpoint after one final regression/secret scan. 
 - These are **source/local checks only** for the Swift fixes; the next macOS Actions run must verify SwiftFormat and Xcode compilation.
 - Docker build remains **unverified locally** because this workspace has no Docker daemon. The next Actions run must verify the absolute-pip Dockerfile fix and Trivy scan.
 - The next exact action is to commit and push the follow-up, then inspect GitHub Actions again.
+
+## 2026-08-21 — Hosted CI follow-up: backend green, remaining iOS/audit fixes
+
+### Material work
+
+- Pushed `09354bceddc2204e582e21dbf02c69271cc3bf46` to `main` and `agent/milestone-9-private-receipts`.
+- Inspected the resulting hosted Actions runs. Backend CI is now green, including PostgreSQL migrations, Ruff, mypy, pytest, OpenAPI diff, and Docker image build.
+- Dependency audit now builds the image successfully and passes the Python source audit, but the container Trivy job still reports stale global Python package metadata for `msgpack 1.1.2` and `setuptools 70.3.0`. The application virtual environment scanned clean. The Dockerfile now removes unused global pip, ensurepip, setuptools, wheel, and cache metadata from the final runtime image after `uv sync`.
+- iOS CI now passes source validation, XcodeGen generation, SwiftFormat lint, secret scan, and test-host setup. The remaining simulator failure is Swift compilation: `SettingsView` was too complex for the type checker, and `RefundEntryView` returned an untyped optional `nil`. Split `SettingsView` into smaller view-builder sections and typed the refund base-money optional explicitly.
+
+### Commands and outcomes
+
+- GitHub Actions jobs for run set `32493153630`, `32493153619`, and `32493153614`: **inspected** with the GitHub connector.
+- Backend CI job `96805289457`: **passed on GitHub Actions**.
+- Dependency audit job `96805289226`: **failed on GitHub Actions** at Trivy only; Docker build and Python audit passed.
+- iOS simulator job `96805289279`: **failed on GitHub Actions** at Swift compile only; source validation, XcodeGen, SwiftFormat, and secret scan passed.
+- `UV_CACHE_DIR=/tmp/miravo-uv-cache PROJECT_LEDGER_ENV=test PROJECT_LEDGER_DATABASE_URL=sqlite:///:memory: uv run python backend/manage.py spectacular --file /tmp/openapi-schema-final.yml --validate && diff -u backend/openapi-schema.yml /tmp/openapi-schema-final.yml`: **passed locally**.
+- `UV_CACHE_DIR=/tmp/miravo-uv-cache uv lock --check`: **passed locally**.
+- `UV_CACHE_DIR=/tmp/miravo-uv-cache uv run pip-audit --cache-dir /tmp/miravo-pip-audit-cache`: **passed locally** with no known vulnerabilities.
+- `./ios/check-localizations.sh && python3 ios/check-project-contract.py && git diff --check`: **passed locally**.
+
+### Verification boundary and next exact action
+
+- Backend CI is now **verified on GitHub Actions** at commit `09354bceddc2204e582e21dbf02c69271cc3bf46`.
+- The Docker metadata cleanup and Swift source fixes are **locally checked where possible** but not yet hosted-verified; the next exact action is to commit, push, and inspect the new Actions runs.
