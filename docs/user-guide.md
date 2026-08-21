@@ -68,7 +68,7 @@ The raw token appears only after creation. Copy it into the Shortcut authorizati
 
 Receipts are private, OCR is on-device and reviewable, and no advertising/third-party analytics SDK is used initially. Revoke lost devices/Shortcut tokens promptly. Synchronized records return after reinstall; export pending-only local data before uninstalling an unsynced app.
 
-Server exports can generate CSV, PDF, or full JSON for a tracker and optional date/account filters. Download links are authenticated, requester-only, expire automatically, and include a checksum header. Native export browsing/downloading is still pending; until then use the API or Django Admin/private operations path.
+Settings → Exports can ask the server to generate CSV, PDF, or full JSON for a tracker and optional account filter. Download links are authenticated, requester-only, expire automatically, and include a checksum header. The app verifies same-origin delivery, byte count, SHA-256, and content type before handing the file to iOS for saving. Only synchronized server data is included; export pending-only local changes before uninstalling an unsynced app.
 
 If the app reports `local_store_unavailable`, restart once and do not delete the app when unsynchronized records may exist. The app intentionally leaves the persistent store untouched. Follow the recovery section in troubleshooting before reinstalling.
 

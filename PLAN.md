@@ -2,7 +2,7 @@
 
 Last updated: 2026-08-21. A checked item is complete; its verification tier is recorded in `IMPLEMENT.md`. Items are not checked merely because scaffolding exists.
 
-Current focus: **Milestone 9 — native export UI after the backend export slice**. Miravo is the final product name and `https://github.com/sstojani/Miravo.git` is now populated. A user-local GitHub CLI is installed at `../tools/gh`; push used an ephemeral PAT header and did not store credentials. Remote `main` and `agent/milestone-9-private-receipts` both reached `7213f29650b098cfda1e5b65159fb9c46b182e42`. The attachment API, isolated storage, sync metadata, native protected-file queue, camera/photo/file capture, metadata-stripped image/PDF preparation, on-device OCR review, authenticated checksum-verified preview/download, deterministic backend analytics API, matching offline native analytics calculator/UI source, and backend CSV/PDF/full export jobs are implemented at the local/source tier. Xcode execution, physical camera/OCR testing, hosted CI, and native export UI remain external or next.
+Current focus: **Milestone 9 — native export UI source checkpoint**. Miravo is the final product name and `https://github.com/sstojani/Miravo.git` is populated. A user-local GitHub CLI is installed at `../tools/gh`; the previous push used an ephemeral PAT header and did not store credentials. Remote `main` and `agent/milestone-9-private-receipts` are verified at `b8775fea89d0392b05119e915d49fd6852319ce8`. The attachment API, isolated storage, sync metadata, native protected-file queue, camera/photo/file capture, metadata-stripped image/PDF preparation, on-device OCR review, authenticated checksum-verified preview/download, deterministic backend analytics API, matching offline native analytics calculator/UI source, backend CSV/PDF/full export jobs, and native export browsing/download source are implemented at the local/source tier. Xcode execution, physical camera/OCR/export testing, hosted CI, and device validation remain external.
 
 ## Milestone 0 — Discovery and durable project plan
 
@@ -93,7 +93,7 @@ Current acceptance: an authenticated device can push an ordered offline tracker/
 - [x] On-device Vision OCR proposal and mandatory editable review (source/extractor tests authored; Vision/device accuracy pending).
 - [x] Authenticated private upload/download, quarantine hook, bounded streaming, tombstone sync, and authorization tests (backend passing locally; native source uncompiled).
 - [x] Offline-consistent charts/analytics and accessible summaries (backend service/API verified locally; native calculator/source/contracts authored and Linux-checked; Xcode execution pending).
-- [x] Expiring, audited CSV/PDF/portable backend exports whose totals match source data (backend passing locally; native export UI/download management pending).
+- [x] Expiring, audited CSV/PDF/portable exports whose totals match source data (backend passing locally; native export UI/download source Linux-checked; Xcode/device execution pending).
 
 ## Milestone 10 — Production hardening and unsigned IPA
 

@@ -508,7 +508,55 @@ def main() -> int:
         if fragment not in insights_view:
             fail(f"Offline analytics UI/accessibility contract drift: {fragment}")
 
-    print("iOS transport, privacy, plan, collaboration, and analytics contracts verified.")
+    export_models = (
+        IOS_ROOT / "ProjectLedger/Networking/ExportModels.swift"
+    ).read_text(encoding="utf-8")
+    export_controller = (
+        IOS_ROOT / "ProjectLedger/Features/Settings/ExportController.swift"
+    ).read_text(encoding="utf-8")
+    export_view = (
+        IOS_ROOT / "ProjectLedger/Features/Settings/ExportSettingsView.swift"
+    ).read_text(encoding="utf-8")
+    settings_view = (
+        IOS_ROOT / "ProjectLedger/Features/Settings/SettingsView.swift"
+    ).read_text(encoding="utf-8")
+    if "storageKey" in export_models or "storage_key" in export_models:
+        fail("Server private export storage keys must never enter native export models.")
+    for fragment in (
+        "listExportJobs",
+        "createExportJob",
+        "downloadExport",
+        "session.download(for: request)",
+        'downloadURL.hasPrefix("/api/v1/export-jobs/")',
+        "isSameOrigin(http.url)",
+        "Int64(data.count) == job.byteCount",
+        'http.value(forHTTPHeaderField: "X-Miravo-Checksum-SHA256")',
+        "SHA256.hash(data: data)",
+        "responseType == job.format.expectedContentType",
+        "extension APIClient: ExportTransport",
+    ):
+        if fragment not in api_client:
+            fail(f"Private export transport contract drift: {fragment}")
+    for fragment in (
+        "Server sign-in is required to create and download exports.",
+        "transportFactory(authentication.baseURL)",
+        "downloadedExport",
+    ):
+        if fragment not in export_controller:
+            fail(f"Export controller contract drift: {fragment}")
+    for fragment in (
+        "ExportSettingsView(scopeKey: scopeKey)",
+        ".fileExporter(",
+        "ExportFileDocument",
+        "Download verified file",
+        "SHA-256 checksum",
+        "selectedAccountID = nil",
+        "controller.presentAuthenticationUnavailable()",
+    ):
+        if fragment not in export_view + settings_view:
+            fail(f"Export settings UI contract drift: {fragment}")
+
+    print("iOS transport, privacy, plan, collaboration, analytics, and export contracts verified.")
     return 0
 
 

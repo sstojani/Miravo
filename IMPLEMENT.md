@@ -915,3 +915,36 @@ Create a clean local receipt checkpoint after one final regression/secret scan. 
 - The full local gate passed and the export checkpoint was committed as `7213f29650b098cfda1e5b65159fb9c46b182e42`.
 - `GIT_TERMINAL_PROMPT=0 git -c http.extraheader=... push origin HEAD:main` and `... HEAD:agent/milestone-9-private-receipts`: **passed** after the owner added `workflow` scope to the one-time PAT. Remote `main` and `agent/milestone-9-private-receipts` were verified at `7213f29650b098cfda1e5b65159fb9c46b182e42`. The token was not written to source, git config, or `gh` auth storage and should now be revoked by the owner.
 - The next exact action is to inspect GitHub Actions status when authenticated run metadata is available, then continue native export UI/download management.
+
+## 2026-08-21 — Milestone 9 native export UI source checkpoint
+
+### Acceptance checkpoint
+
+- Settings exposes connected-only export management without weakening local-first ledger behavior: local transaction entry still does not wait on networking, while server exports represent synchronized server data.
+- Export job creation uses the authenticated app session, tracker selection, export format, optional account filter, and optional note suppression.
+- Export listing/download never exposes server private storage keys in native DTOs.
+- A downloaded export is accepted only from the same API origin and only when byte count, body SHA-256, server checksum header, and content type match the export manifest.
+- iOS hands accepted bytes to the system file exporter; Xcode/runtime behavior remains unclaimed until macOS/device execution.
+
+### Material work
+
+- Added native export DTOs and `ExportTransport` for `GET/POST /api/v1/export-jobs/` plus authenticated job download.
+- Extended `APIClient` with export list/create/download methods, `URLSession.download`, same-origin checks, exact byte-count matching, `X-Miravo-Checksum-SHA256` verification, body SHA-256 verification, and content-type validation.
+- Added `ExportController` and Settings → Exports UI for tracker/format/account/note controls, recent jobs, requester-only download actions, authenticated-session errors, checksum display, and `fileExporter` handoff.
+- Reset the account filter when the selected tracker changes to avoid submitting stale cross-tracker filters.
+- Added English/Albanian export strings and expanded the Linux source contract to reject export storage-key leakage and transport-verification drift.
+- Updated durable status docs, user guide, iOS README, test matrix, and recorded D-038.
+
+### Commands and outcomes
+
+- `./ios/check-localizations.sh`: **passed locally** — 783 literal UI keys, identical English/Albanian sets, and compatible placeholders.
+- `python3 -m py_compile ios/check-project-contract.py`: **passed locally**.
+- `python3 ios/check-project-contract.py`: **passed locally**, including export transport/UI source contracts.
+- `git diff --check`: **passed locally**.
+- `git ls-remote --heads origin main agent/milestone-9-private-receipts`: **passed**, confirming the previously pushed remote refs at `b8775fea89d0392b05119e915d49fd6852319ce8`.
+
+### Verification boundary and next exact action
+
+- Native export source/resource contracts are **verified locally on Linux**.
+- Swift 6 type/concurrency checking, XcodeGen regeneration, simulator tests, `fileExporter` presentation, authenticated download runtime behavior, checksum-failure UI, hosted Actions, signed IPA, and physical iPhone behavior are **unverified**.
+- The next exact action is to commit this native export checkpoint locally, then continue Milestone 9/Milestone 10 hardening while remote publishing waits for a safe authenticated GitHub mechanism. The previous one-time PAT should be revoked.

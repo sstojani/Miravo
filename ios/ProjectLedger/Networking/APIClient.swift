@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 
 final class NoRedirectURLSessionDelegate: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
@@ -478,6 +479,125 @@ actor APIClient: SyncTransport {
         return data
     }
 
+    func listExportJobs(accessToken: String) async throws -> [ExportJobSummary] {
+        try await send(
+            [ExportJobSummary].self,
+            path: "api/v1/export-jobs/",
+            method: "GET",
+            accessToken: accessToken,
+            maximumResponseBytes: 4_194_304
+        )
+    }
+
+    func createExportJob(
+        _ request: ExportJobCreateRequest,
+        accessToken: String
+    ) async throws -> ExportJobSummary {
+        try await send(
+            ExportJobSummary.self,
+            path: "api/v1/export-jobs/",
+            method: "POST",
+            accessToken: accessToken,
+            body: encoder.encode(request),
+            maximumResponseBytes: 1_048_576
+        )
+    }
+
+    func downloadExport(job: ExportJobSummary, accessToken: String) async throws -> DownloadedExport {
+        guard job.state == .ready,
+              let downloadURL = job.downloadURL,
+              downloadURL.hasPrefix("/api/v1/export-jobs/"),
+              job.byteCount > 0,
+              job.byteCount <= 64 * 1024 * 1024
+        else {
+            throw APIClientError(
+                code: "invalid_request",
+                message: String(localized: "The request could not be completed."),
+                requestID: nil,
+                statusCode: nil
+            )
+        }
+        var request = URLRequest(url: endpoint(String(downloadURL.dropFirst())))
+        request.httpMethod = "GET"
+        request.setValue(job.contentType, forHTTPHeaderField: "Accept")
+        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        request.setValue(UUID().uuidString.lowercased(), forHTTPHeaderField: "X-Request-ID")
+        let (temporaryURL, response) = try await session.download(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            throw APIClientError(
+                code: "invalid_response",
+                message: String(localized: "The server returned an invalid response."),
+                requestID: nil,
+                statusCode: nil
+            )
+        }
+        guard isSameOrigin(http.url) else {
+            throw invalidOriginError(response: http)
+        }
+        let values = try temporaryURL.resourceValues(forKeys: [.fileSizeKey, .isRegularFileKey])
+        guard values.isRegularFile == true, let fileSize = values.fileSize else {
+            throw APIClientError(
+                code: "invalid_response",
+                message: String(localized: "The server returned an invalid response."),
+                requestID: http.value(forHTTPHeaderField: "X-Request-ID"),
+                statusCode: http.statusCode
+            )
+        }
+        guard fileSize > 0,
+              Int64(fileSize) <= ((200 ..< 300).contains(http.statusCode) ? job.byteCount : 1_048_576)
+        else {
+            throw APIClientError(
+                code: "response_too_large",
+                message: String(localized: "The server response was unexpectedly large."),
+                requestID: http.value(forHTTPHeaderField: "X-Request-ID"),
+                statusCode: http.statusCode
+            )
+        }
+        let data = try Data(contentsOf: temporaryURL, options: [.mappedIfSafe])
+        guard (200 ..< 300).contains(http.statusCode) else {
+            throw decodeError(from: data, response: http)
+        }
+        guard Int64(data.count) == job.byteCount else {
+            throw APIClientError(
+                code: "export_size_mismatch",
+                message: String(localized: "The downloaded export could not be verified."),
+                requestID: http.value(forHTTPHeaderField: "X-Request-ID"),
+                statusCode: http.statusCode
+            )
+        }
+        let checksum = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+        guard checksum == job.checksumSHA256,
+              checksum == http.value(forHTTPHeaderField: "X-Miravo-Checksum-SHA256")
+        else {
+            throw APIClientError(
+                code: "export_checksum_mismatch",
+                message: String(localized: "The downloaded export could not be verified."),
+                requestID: http.value(forHTTPHeaderField: "X-Request-ID"),
+                statusCode: http.statusCode
+            )
+        }
+        let responseType = http.value(forHTTPHeaderField: "Content-Type").map { value in
+            let mediaType = value.split(separator: ";", maxSplits: 1).first
+                .map(String.init) ?? ""
+            return mediaType.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        }
+        guard responseType == job.format.expectedContentType else {
+            throw APIClientError(
+                code: "invalid_response_content_type",
+                message: String(localized: "The server returned an invalid response."),
+                requestID: http.value(forHTTPHeaderField: "X-Request-ID"),
+                statusCode: http.statusCode
+            )
+        }
+        return DownloadedExport(
+            id: job.id,
+            format: job.format,
+            filename: "miravo-export-\(job.id.uuidString.lowercased()).\(job.format.fileExtension)",
+            checksumSHA256: checksum,
+            data: data
+        )
+    }
+
     private func endpoint(_ path: String) -> URL {
         let resolved = path.split(separator: "/").reduce(baseURL) { partial, component in
             partial.appending(path: String(component))
@@ -641,3 +761,4 @@ extension APIClient: ShortcutCredentialTransport {}
 extension APIClient: CollaborationTransport {}
 extension APIClient: AttachmentTransport {}
 extension APIClient: AttachmentDownloadTransport {}
+extension APIClient: ExportTransport {}

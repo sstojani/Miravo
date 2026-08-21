@@ -55,6 +55,11 @@ struct SettingsView: View {
                 } label: {
                     Label("Apple Wallet Shortcut", systemImage: "bolt.horizontal.circle")
                 }
+                NavigationLink {
+                    ExportSettingsView(scopeKey: scopeKey)
+                } label: {
+                    Label("Exports", systemImage: "square.and.arrow.down")
+                }
             }
 
             Section("Privacy") {
