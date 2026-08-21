@@ -95,9 +95,9 @@ struct AttachmentTransferWorkerTests {
         #expect(transfer.state == .pending)
         #expect(transfer.nextAttemptAt != nil)
         #expect(transfer.lastSafeErrorCode == "server_unavailable")
-        let macroSafeExpectation1: Bool = try {
+        let macroSafeExpectation1: Bool = try await evaluateExpectation {
             try await queue.readyBatch(scopeKey: fixture.scopeKey).isEmpty
-        }()
+        }
         #expect(macroSafeExpectation1)
     }
 
@@ -297,9 +297,9 @@ private actor ScriptedAttachmentTransport: AttachmentTransport {
         uploadCount += 1
         let request = try #require(reservation)
         #expect(id == request.id)
-        let macroSafeExpectation2: Bool = try {
+        let macroSafeExpectation2: Bool = evaluateExpectation {
             (try? Data(contentsOf: fileURL))?.isEmpty == false
-        }()
+        }
         #expect(macroSafeExpectation2)
         return snapshot(request: request, uploadState: "ready", version: 2)
     }

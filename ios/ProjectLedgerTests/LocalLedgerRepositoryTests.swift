@@ -106,9 +106,9 @@ struct LocalLedgerRepositoryTests {
         #expect(transaction.baseAmountMinor == 1_250)
         #expect(transaction.rateSnapshot == "1")
         #expect(transaction.rateEffectiveAt == reviewedDate)
-        let macroSafeExpectation1: Bool = try {
+        let macroSafeExpectation1: Bool = try evaluateExpectation {
             try context.fetch(FetchDescriptor<OutboxMutation>()).count == mutationCount + 1
-        }()
+        }
         #expect(macroSafeExpectation1)
     }
 
@@ -184,13 +184,13 @@ struct LocalLedgerRepositoryTests {
                 merchant: "Rejected"
             )
         }
-        let macroSafeExpectation2: Bool = try {
+        let macroSafeExpectation2: Bool = try evaluateExpectation {
             try context.fetch(FetchDescriptor<LedgerTransaction>()).isEmpty
-        }()
+        }
         #expect(macroSafeExpectation2)
-        let macroSafeExpectation3: Bool = try {
+        let macroSafeExpectation3: Bool = try evaluateExpectation {
             try context.fetch(FetchDescriptor<OutboxMutation>()).count == before
-        }()
+        }
         #expect(macroSafeExpectation3)
     }
 
@@ -222,13 +222,13 @@ struct LocalLedgerRepositoryTests {
                 merchant: "Rejected"
             )
         }
-        let macroSafeExpectation4: Bool = try {
+        let macroSafeExpectation4: Bool = try evaluateExpectation {
             try context.fetch(FetchDescriptor<LedgerTransaction>()).isEmpty
-        }()
+        }
         #expect(macroSafeExpectation4)
-        let macroSafeExpectation5: Bool = try {
+        let macroSafeExpectation5: Bool = try evaluateExpectation {
             try context.fetch(FetchDescriptor<OutboxMutation>()).count == before
-        }()
+        }
         #expect(macroSafeExpectation5)
     }
 
@@ -254,17 +254,17 @@ struct LocalLedgerRepositoryTests {
                 merchant: "Must roll back"
             )
         }
-        let macroSafeExpectation6: Bool = try {
+        let macroSafeExpectation6: Bool = try evaluateExpectation {
             try context.fetch(FetchDescriptor<LedgerTransaction>()).isEmpty
-        }()
+        }
         #expect(macroSafeExpectation6)
-        let macroSafeExpectation7: Bool = try {
+        let macroSafeExpectation7: Bool = try evaluateExpectation {
             try context.fetch(FetchDescriptor<LocalAccountMovement>()).isEmpty
-        }()
+        }
         #expect(macroSafeExpectation7)
-        let macroSafeExpectation8: Bool = try {
+        let macroSafeExpectation8: Bool = try evaluateExpectation {
             try context.fetch(FetchDescriptor<LocalCategoryAllocation>()).isEmpty
-        }()
+        }
         #expect(macroSafeExpectation8)
     }
 
@@ -304,9 +304,9 @@ struct LocalLedgerRepositoryTests {
         #expect(transfer.destinationAmountMinor == 2_500)
         #expect(Set(originalMovements.map(\.signedAmountMinor)) == Set([-2_500, 2_500]))
         #expect(Set(duplicateMovements.map(\.signedAmountMinor)) == Set([-2_500, 2_500]))
-        let macroSafeExpectation9: Bool = try {
+        let macroSafeExpectation9: Bool = try evaluateExpectation {
             try context.fetch(FetchDescriptor<LocalCategoryAllocation>()).isEmpty
-        }()
+        }
         #expect(macroSafeExpectation9)
     }
 
@@ -480,13 +480,13 @@ struct LocalLedgerRepositoryTests {
                 merchant: "Blocked"
             )
         }
-        let macroSafeExpectation10: Bool = try {
+        let macroSafeExpectation10: Bool = try evaluateExpectation {
             try context.fetch(FetchDescriptor<LedgerTransaction>()).isEmpty
-        }()
+        }
         #expect(macroSafeExpectation10)
-        let macroSafeExpectation11: Bool = try {
+        let macroSafeExpectation11: Bool = try evaluateExpectation {
             try context.fetch(FetchDescriptor<OutboxMutation>()).count == before
-        }()
+        }
         #expect(macroSafeExpectation11)
     }
 
@@ -520,9 +520,9 @@ struct LocalLedgerRepositoryTests {
             )
         }
         #expect(everyday.name == "Everyday")
-        let macroSafeExpectation12: Bool = try {
+        let macroSafeExpectation12: Bool = try evaluateExpectation {
             try context.fetch(FetchDescriptor<OutboxMutation>()).count == beforeInvalidUpdate
-        }()
+        }
         #expect(macroSafeExpectation12)
 
         try repository.updateTracker(
@@ -591,9 +591,9 @@ struct LocalLedgerRepositoryTests {
             try repository.reorderTrackers([tracker], scopeKey: scope)
         }
         #expect(tracker.name == "Everyday")
-        let macroSafeExpectation13: Bool = try {
+        let macroSafeExpectation13: Bool = try evaluateExpectation {
             try context.fetch(FetchDescriptor<OutboxMutation>()).count == before
-        }()
+        }
         #expect(macroSafeExpectation13)
     }
 

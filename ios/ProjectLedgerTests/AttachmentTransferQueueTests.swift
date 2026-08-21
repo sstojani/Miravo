@@ -115,26 +115,26 @@ struct AttachmentTransferQueueTests {
             attachmentID: request.attachmentID
         )
 
-        let macroSafeExpectation1: Bool = try {
+        let macroSafeExpectation1: Bool = try await evaluateExpectation {
             try await queue.readyBatch(scopeKey: fixture.scopeKey).isEmpty
-        }()
+        }
         #expect(macroSafeExpectation1)
         let transfer = try #require(
             fixture.container.mainContext.fetch(FetchDescriptor<AttachmentTransfer>()).first
         )
         #expect(transfer.state == .cancelled)
-        let macroSafeExpectation2: Bool = try {
+        let macroSafeExpectation2: Bool = try evaluateExpectation {
             try fixture.container.mainContext.fetch(FetchDescriptor<LocalAttachment>()).count == 1
-        }()
+        }
         #expect(macroSafeExpectation2)
 
         try await queue.retry(
             scopeKey: fixture.scopeKey,
             attachmentID: request.attachmentID
         )
-        let macroSafeExpectation3: Bool = try {
+        let macroSafeExpectation3: Bool = try await evaluateExpectation {
             try await queue.readyBatch(scopeKey: fixture.scopeKey).count == 1
-        }()
+        }
         #expect(macroSafeExpectation3)
         #expect(transfer.state == .pending)
 

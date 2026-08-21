@@ -556,13 +556,13 @@ struct LedgerSyncActorTests {
         #expect(savedPlan.name == "Local laptop edit")
         #expect(savedItem.paidMinor == 400)
         #expect(savedItem.state == .partiallyPaid)
-        let macroSafeExpectation1: Bool = try {
+        let macroSafeExpectation1: Bool = try evaluateExpectation {
             try verification.fetch(FetchDescriptor<LedgerTransaction>()).first?.id == transactionID
-        }()
+        }
         #expect(macroSafeExpectation1)
-        let macroSafeExpectation2: Bool = try {
+        let macroSafeExpectation2: Bool = try evaluateExpectation {
             try verification.fetch(FetchDescriptor<OutboxMutation>()).first?.operationID == operationID
-        }()
+        }
         #expect(macroSafeExpectation2)
     }
 
@@ -984,13 +984,13 @@ struct LedgerSyncActorTests {
 
         let verification = ModelContext(container)
         #expect(didThrow)
-        let macroSafeExpectation3: Bool = try {
+        let macroSafeExpectation3: Bool = try evaluateExpectation {
             try verification.fetch(FetchDescriptor<LocalRecurringRule>()).isEmpty
-        }()
+        }
         #expect(macroSafeExpectation3)
-        let macroSafeExpectation4: Bool = try {
+        let macroSafeExpectation4: Bool = try evaluateExpectation {
             try verification.fetch(FetchDescriptor<SyncCursor>()).first?.cursor == "before"
-        }()
+        }
         #expect(macroSafeExpectation4)
     }
 
@@ -1108,26 +1108,26 @@ struct LedgerSyncActorTests {
 
         let verification = ModelContext(container)
         #expect(summary.pulledCount == 4)
-        let macroSafeExpectation5: Bool = try {
+        let macroSafeExpectation5: Bool = try evaluateExpectation {
             try verification.fetch(FetchDescriptor<LocalParticipant>()).count == 2
-        }()
+        }
         #expect(macroSafeExpectation5)
-        let macroSafeExpectation6: Bool = try {
+        let macroSafeExpectation6: Bool = try evaluateExpectation {
             try verification.fetch(FetchDescriptor<LocalSplitPayment>()).count == 1
-        }()
+        }
         #expect(macroSafeExpectation6)
-        let macroSafeExpectation7: Bool = try {
+        let macroSafeExpectation7: Bool = try evaluateExpectation {
             try verification.fetch(FetchDescriptor<LocalSplitShare>()).count == 2
-        }()
+        }
         #expect(macroSafeExpectation7)
-        let macroSafeExpectation8: Bool = try {
+        let macroSafeExpectation8: Bool = try evaluateExpectation {
             try verification.fetch(FetchDescriptor<LocalSettlement>()).count == 1
-        }()
+        }
         #expect(macroSafeExpectation8)
-        let macroSafeExpectation9: Bool = try {
+        let macroSafeExpectation9: Bool = try evaluateExpectation {
             try verification.fetch(FetchDescriptor<SyncCursor>()).first?.cursor ==
                 "after-collaboration"
-        }()
+        }
         #expect(macroSafeExpectation9)
     }
 
@@ -1239,9 +1239,9 @@ struct LedgerSyncActorTests {
         )
 
         #expect(summary.acknowledged)
-        let macroSafeExpectation10: Bool = try {
+        let macroSafeExpectation10: Bool = try await evaluateExpectation {
             try await store.load(scopeKey: scope) == refreshed
-        }()
+        }
         #expect(macroSafeExpectation10)
         #expect(await transport.refreshCount() == 1)
         #expect(await transport.pullCount() == 2)

@@ -48,13 +48,13 @@ struct LocalRecurringTests {
             localTimeSeconds: 1 * 3_600 + 30 * 60,
             timeZoneIdentifier: "America/New_York"
         )
-        let macroSafeExpectation1: Bool = try {
-            gap == try timestamp("2026-03-08T07:00:00Z")
-        }()
+        let macroSafeExpectation1: Bool = try evaluateExpectation {
+            gap == (try timestamp("2026-03-08T07:00:00Z"))
+        }
         #expect(macroSafeExpectation1)
-        let macroSafeExpectation2: Bool = try {
-            fold == try timestamp("2026-11-01T05:30:00Z")
-        }()
+        let macroSafeExpectation2: Bool = try evaluateExpectation {
+            fold == (try timestamp("2026-11-01T05:30:00Z"))
+        }
         #expect(macroSafeExpectation2)
     }
 
@@ -164,12 +164,12 @@ struct LocalRecurringTests {
         )
         #expect(normalized.monthly.minorUnits == 4_333)
         #expect(normalized.annual.minorUnits == 52_000)
-        let macroSafeExpectation3: Bool = try {
+        let macroSafeExpectation3: Bool = try evaluateExpectation {
             LocalRecurrenceCalculator.occurrenceKey(
                 ruleID: ruleID,
                 dueOn: try dateOnly("2026-08-31")
             ) == "be775a3d4e64436b4a1240088e5cbcf4b5e18d46360ee1fcd77ae39ba93fe735"
-        }()
+        }
         #expect(macroSafeExpectation3)
     }
 
@@ -276,13 +276,13 @@ struct LocalRecurringTests {
                 localTimeSeconds: 0
             )
         }
-        let macroSafeExpectation4: Bool = try {
+        let macroSafeExpectation4: Bool = try evaluateExpectation {
             try context.fetch(FetchDescriptor<LocalRecurringRule>()).isEmpty
-        }()
+        }
         #expect(macroSafeExpectation4)
-        let macroSafeExpectation5: Bool = try {
+        let macroSafeExpectation5: Bool = try evaluateExpectation {
             try context.fetch(FetchDescriptor<OutboxMutation>()).count == before
-        }()
+        }
         #expect(macroSafeExpectation5)
     }
 

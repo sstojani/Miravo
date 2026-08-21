@@ -44,9 +44,9 @@ struct ReceiptPreparationServiceTests {
         )
 
         #expect(verified.checksumSHA256 == checksum)
-        let macroSafeExpectation1: Bool = try {
+        let macroSafeExpectation1: Bool = try evaluateExpectation {
             try store.loadThumbnail(relativePath: paths.thumbnailRelativePath) == prepared.thumbnail
-        }()
+        }
         #expect(macroSafeExpectation1)
         let downloaded = try store.storeDownloaded(
             prepared.content,

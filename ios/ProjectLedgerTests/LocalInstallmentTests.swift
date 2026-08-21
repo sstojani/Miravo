@@ -8,13 +8,13 @@ struct LocalInstallmentTests {
     private let scope = "https://ledger.example|10000000-0000-0000-0000-000000000001"
 
     @Test func scheduleMatchesServerRemaindersAndOriginalMonthAnchor() throws {
-        let macroSafeExpectation1: Bool = try {
+        let macroSafeExpectation1: Bool = try evaluateExpectation {
             try LocalInstallmentCalculator.scheduleItemID(
                         planID: UUID(uuidString: "10000000-0000-0000-0000-000000000001")!,
                         revisionNumber: 1,
                         sequence: 1
                     ) == UUID(uuidString: "6aeb1cec-6102-510c-975b-96cdfc43718e")
-        }()
+        }
         #expect(macroSafeExpectation1)
         let schedule = try LocalInstallmentCalculator.buildSchedule(
             principalMinor: 1_000,
@@ -164,9 +164,9 @@ struct LocalInstallmentTests {
                 confirmOverpayment: false
             )
         }
-        let macroSafeExpectation2: Bool = try {
+        let macroSafeExpectation2: Bool = try evaluateExpectation {
             try context.fetch(FetchDescriptor<LedgerTransaction>()).isEmpty
-        }()
+        }
         #expect(macroSafeExpectation2)
 
         let first = try repository.recordInstallmentPayment(
@@ -183,9 +183,9 @@ struct LocalInstallmentTests {
         #expect(first.syncState == .pending)
         #expect(items[0].paidMinor == 400)
         #expect(items[0].state == .partiallyPaid)
-        let macroSafeExpectation3: Bool = try {
+        let macroSafeExpectation3: Bool = try evaluateExpectation {
             try context.fetch(FetchDescriptor<LocalInstallmentPayment>()).isEmpty
-        }()
+        }
         #expect(macroSafeExpectation3)
         let movement = try #require(
             context.fetch(FetchDescriptor<LocalAccountMovement>())
@@ -293,9 +293,9 @@ struct LocalInstallmentTests {
                 startsOn: try dateOnly("2026-08-13")
             )
         }
-        let macroSafeExpectation4: Bool = try {
+        let macroSafeExpectation4: Bool = try evaluateExpectation {
             try context.fetch(FetchDescriptor<OutboxMutation>()).count == before
-        }()
+        }
         #expect(macroSafeExpectation4)
     }
 
@@ -338,9 +338,9 @@ struct LocalInstallmentTests {
                 amount: Money(minorUnits: 500, currencyCode: "ALL", exponent: 2)
             )
         }
-        let macroSafeExpectation5: Bool = try {
+        let macroSafeExpectation5: Bool = try evaluateExpectation {
             try context.fetch(FetchDescriptor<LedgerTransaction>()).isEmpty
-        }()
+        }
         #expect(macroSafeExpectation5)
 
         let transaction = try repository.recordInstallmentPayment(

@@ -29,17 +29,17 @@ struct LocalBudgetTests {
             categories: [category]
         )
 
-        let macroSafeExpectation1: Bool = try {
+        let macroSafeExpectation1: Bool = try evaluateExpectation {
             try context.fetch(FetchDescriptor<LocalBudget>()).map(\.id) == [budget.id]
-        }()
+        }
         #expect(macroSafeExpectation1)
-        let macroSafeExpectation2: Bool = try {
+        let macroSafeExpectation2: Bool = try evaluateExpectation {
             try context.fetch(FetchDescriptor<LocalBudgetCategory>()).count == 1
-        }()
+        }
         #expect(macroSafeExpectation2)
-        let macroSafeExpectation3: Bool = try {
+        let macroSafeExpectation3: Bool = try evaluateExpectation {
             try context.fetch(FetchDescriptor<LocalBudgetThreshold>()).map(\.percent) == [50, 80, 100]
-        }()
+        }
         #expect(macroSafeExpectation3)
         var mutations = try budgetMutations(context: context, id: budget.id)
         #expect(mutations.map(\.command) == ["create"])
@@ -117,13 +117,13 @@ struct LocalBudgetTests {
                 categories: []
             )
         }
-        let macroSafeExpectation4: Bool = try {
+        let macroSafeExpectation4: Bool = try evaluateExpectation {
             try context.fetch(FetchDescriptor<LocalBudget>()).isEmpty
-        }()
+        }
         #expect(macroSafeExpectation4)
-        let macroSafeExpectation5: Bool = try {
+        let macroSafeExpectation5: Bool = try evaluateExpectation {
             try context.fetch(FetchDescriptor<OutboxMutation>()).count == before
-        }()
+        }
         #expect(macroSafeExpectation5)
     }
 

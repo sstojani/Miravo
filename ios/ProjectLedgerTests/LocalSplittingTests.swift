@@ -155,14 +155,14 @@ struct LocalSplittingRepositoryTests {
         #expect(debts.first?.amountMinor == 200)
 
         try repository.setSettlementDeleted(settlement, deleted: true)
-        let macroSafeExpectation1: Bool = try {
+        let macroSafeExpectation1: Bool = try evaluateExpectation {
             try repository.simplifiedDebts(tracker: tracker).first?.amountMinor == 500
-        }()
+        }
         #expect(macroSafeExpectation1)
         try repository.setSettlementDeleted(settlement, deleted: false)
-        let macroSafeExpectation2: Bool = try {
+        let macroSafeExpectation2: Bool = try evaluateExpectation {
             try repository.simplifiedDebts(tracker: tracker).first?.amountMinor == 200
-        }()
+        }
         #expect(macroSafeExpectation2)
 
         let finalMoney = try Money(minorUnits: 200, currencyCode: "ALL", exponent: 2)
@@ -181,9 +181,9 @@ struct LocalSplittingRepositoryTests {
             }
         )
         #expect(linkedTransaction.kind == .settlement)
-        let macroSafeExpectation3: Bool = try {
+        let macroSafeExpectation3: Bool = try evaluateExpectation {
             try repository.simplifiedDebts(tracker: tracker).isEmpty
-        }()
+        }
         #expect(macroSafeExpectation3)
         #expect(
             context.fetch(FetchDescriptor<OutboxMutation>())
