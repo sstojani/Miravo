@@ -422,7 +422,7 @@ struct LocalLedgerRepository {
             transaction.syncStateRaw = LocalSyncState.pending.rawValue
             let splitMutation: TransactionSplitMutationValue
             if prepared == nil {
-                splitMutation = .none
+                splitMutation = TransactionSplitMutationValue.none
             } else {
                 splitMutation = try mutationSplitValue(for: transaction)
             }
@@ -1760,7 +1760,7 @@ struct LocalLedgerRepository {
             case .unchanged:
                 splitMutation = nil
             case .remove:
-                splitMutation = .none
+                splitMutation = TransactionSplitMutationValue.none
             case .replace:
                 splitMutation = try mutationSplitValue(for: transaction)
             }

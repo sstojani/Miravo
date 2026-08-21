@@ -112,155 +112,12 @@ struct LocalDataSettingsView: View {
 
     var body: some View {
         List {
-            Section("Trackers") {
-                ForEach(trackers) { tracker in
-                    EntityRow(
-                        name: tracker.name,
-                        detail: "\(tracker.baseCurrencyCode) · \(tracker.role.displayName)",
-                        symbol: tracker.icon,
-                        colorHex: tracker.colorHex,
-                        archived: tracker.archivedAt != nil
-                    )
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        if tracker.role.canManageTracker { sheet = .editTracker(tracker) }
-                    }
-                    .swipeActions {
-                        if tracker.role.canManageTracker {
-                            archiveButton(archived: tracker.archivedAt != nil) {
-                                try repository.setTrackerArchived(
-                                    tracker,
-                                    archived: tracker.archivedAt == nil
-                                )
-                            }
-                        }
-                    }
-                }
-                .onMove(perform: reorderTrackers)
-            }
-
-            Section("Collaborators") {
-                ForEach(memberships.filter { member in
-                    trackers.contains { $0.id == member.trackerID }
-                }) { member in
-                    EntityRow(
-                        name: member.email,
-                        detail: "\(trackerName(id: member.trackerID)) · \(member.role.displayName)",
-                        symbol: "person.crop.circle",
-                        colorHex: "#73819B",
-                        archived: false
-                    )
-                }
-            } footer: {
-                Text("The synchronized roster remains visible offline. Invitations and role changes require a connection.")
-            }
-
-            Section("Split participants") {
-                ForEach(visibleParticipants) { participant in
-                    EntityRow(
-                        name: participant.displayName,
-                        detail: "\(trackerName(id: participant.trackerID)) · \(participant.isRegistered ? String(localized: "Registered member") : String(localized: "Guest participant"))",
-                        symbol: participant.isRegistered ? "person.crop.circle.badge.checkmark" : "person.crop.circle.badge.plus",
-                        colorHex: "#6E56CF",
-                        archived: participant.archivedAt != nil
-                    )
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        if canRename(participant) { sheet = .renameParticipant(participant) }
-                    }
-                    .swipeActions {
-                        if !participant.isRegistered && canEdit(trackerID: participant.trackerID) {
-                            archiveButton(archived: participant.archivedAt != nil) {
-                                try repository.setParticipantArchived(
-                                    participant,
-                                    archived: participant.archivedAt == nil
-                                )
-                            }
-                        }
-                    }
-                }
-            } footer: {
-                Text("Guests can share costs without an account. Registered members are synchronized from the tracker roster.")
-            }
-
-            Section("Accounts") {
-                ForEach(visibleAccounts) { account in
-                    EntityRow(
-                        name: account.name,
-                        detail: "\(account.type.displayName) · \(account.currencyCode)",
-                        symbol: account.icon,
-                        colorHex: account.colorHex,
-                        archived: account.archivedAt != nil
-                    )
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        if canEdit(trackerID: account.trackerID) {
-                            sheet = .renameAccount(account)
-                        }
-                    }
-                    .swipeActions {
-                        if canEdit(trackerID: account.trackerID) {
-                            archiveButton(archived: account.archivedAt != nil) {
-                                try repository.setAccountArchived(
-                                    account,
-                                    archived: account.archivedAt == nil
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
-            Section("Categories") {
-                ForEach(visibleCategories) { category in
-                    EntityRow(
-                        name: category.name,
-                        detail: category.kind.displayName,
-                        symbol: category.icon,
-                        colorHex: category.colorHex,
-                        archived: category.archivedAt != nil
-                    )
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        if canEdit(trackerID: category.trackerID) {
-                            sheet = .renameCategory(category)
-                        }
-                    }
-                    .swipeActions {
-                        if canEdit(trackerID: category.trackerID) {
-                            archiveButton(archived: category.archivedAt != nil) {
-                                try repository.setCategoryArchived(
-                                    category,
-                                    archived: category.archivedAt == nil
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
-            Section("Tags") {
-                ForEach(visibleTags) { tag in
-                    EntityRow(
-                        name: tag.name,
-                        detail: trackerName(id: tag.trackerID),
-                        symbol: "tag",
-                        colorHex: tag.colorHex,
-                        archived: tag.archivedAt != nil
-                    )
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        if canEdit(trackerID: tag.trackerID) { sheet = .renameTag(tag) }
-                    }
-                    .swipeActions {
-                        if canEdit(trackerID: tag.trackerID) {
-                            archiveButton(archived: tag.archivedAt != nil) {
-                                try repository.setTagArchived(tag, archived: tag.archivedAt == nil)
-                            }
-                        }
-                    }
-                }
-            }
+            trackersSection
+            collaboratorsSection
+            splitParticipantsSection
+            accountsSection
+            categoriesSection
+            tagsSection
         }
         .navigationTitle("Local data")
         .toolbar {
@@ -344,6 +201,173 @@ struct LocalDataSettingsView: View {
         }
     }
 
+    private var trackersSection: some View {
+        Section("Trackers") {
+            ForEach(trackers) { tracker in
+                EntityRow(
+                    name: tracker.name,
+                    detail: "\(tracker.baseCurrencyCode) · \(tracker.role.displayName)",
+                    symbol: tracker.icon,
+                    colorHex: tracker.colorHex,
+                    archived: tracker.archivedAt != nil
+                )
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    if tracker.role.canManageTracker { sheet = .editTracker(tracker) }
+                }
+                .swipeActions {
+                    if tracker.role.canManageTracker {
+                        archiveButton(archived: tracker.archivedAt != nil) {
+                            try repository.setTrackerArchived(
+                                tracker,
+                                archived: tracker.archivedAt == nil
+                            )
+                        }
+                    }
+                }
+            }
+            .onMove(perform: reorderTrackers)
+        }
+    }
+
+    private var collaboratorsSection: some View {
+        Section {
+            ForEach(memberships.filter { member in
+                trackers.contains { $0.id == member.trackerID }
+            }) { member in
+                EntityRow(
+                    name: member.email,
+                    detail: "\(trackerName(id: member.trackerID)) · \(member.role.displayName)",
+                    symbol: "person.crop.circle",
+                    colorHex: "#73819B",
+                    archived: false
+                )
+            }
+        } header: {
+            Text("Collaborators")
+        } footer: {
+            Text("The synchronized roster remains visible offline. Invitations and role changes require a connection.")
+        }
+    }
+
+    private var splitParticipantsSection: some View {
+        Section {
+            ForEach(visibleParticipants) { participant in
+                EntityRow(
+                    name: participant.displayName,
+                    detail: splitParticipantDetail(participant),
+                    symbol: participant.isRegistered
+                        ? "person.crop.circle.badge.checkmark" : "person.crop.circle.badge.plus",
+                    colorHex: "#6E56CF",
+                    archived: participant.archivedAt != nil
+                )
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    if canRename(participant) { sheet = .renameParticipant(participant) }
+                }
+                .swipeActions {
+                    if !participant.isRegistered && canEdit(trackerID: participant.trackerID) {
+                        archiveButton(archived: participant.archivedAt != nil) {
+                            try repository.setParticipantArchived(
+                                participant,
+                                archived: participant.archivedAt == nil
+                            )
+                        }
+                    }
+                }
+            }
+        } header: {
+            Text("Split participants")
+        } footer: {
+            Text("Guests can share costs without an account. Registered members are synchronized from the tracker roster.")
+        }
+    }
+
+    private var accountsSection: some View {
+        Section("Accounts") {
+            ForEach(visibleAccounts) { account in
+                EntityRow(
+                    name: account.name,
+                    detail: "\(account.type.displayName) · \(account.currencyCode)",
+                    symbol: account.icon,
+                    colorHex: account.colorHex,
+                    archived: account.archivedAt != nil
+                )
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    if canEdit(trackerID: account.trackerID) {
+                        sheet = .renameAccount(account)
+                    }
+                }
+                .swipeActions {
+                    if canEdit(trackerID: account.trackerID) {
+                        archiveButton(archived: account.archivedAt != nil) {
+                            try repository.setAccountArchived(
+                                account,
+                                archived: account.archivedAt == nil
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private var categoriesSection: some View {
+        Section("Categories") {
+            ForEach(visibleCategories) { category in
+                EntityRow(
+                    name: category.name,
+                    detail: category.kind.displayName,
+                    symbol: category.icon,
+                    colorHex: category.colorHex,
+                    archived: category.archivedAt != nil
+                )
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    if canEdit(trackerID: category.trackerID) {
+                        sheet = .renameCategory(category)
+                    }
+                }
+                .swipeActions {
+                    if canEdit(trackerID: category.trackerID) {
+                        archiveButton(archived: category.archivedAt != nil) {
+                            try repository.setCategoryArchived(
+                                category,
+                                archived: category.archivedAt == nil
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private var tagsSection: some View {
+        Section("Tags") {
+            ForEach(visibleTags) { tag in
+                EntityRow(
+                    name: tag.name,
+                    detail: trackerName(id: tag.trackerID),
+                    symbol: "tag",
+                    colorHex: tag.colorHex,
+                    archived: tag.archivedAt != nil
+                )
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    if canEdit(trackerID: tag.trackerID) { sheet = .renameTag(tag) }
+                }
+                .swipeActions {
+                    if canEdit(trackerID: tag.trackerID) {
+                        archiveButton(archived: tag.archivedAt != nil) {
+                            try repository.setTagArchived(tag, archived: tag.archivedAt == nil)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     private var repository: LocalLedgerRepository {
         LocalLedgerRepository(context: modelContext)
     }
@@ -362,6 +386,13 @@ struct LocalDataSettingsView: View {
 
     private func trackerName(id: UUID) -> String {
         trackers.first { $0.id == id }?.name ?? String(localized: "Unknown tracker")
+    }
+
+    private func splitParticipantDetail(_ participant: LocalParticipant) -> String {
+        let registration = participant.isRegistered
+            ? String(localized: "Registered member")
+            : String(localized: "Guest participant")
+        return "\(trackerName(id: participant.trackerID)) · \(registration)"
     }
 
     private func requestSync() {

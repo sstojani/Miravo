@@ -1160,3 +1160,33 @@ Create a clean local receipt checkpoint after one final regression/secret scan. 
 
 - Backend CI and dependency/container audits are **verified on GitHub Actions** at commit `8287de06037ca0d007f82222d8251c24870d6d33`.
 - The Swift compile fixes are **locally source-checked** but require the next hosted macOS run for compiler verification. The next exact action is to commit, push, and inspect iOS CI again.
+
+## 2026-08-21 — Hosted CI follow-up: throwing sync upserts and settings type-check split
+
+### Material work
+
+- Pushed `4ab3b6541ee10a8f79871a42a982726dab43c24e` to `main` and `agent/milestone-9-private-receipts`.
+- Hosted backend CI passed again.
+- Hosted dependency audit passed again.
+- Hosted iOS CI passed localization, project contract, XcodeGen generation, SwiftFormat lint, and secret scan, then failed during simulator compilation with:
+  - a throwing `hasLocalMutation` call inside a boolean `||` expression;
+  - throwing timestamp/date parsing inside `existing ?? Model(...)` expressions in sync upsert paths;
+  - an oversized `LocalDataSettingsView.body` expression that the compiler could not type-check in time;
+  - ambiguous `.none` split-removal assignments in `LocalLedgerWriter`.
+- Converted the pending-local-mutation guard to an explicit throwing branch.
+- Precomputed parsed timestamps/dates before nil-coalescing upsert initializers for trackers, memberships, accounts, categories, tags, budgets, recurring rules, recurring occurrences, and transactions.
+- Split `LocalDataSettingsView` into section-level computed builders and extracted the split-participant detail string.
+- Made split removal explicitly assign `.some(.none)` so the optional enum intent is unambiguous.
+
+### Commands and outcomes
+
+- GitHub Actions jobs for run set `32494766507`, `32494766681`, and `32494766789`: **inspected** from hosted logs.
+- Backend CI job `96810461760`: **passed on GitHub Actions**.
+- Dependency audit jobs `96810461815` and `96810462090`: **passed on GitHub Actions**.
+- iOS simulator job `96810461811`: **failed on GitHub Actions** at Swift compile only; all pre-build source checks passed.
+- `./ios/check-localizations.sh && python3 ios/check-project-contract.py && git diff --check`: **passed locally**.
+
+### Verification boundary and next exact action
+
+- Backend CI and dependency/container audits are **verified on GitHub Actions** at commit `4ab3b6541ee10a8f79871a42a982726dab43c24e`.
+- The latest Swift compile fixes are **locally source-checked** but require the next hosted macOS run for compiler verification. The next exact action is to commit, push, and inspect iOS CI again.

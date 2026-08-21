@@ -1205,11 +1205,13 @@ actor LedgerSyncActor {
         else {
             throw SyncEngineError.invalidServerResponse
         }
-        guard !respectPending || !(try hasLocalMutation(
-            scopeKey: scopeKey,
-            entityType: entityType,
-            entityID: entityID
-        )) else { return }
+        if respectPending {
+            guard try !hasLocalMutation(
+                scopeKey: scopeKey,
+                entityType: entityType,
+                entityID: entityID
+            ) else { return }
+        }
         try applyDecoded(
             decodeRemote(entityType: entityType, data: value),
             scopeKey: scopeKey
@@ -1230,6 +1232,7 @@ actor LedgerSyncActor {
             )
         ).first
         if let version = existing?.serverVersion, version > snapshot.version { return }
+        let createdAt = try parseTimestamp(snapshot.createdAt)
         let tracker = existing ?? LocalTracker(
             id: snapshot.id,
             scopeKey: scopeKey,
@@ -1237,7 +1240,7 @@ actor LedgerSyncActor {
             baseCurrencyCode: snapshot.baseCurrency,
             baseCurrencyExponent: exponent,
             syncState: .synced,
-            createdAt: try parseTimestamp(snapshot.createdAt)
+            createdAt: createdAt
         )
         if existing == nil { modelContext.insert(tracker) }
         tracker.name = snapshot.name
@@ -1257,7 +1260,7 @@ actor LedgerSyncActor {
         }
         tracker.serverVersion = snapshot.version
         tracker.syncStateRaw = LocalSyncState.synced.rawValue
-        tracker.createdAt = try parseTimestamp(snapshot.createdAt)
+        tracker.createdAt = createdAt
         tracker.updatedAt = try parseTimestamp(snapshot.updatedAt)
         tracker.archivedAt = try parseOptionalTimestamp(snapshot.archivedAt)
         tracker.deletedAt = try parseOptionalTimestamp(snapshot.deletedAt)
@@ -1280,6 +1283,8 @@ actor LedgerSyncActor {
             )
         ).first
         if let existing, existing.serverVersion > snapshot.version { return }
+        let joinedAt = try parseTimestamp(snapshot.joinedAt)
+        let createdAt = try parseTimestamp(snapshot.createdAt)
         let membership = existing ?? LocalTrackerMembership(
             id: snapshot.id,
             scopeKey: scopeKey,
@@ -1289,8 +1294,8 @@ actor LedgerSyncActor {
             role: role,
             state: snapshot.state,
             serverVersion: snapshot.version,
-            joinedAt: try parseTimestamp(snapshot.joinedAt),
-            createdAt: try parseTimestamp(snapshot.createdAt)
+            joinedAt: joinedAt,
+            createdAt: createdAt
         )
         if existing == nil { modelContext.insert(membership) }
         membership.trackerID = snapshot.trackerID
@@ -1299,8 +1304,8 @@ actor LedgerSyncActor {
         membership.roleRaw = role.rawValue
         membership.stateRaw = snapshot.state
         membership.serverVersion = snapshot.version
-        membership.joinedAt = try parseTimestamp(snapshot.joinedAt)
-        membership.createdAt = try parseTimestamp(snapshot.createdAt)
+        membership.joinedAt = joinedAt
+        membership.createdAt = createdAt
         membership.updatedAt = try parseTimestamp(snapshot.updatedAt)
         membership.deletedAt = try parseOptionalTimestamp(snapshot.deletedAt)
     }
@@ -1369,6 +1374,8 @@ actor LedgerSyncActor {
             )
         ).first
         if let version = existing?.serverVersion, version > snapshot.version { return }
+        let openingDate = try parseDate(snapshot.openingDate)
+        let createdAt = try parseTimestamp(snapshot.createdAt)
         let account = existing ?? LocalAccount(
             id: snapshot.id,
             scopeKey: scopeKey,
@@ -1378,9 +1385,9 @@ actor LedgerSyncActor {
             currencyCode: snapshot.currency,
             currencyExponent: snapshot.currencyExponent,
             openingBalanceMinor: snapshot.openingBalanceMinor,
-            openingDate: try parseDate(snapshot.openingDate),
+            openingDate: openingDate,
             syncState: .synced,
-            createdAt: try parseTimestamp(snapshot.createdAt)
+            createdAt: createdAt
         )
         if existing == nil { modelContext.insert(account) }
         account.trackerID = snapshot.trackerID
@@ -1389,14 +1396,14 @@ actor LedgerSyncActor {
         account.currencyCode = snapshot.currency
         account.currencyExponent = snapshot.currencyExponent
         account.openingBalanceMinor = snapshot.openingBalanceMinor
-        account.openingDate = try parseDate(snapshot.openingDate)
+        account.openingDate = openingDate
         account.colorHex = snapshot.color
         account.icon = snapshot.icon
         account.includeInNetWorth = snapshot.includeInNetWorth
         account.creditLimitMinor = snapshot.creditLimitMinor
         account.serverVersion = snapshot.version
         account.syncStateRaw = LocalSyncState.synced.rawValue
-        account.createdAt = try parseTimestamp(snapshot.createdAt)
+        account.createdAt = createdAt
         account.updatedAt = try parseTimestamp(snapshot.updatedAt)
         account.archivedAt = try parseOptionalTimestamp(snapshot.archivedAt)
         account.deletedAt = try parseOptionalTimestamp(snapshot.deletedAt)
@@ -1413,6 +1420,7 @@ actor LedgerSyncActor {
             )
         ).first
         if let version = existing?.serverVersion, version > snapshot.version { return }
+        let createdAt = try parseTimestamp(snapshot.createdAt)
         let category = existing ?? LocalCategory(
             id: snapshot.id,
             scopeKey: scopeKey,
@@ -1421,7 +1429,7 @@ actor LedgerSyncActor {
             kind: kind,
             name: snapshot.name,
             syncState: .synced,
-            createdAt: try parseTimestamp(snapshot.createdAt)
+            createdAt: createdAt
         )
         if existing == nil { modelContext.insert(category) }
         category.trackerID = trackerID
@@ -1433,7 +1441,7 @@ actor LedgerSyncActor {
         category.sortOrder = snapshot.sortOrder
         category.serverVersion = snapshot.version
         category.syncStateRaw = LocalSyncState.synced.rawValue
-        category.createdAt = try parseTimestamp(snapshot.createdAt)
+        category.createdAt = createdAt
         category.updatedAt = try parseTimestamp(snapshot.updatedAt)
         category.archivedAt = try parseOptionalTimestamp(snapshot.archivedAt)
         category.deletedAt = try parseOptionalTimestamp(snapshot.deletedAt)
@@ -1447,6 +1455,7 @@ actor LedgerSyncActor {
             )
         ).first
         if let version = existing?.serverVersion, version > snapshot.version { return }
+        let createdAt = try parseTimestamp(snapshot.createdAt)
         let tag = existing ?? LocalTag(
             id: snapshot.id,
             scopeKey: scopeKey,
@@ -1454,7 +1463,7 @@ actor LedgerSyncActor {
             name: snapshot.name,
             colorHex: snapshot.color,
             syncState: .synced,
-            createdAt: try parseTimestamp(snapshot.createdAt)
+            createdAt: createdAt
         )
         if existing == nil { modelContext.insert(tag) }
         tag.trackerID = snapshot.trackerID
@@ -1462,7 +1471,7 @@ actor LedgerSyncActor {
         tag.colorHex = snapshot.color
         tag.serverVersion = snapshot.version
         tag.syncStateRaw = LocalSyncState.synced.rawValue
-        tag.createdAt = try parseTimestamp(snapshot.createdAt)
+        tag.createdAt = createdAt
         tag.updatedAt = try parseTimestamp(snapshot.updatedAt)
         tag.archivedAt = try parseOptionalTimestamp(snapshot.archivedAt)
         tag.deletedAt = try parseOptionalTimestamp(snapshot.deletedAt)
@@ -1499,6 +1508,7 @@ actor LedgerSyncActor {
             )
         ).first
         if let version = existing?.serverVersion, version > snapshot.version { return }
+        let createdAt = try parseTimestamp(snapshot.createdAt)
         let budget = existing ?? LocalBudget(
             id: snapshot.id,
             scopeKey: scopeKey,
@@ -1512,7 +1522,7 @@ actor LedgerSyncActor {
             endsOn: endsOn,
             rollover: snapshot.rollover,
             syncState: .synced,
-            createdAt: try parseTimestamp(snapshot.createdAt)
+            createdAt: createdAt
         )
         if existing == nil { modelContext.insert(budget) }
         budget.trackerID = snapshot.trackerID
@@ -1528,7 +1538,7 @@ actor LedgerSyncActor {
         budget.rollover = snapshot.rollover
         budget.serverVersion = snapshot.version
         budget.syncStateRaw = LocalSyncState.synced.rawValue
-        budget.createdAt = try parseTimestamp(snapshot.createdAt)
+        budget.createdAt = createdAt
         budget.updatedAt = try parseTimestamp(snapshot.updatedAt)
         budget.archivedAt = try parseOptionalTimestamp(snapshot.archivedAt)
         budget.deletedAt = try parseOptionalTimestamp(snapshot.deletedAt)
@@ -1722,6 +1732,7 @@ actor LedgerSyncActor {
             )
         ).first
         if let version = existing?.serverVersion, version > snapshot.version { return }
+        let createdAt = try parseTimestamp(snapshot.createdAt)
         let rule = existing ?? LocalRecurringRule(
             id: snapshot.id,
             scopeKey: scopeKey,
@@ -1750,7 +1761,7 @@ actor LedgerSyncActor {
             cancellationURL: snapshot.cancellationURL,
             subscriptionNote: snapshot.subscriptionNote,
             syncState: .synced,
-            createdAt: try parseTimestamp(snapshot.createdAt)
+            createdAt: createdAt
         )
         if existing == nil { modelContext.insert(rule) }
         rule.trackerID = snapshot.trackerID
@@ -1788,7 +1799,7 @@ actor LedgerSyncActor {
         rule.subscriptionNote = snapshot.subscriptionNote
         rule.serverVersion = snapshot.version
         rule.syncStateRaw = LocalSyncState.synced.rawValue
-        rule.createdAt = try parseTimestamp(snapshot.createdAt)
+        rule.createdAt = createdAt
         rule.updatedAt = try parseTimestamp(snapshot.updatedAt)
         rule.archivedAt = try parseOptionalTimestamp(snapshot.archivedAt)
         rule.deletedAt = try parseOptionalTimestamp(snapshot.deletedAt)
@@ -1860,6 +1871,8 @@ actor LedgerSyncActor {
             )
         ).first
         if let existing, existing.serverVersion > snapshot.version { return }
+        let scheduledFor = try parseTimestamp(snapshot.scheduledFor)
+        let createdAt = try parseTimestamp(snapshot.createdAt)
         let occurrence = existing ?? LocalRecurringOccurrence(
             id: snapshot.id,
             scopeKey: scopeKey,
@@ -1867,19 +1880,19 @@ actor LedgerSyncActor {
             ruleID: snapshot.ruleID,
             occurrenceKey: snapshot.occurrenceKey,
             dueOn: dueOn,
-            scheduledFor: try parseTimestamp(snapshot.scheduledFor),
+            scheduledFor: scheduledFor,
             ruleVersion: snapshot.ruleVersion,
             state: state,
             transactionID: snapshot.transactionID,
             serverVersion: snapshot.version,
-            createdAt: try parseTimestamp(snapshot.createdAt)
+            createdAt: createdAt
         )
         if existing == nil { modelContext.insert(occurrence) }
         occurrence.trackerID = snapshot.trackerID
         occurrence.ruleID = snapshot.ruleID
         occurrence.occurrenceKey = snapshot.occurrenceKey
         occurrence.dueOn = dueOn
-        occurrence.scheduledFor = try parseTimestamp(snapshot.scheduledFor)
+        occurrence.scheduledFor = scheduledFor
         occurrence.ruleVersion = snapshot.ruleVersion
         occurrence.stateRaw = snapshot.state
         occurrence.transactionID = snapshot.transactionID
@@ -1887,7 +1900,7 @@ actor LedgerSyncActor {
         occurrence.skippedAt = try parseOptionalTimestamp(snapshot.skippedAt)
         occurrence.errorCode = snapshot.errorCode
         occurrence.serverVersion = snapshot.version
-        occurrence.createdAt = try parseTimestamp(snapshot.createdAt)
+        occurrence.createdAt = createdAt
         occurrence.updatedAt = try parseTimestamp(snapshot.updatedAt)
         occurrence.deletedAt = nil
     }
@@ -2342,6 +2355,8 @@ actor LedgerSyncActor {
             exponent: snapshot.currencyExponent
         )
         let destination = snapshot.movements.first { $0.id != primary.id }
+        let occurredAt = try parseTimestamp(snapshot.occurredAt)
+        let createdAt = try parseTimestamp(snapshot.createdAt)
         let transaction = existing ?? LedgerTransaction(
             id: snapshot.id,
             scopeKey: scopeKey,
@@ -2358,9 +2373,9 @@ actor LedgerSyncActor {
             status: status,
             merchant: snapshot.merchant ?? snapshot.payee,
             note: snapshot.note,
-            occurredAt: try parseTimestamp(snapshot.occurredAt),
+            occurredAt: occurredAt,
             syncState: .synced,
-            createdAt: try parseTimestamp(snapshot.createdAt)
+            createdAt: createdAt
         )
         if existing == nil { modelContext.insert(transaction) }
         transaction.trackerID = snapshot.trackerID
@@ -2383,13 +2398,13 @@ actor LedgerSyncActor {
         transaction.rateEffectiveAt = try parseTimestamp(snapshot.rateEffectiveAt)
         transaction.merchant = snapshot.merchant ?? snapshot.payee
         transaction.note = snapshot.note
-        transaction.occurredAt = try parseTimestamp(snapshot.occurredAt)
+        transaction.occurredAt = occurredAt
         transaction.capturedAt = try parseTimestamp(snapshot.capturedAt)
         transaction.externalEventID = snapshot.externalEventID
         transaction.refundOfID = snapshot.refundOfID
         transaction.serverVersion = snapshot.version
         transaction.syncStateRaw = LocalSyncState.synced.rawValue
-        transaction.createdAt = try parseTimestamp(snapshot.createdAt)
+        transaction.createdAt = createdAt
         transaction.updatedAt = try parseTimestamp(snapshot.updatedAt)
         transaction.deletedAt = try parseOptionalTimestamp(snapshot.deletedAt)
         try replaceChildren(snapshot, scopeKey: scopeKey)
