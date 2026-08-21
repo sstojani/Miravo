@@ -470,13 +470,15 @@ private struct InstallmentPlanEditorView: View {
                 }
                 .disabled(termsLocked)
 
-                Section("Schedule") {
+                Section {
                     Picker("Cadence", selection: $cadence) {
                         ForEach(InstallmentCadence.allCases, id: \.self) {
                             Text($0.displayName).tag($0)
                         }
                     }
                     DatePicker("Starts", selection: $startsOn, displayedComponents: .date)
+                } header: {
+                    Text("Schedule")
                 } footer: {
                     if termsLocked {
                         Text("Financial terms stay fixed after the first payment. Name, account, category, and time zone metadata remain editable.")
@@ -991,19 +993,23 @@ private struct InstallmentPaymentEditorView: View {
                     DatePicker("Date", selection: $occurredAt)
                 }
                 if needsAccountConversion {
-                    Section("Account conversion") {
+                    Section {
                         TextField("Account amount", text: $accountAmountText)
                             .keyboardType(.decimalPad)
                         LabeledContent("Account currency", value: account.currencyCode)
+                    } header: {
+                        Text("Account conversion")
                     } footer: {
                         Text("Enter the exact account-currency amount. No exchange rate is invented.")
                     }
                 }
                 if needsBaseConversion {
-                    Section("Reporting conversion") {
+                    Section {
                         TextField("Base amount", text: $baseAmountText)
                             .keyboardType(.decimalPad)
                         LabeledContent("Base currency", value: tracker.baseCurrencyCode)
+                    } header: {
+                        Text("Reporting conversion")
                     } footer: {
                         Text("This manual snapshot is retained for historical reports.")
                     }
@@ -1142,8 +1148,10 @@ private struct InstallmentRescheduleView: View {
                             .foregroundStyle(LedgerTheme.negative)
                     }
                 }
-                Section("Reschedule payment") {
+                Section {
                     DatePicker("New due date", selection: $dueOn, displayedComponents: .date)
+                } header: {
+                    Text("Reschedule payment")
                 } footer: {
                     Text("The original due date remains in revision history.")
                 }

@@ -142,7 +142,7 @@ struct InsightsView: View {
             )
         }
         let recordIDs = Set(records.map(\.id))
-        let categoryAllocations = allocations.compactMap { allocation in
+        let categoryAllocations: [LocalAnalyticsAllocationInput] = allocations.compactMap { allocation -> LocalAnalyticsAllocationInput? in
             guard recordIDs.contains(allocation.transactionID) else { return nil }
             return LocalAnalyticsAllocationInput(
                 transactionID: allocation.transactionID,
@@ -928,8 +928,8 @@ struct InsightsView: View {
             return
         }
         if selectedTrackerID != tracker.id { selectedTrackerID = tracker.id }
-        if let selectedAccountID,
-           !trackerAccounts.contains(where: { $0.id == selectedAccountID }) {
+        if let currentAccountID = selectedAccountID,
+           !trackerAccounts.contains(where: { $0.id == currentAccountID }) {
             selectedAccountID = nil
         }
         if resetCurrency || !reportingCurrencies.contains(where: { $0.code == selectedCurrencyCode }) {
