@@ -877,3 +877,39 @@ Create a clean local receipt checkpoint after one final regression/secret scan. 
 - Native Swift analytics tests are authored but **not executed** because this Linux environment has no Swift/Xcode toolchain. Simulator performance, accessibility inspection, and UI behavior remain GitHub macOS/device checks.
 - Remote GitHub publication is authorized by the owner but still blocked until `../tools/gh` or Git receives an authenticated write session for `sstojani/Miravo`, or the connected GitHub integration is granted write access that can create Git blobs/commits/refs.
 - The next exact product action is the Milestone 9 export vertical slice: authenticated, expiring CSV/PDF/full-export jobs whose totals reuse the analytics reporting definition and whose files are stored in private media with audit and expiry.
+
+## 2026-08-21 — Milestone 9 backend export checkpoint
+
+### Acceptance checkpoint
+
+- A signed-in viewer can generate a tracker export without exposing a storage path or permanent public URL.
+- CSV, PDF, and full JSON exports are stored under private randomized keys in `EXPORT_ROOT`, have SHA-256 checksums, expire automatically, and stream only through authenticated API download.
+- Downloads are requester-only even when another tracker viewer can see the underlying tracker. Expired jobs become unavailable and are marked expired.
+- Export creation/download audit events contain only safe metadata. Notes can be suppressed in the full JSON/CSV row materialization.
+- The API and OpenAPI schema expose stable fields without committing secrets or relying on direct media serving.
+
+### Material work
+
+- Added `ExportJob` to the ledger domain, including requester, tracker, filters, format, state, private key, byte count, checksum, content type, expiry, and safe error summary.
+- Added synchronous initial export generation service for UTF-8 CSV, valid text-first PDF, and full JSON portability output. The service writes 0600 files under `PROJECT_LEDGER_EXPORT_ROOT` and never serializes `storage_key`.
+- Added `GET/POST /api/v1/export-jobs/`, `GET /api/v1/export-jobs/{id}/`, and `GET /api/v1/export-jobs/{id}/download/` with tracker/account authorization, requester-only downloads, `private, no-store`, `nosniff`, and checksum headers.
+- Added `PROJECT_LEDGER_EXPORT_EXPIRY_HOURS` with a 24-hour default and documented it in `.env.example`.
+- Added focused export tests covering CSV data/headers, checksum downloads, storage-key non-leakage, audit, full JSON note suppression, valid PDF output, requester-only denial, and expiry state.
+- Updated API/data/user/status/test documentation. The first PAT push attempt reached GitHub but was rejected because workflow files require a `workflow`-scoped token; the owner then added that scope and the next push should retry.
+
+### Commands and outcomes
+
+- `PROJECT_LEDGER_ENV=test PROJECT_LEDGER_DATABASE_URL=sqlite:///:memory: .venv/bin/python backend/manage.py makemigrations ledger`: generated `backend/apps/ledger/migrations/0005_exportjob.py`.
+- `PROJECT_LEDGER_ENV=test PROJECT_LEDGER_DATABASE_URL=sqlite:///:memory: .venv/bin/pytest backend/tests/test_exports.py -q`: first run found the trailing-slash redirect and rollback-on-expiry issue; both were fixed.
+- `PROJECT_LEDGER_ENV=test PROJECT_LEDGER_DATABASE_URL=sqlite:///:memory: .venv/bin/pytest backend/tests/test_exports.py -q`: **3 passed locally**.
+- `make schema`: **passed locally** and refreshed `backend/openapi-schema.yml`.
+- `make check`: **passed locally** — 96 tests, 82.26% coverage, Ruff format/lint, Django checks, strict mypy over 108 source files, OpenAPI validation, and byte-current schema.
+- `./ios/check-localizations.sh`: **passed locally** — 762 literal UI keys, identical English/Albanian sets, and compatible placeholders.
+- `python3 ios/check-project-contract.py`: **passed locally**, including the analytics source contract; native export UI is not implemented yet.
+- `git diff --check`: **passed locally**.
+
+### Verification boundary and next exact action
+
+- Backend export creation, download authorization, expiry, checksum, audit, and schema generation are **verified locally on Linux/SQLite** at the focused-test tier.
+- Docker/PostgreSQL/Redis, hosted CI, asynchronous Celery generation, PDF visual layout polish, native export UI/download management, signer/device behavior, and real server storage permissions remain unverified.
+- The next exact action is to run the full local gate, commit this export checkpoint, retry pushing `main` and `agent/milestone-9-private-receipts` with the workflow-scoped PAT, then continue native export UI if the push succeeds.

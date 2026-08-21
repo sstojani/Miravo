@@ -5,6 +5,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from django.db import transaction
 from django.db.models import Q, QuerySet
+from django.http import FileResponse, HttpResponseBase
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from drf_spectacular.types import OpenApiTypes
@@ -25,6 +26,7 @@ from apps.ledger.analytics_serializers import (
 from apps.ledger.models import (
     Account,
     Category,
+    ExportJob,
     Merchant,
     Participant,
     Settlement,
@@ -41,6 +43,8 @@ from apps.ledger.serializers import (
     CategoryMergeSerializer,
     CategoryRevisionSerializer,
     CategorySerializer,
+    ExportJobCreateSerializer,
+    ExportJobSerializer,
     InviteAcceptSerializer,
     InviteCreatedSerializer,
     InviteCreateSerializer,
@@ -75,6 +79,12 @@ from apps.ledger.services.collaboration import (
     create_tracker,
     request_id,
     transfer_tracker_ownership,
+)
+from apps.ledger.services.exports import (
+    ExportRequest,
+    authorized_export_job,
+    create_export_job,
+    export_download_path,
 )
 from apps.ledger.services.settlements import (
     create_settlement,
@@ -1121,3 +1131,75 @@ class AuditEventViewSet(
         tracker = get_object_or_404(visible_trackers(_user(self.request)), id=tracker_id)
         require_tracker_role(_user(self.request), tracker, TrackerMembership.Role.ADMIN)
         return AuditEvent.objects.filter(tracker_id=tracker.id).select_related("actor")
+
+
+class ExportJobViewSet(
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    mixins.CreateModelMixin,
+    viewsets.GenericViewSet,  # type: ignore[type-arg]
+):
+    serializer_class = ExportJobSerializer
+    queryset = ExportJob.objects.none()
+    http_method_names = ["get", "post", "head", "options"]
+
+    def get_queryset(self) -> QuerySet[ExportJob]:
+        return ExportJob.objects.filter(
+            requester=_user(self.request),
+            tracker__in=visible_trackers(_user(self.request)),
+        ).select_related("requester", "tracker")
+
+    @extend_schema(
+        request=ExportJobCreateSerializer,
+        responses={201: ExportJobSerializer},
+    )
+    def create(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        del args, kwargs
+        serializer = ExportJobCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        values = serializer.validated_data
+        tracker = get_object_or_404(
+            visible_trackers(_user(request)),
+            id=values["tracker_id"],
+        )
+        account_id = values.get("account_id")
+        if account_id:
+            get_object_or_404(
+                Account,
+                id=account_id,
+                tracker=tracker,
+                deleted_at__isnull=True,
+            )
+        filters = {
+            key: values[key]
+            for key in ("date_from", "date_to", "account_id", "include_notes")
+            if key in values
+        }
+        job = create_export_job(
+            export_request=ExportRequest(
+                tracker=tracker,
+                actor=_user(request),
+                format=values["format"],
+                filters=filters,
+            ),
+            request=request,
+        )
+        return Response(ExportJobSerializer(job).data, status=status.HTTP_201_CREATED)
+
+    @extend_schema(responses={(200, "application/octet-stream"): OpenApiTypes.BINARY})
+    @action(detail=True, methods=["get"], url_path="download")
+    def download(self, request: Request, pk: str | None = None) -> Response | HttpResponseBase:
+        job = authorized_export_job(actor=_user(request), job_id=pk)
+        path = export_download_path(job=job, actor=_user(request), request=request)
+        extension = job.format if job.format != ExportJob.Format.FULL else "json"
+        filename = f"miravo-export-{job.id}.{extension}"
+        response = FileResponse(
+            path.open("rb"),
+            as_attachment=True,
+            filename=filename,
+            content_type=job.content_type or "application/octet-stream",
+        )
+        response["Cache-Control"] = "private, no-store"
+        response["X-Content-Type-Options"] = "nosniff"
+        response["X-Miravo-Checksum-SHA256"] = job.checksum_sha256
+        return response

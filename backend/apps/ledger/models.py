@@ -624,6 +624,44 @@ class Settlement(SyncableModel):
             raise ValidationError({"transaction": "Transaction must use this tracker."})
 
 
+class ExportJob(UUIDTimestampedModel):
+    class Format(models.TextChoices):
+        CSV = "csv", "CSV"
+        PDF = "pdf", "PDF"
+        FULL = "full", "Full JSON"
+
+    class State(models.TextChoices):
+        READY = "ready", "Ready"
+        FAILED = "failed", "Failed"
+        EXPIRED = "expired", "Expired"
+
+    requester = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="export_jobs",
+    )
+    tracker = models.ForeignKey(Tracker, on_delete=models.PROTECT, related_name="export_jobs")
+    format = models.CharField(max_length=12, choices=Format.choices)
+    state = models.CharField(max_length=12, choices=State.choices, default=State.READY)
+    filters = models.JSONField(default=dict, blank=True)
+    storage_key = models.CharField(max_length=160, unique=True)
+    byte_count = models.PositiveBigIntegerField(default=0)
+    checksum_sha256 = models.CharField(max_length=64, blank=True)
+    content_type = models.CharField(max_length=80, blank=True)
+    expires_at = models.DateTimeField(db_index=True)
+    error_summary = models.CharField(max_length=240, blank=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+        indexes = [
+            models.Index(fields=("requester", "created_at")),
+            models.Index(fields=("tracker", "state", "expires_at")),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.format} export for {self.tracker_id} ({self.state})"
+
+
 class TransactionRevision(UUIDTimestampedModel):
     """Immutable financially material snapshot captured before a parent change."""
 

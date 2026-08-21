@@ -16,6 +16,7 @@ from apps.ledger.models import (
     Category,
     CategoryAllocation,
     CategoryRevision,
+    ExportJob,
     Merchant,
     MovementRevision,
     Participant,
@@ -909,3 +910,53 @@ class AuditEventSerializer(StrictModelSerializer):
             "created_at",
         )
         read_only_fields = fields
+
+
+class ExportJobCreateSerializer(StrictSerializer):
+    tracker_id = serializers.UUIDField()
+    format = serializers.ChoiceField(choices=ExportJob.Format.choices)
+    date_from = serializers.DateTimeField(required=False)
+    date_to = serializers.DateTimeField(required=False)
+    account_id = serializers.UUIDField(required=False)
+    include_notes = serializers.BooleanField(default=True)
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        start = attrs.get("date_from")
+        end = attrs.get("date_to")
+        if start and end and start >= end:
+            raise serializers.ValidationError(
+                {"date_to": "date_to must be after date_from."},
+                code="invalid_export_range",
+            )
+        return attrs
+
+
+class ExportJobSerializer(StrictModelSerializer):
+    tracker_id = serializers.UUIDField(read_only=True)
+    requester_id = serializers.UUIDField(read_only=True)
+    download_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ExportJob
+        fields = (
+            "id",
+            "requester_id",
+            "tracker_id",
+            "format",
+            "state",
+            "filters",
+            "byte_count",
+            "checksum_sha256",
+            "content_type",
+            "expires_at",
+            "error_summary",
+            "download_url",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = fields
+
+    def get_download_url(self, obj: ExportJob) -> str | None:
+        if obj.state != ExportJob.State.READY:
+            return None
+        return f"/api/v1/export-jobs/{obj.id}/download/"

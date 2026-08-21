@@ -176,10 +176,22 @@ The summary uses posted/reconciled expense, income, and refund rows only. Transf
 
 The response includes totals, trend points, category/subcategory breakdowns, merchant totals, source totals, account balances/net worth, budget/subscription/installment/split placeholders or summaries where synchronized data exists, and accessibility-oriented labels for chart consumers. The native app uses a matching local calculator so Insights remains available offline; the server endpoint is the authorized comparison/reporting surface.
 
+## Implemented in Milestone 9 (exports)
+
+| Method/path | Minimum tracker role | Purpose |
+|---|---|---|
+| `GET/POST /export-jobs/` | viewer | List requester-owned jobs or generate a new private CSV/PDF/full JSON export |
+| `GET /export-jobs/{id}/` | viewer | Read safe requester-owned job metadata |
+| `GET /export-jobs/{id}/download/` | viewer + requester | Stream the private generated file before expiry |
+
+`POST /export-jobs/` accepts `tracker_id`, `format` (`csv`, `pdf`, or `full`), optional `date_from`, optional `date_to`, optional `account_id`, and `include_notes`. The first implementation generates the bounded job synchronously; the contract is compatible with moving generation to Celery later. Every request rechecks tracker visibility and account scope. Downloads are requester-only even when another viewer can see the tracker, expire after `PROJECT_LEDGER_EXPORT_EXPIRY_HOURS` (default 24), set `private, no-store` plus `nosniff`, include `X-Miravo-Checksum-SHA256`, and never expose the private storage key.
+
+CSV uses stable UTF-8 headers and includes JSON-encoded movement/allocation/tag columns. Full JSON is a portability payload with a `format_version`, tracker metadata, filters, and transaction rows. PDF is currently a valid text-first period report containing generation time, tracker, exported row count, base-currency totals, and conversion caveats; chart/table polish can be added without changing authorization or storage semantics. Creation and download record safe audit events.
+
 ## Planned resource surface
 
 - Profile and configured recovery.
-- Currency rates, audit history, export jobs/expiring downloads.
+- Currency rates and additional audit-history filters.
 
 Collection endpoints use bounded cursor pagination, explicit filters/order, and stable error codes. Authorization returns 404 where revealing object existence would be inappropriate.
 

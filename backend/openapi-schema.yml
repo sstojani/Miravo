@@ -989,6 +989,97 @@ paths:
                 type: object
                 additionalProperties: {}
           description: ''
+  /api/v1/export-jobs/:
+    get:
+      operationId: export_jobs_list
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      tags:
+      - export-jobs
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedExportJobList'
+          description: ''
+    post:
+      operationId: export_jobs_create
+      tags:
+      - export-jobs
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExportJobCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ExportJobCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ExportJobCreateRequest'
+        required: true
+      security:
+      - accessToken: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExportJob'
+          description: ''
+  /api/v1/export-jobs/{id}/:
+    get:
+      operationId: export_jobs_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this export job.
+        required: true
+      tags:
+      - export-jobs
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExportJob'
+          description: ''
+  /api/v1/export-jobs/{id}/download/:
+    get:
+      operationId: export_jobs_download_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this export job.
+        required: true
+      tags:
+      - export-jobs
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+          description: ''
   /api/v1/health/live:
     get:
       operationId: health_live
@@ -4794,6 +4885,119 @@ components:
         * `installment_plan` - installment_plan
         * `transaction` - transaction
         * `settlement` - settlement
+    ExportJob:
+      type: object
+      description: Model serializer with strict input-field handling.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        requester_id:
+          type: string
+          format: uuid
+          readOnly: true
+        tracker_id:
+          type: string
+          format: uuid
+          readOnly: true
+        format:
+          allOf:
+          - $ref: '#/components/schemas/FormatEnum'
+          readOnly: true
+        state:
+          allOf:
+          - $ref: '#/components/schemas/ExportJobStateEnum'
+          readOnly: true
+        filters:
+          readOnly: true
+        byte_count:
+          type: integer
+          readOnly: true
+        checksum_sha256:
+          type: string
+          readOnly: true
+        content_type:
+          type: string
+          readOnly: true
+        expires_at:
+          type: string
+          format: date-time
+          readOnly: true
+        error_summary:
+          type: string
+          readOnly: true
+        download_url:
+          type: string
+          nullable: true
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - byte_count
+      - checksum_sha256
+      - content_type
+      - created_at
+      - download_url
+      - error_summary
+      - expires_at
+      - filters
+      - format
+      - id
+      - requester_id
+      - state
+      - tracker_id
+      - updated_at
+    ExportJobCreateRequest:
+      type: object
+      description: Serializer that rejects misspelled or unsupported request fields.
+      properties:
+        tracker_id:
+          type: string
+          format: uuid
+        format:
+          $ref: '#/components/schemas/FormatEnum'
+        date_from:
+          type: string
+          format: date-time
+        date_to:
+          type: string
+          format: date-time
+        account_id:
+          type: string
+          format: uuid
+        include_notes:
+          type: boolean
+          default: true
+      required:
+      - format
+      - tracker_id
+    ExportJobStateEnum:
+      enum:
+      - ready
+      - failed
+      - expired
+      type: string
+      description: |-
+        * `ready` - Ready
+        * `failed` - Failed
+        * `expired` - Expired
+    FormatEnum:
+      enum:
+      - csv
+      - pdf
+      - full
+      type: string
+      description: |-
+        * `csv` - CSV
+        * `pdf` - PDF
+        * `full` - Full JSON
     InstallmentPayment:
       type: object
       description: Model serializer with strict input-field handling.
@@ -6013,6 +6217,25 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/CategoryRevision'
+    PaginatedExportJobList:
+      type: object
+      required:
+      - results
+      properties:
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cD00ODY%3D"
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExportJob'
     PaginatedInstallmentPaymentList:
       type: object
       required:

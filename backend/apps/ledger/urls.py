@@ -6,6 +6,7 @@ from apps.ledger.views import (
     AnalyticsSummaryView,
     AuditEventViewSet,
     CategoryViewSet,
+    ExportJobViewSet,
     InviteAcceptView,
     MerchantViewSet,
     ParticipantViewSet,
@@ -26,6 +27,7 @@ router.register("participants", ParticipantViewSet, basename="participant")
 router.register("settlements", SettlementViewSet, basename="settlement")
 router.register("transactions", TransactionViewSet, basename="transaction")
 router.register("audit-events", AuditEventViewSet, basename="audit-event")
+router.register("export-jobs", ExportJobViewSet, basename="export-job")
 
 urlpatterns = [
     path("analytics/summary", AnalyticsSummaryView.as_view(), name="analytics-summary"),

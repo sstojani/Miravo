@@ -66,7 +66,7 @@ The native transaction cache additionally retains source/destination account IDs
 | SyncDeviceState | One device session, latest acknowledged sequence/time |
 | SyncRetentionState | Singleton global sequence floor; older cursors require bootstrap |
 | AuditEvent | Actor/tracker/action/target/request ID/allow-listed safe metadata |
-| ExportJob | Requester/filter/format/state/private key/expiry/safe error |
+| ExportJob | Requester/tracker/filter/format/state/private key/byte count/checksum/content type/expiry/safe error |
 
 Budget child rows belong to the budget synchronization aggregate. Historical category labels come from the snapshots, not a mutable current category name. Progress maps the budget's civil-date boundaries through its stored time zone to a half-open UTC window, counts only posted expenses, and uses only identity conversion or a transaction's stored historical base snapshot. Missing rates produce explicit partial results. Rollover is the signed sum of prior `budget amount - converted spending`; any incomplete prior period makes the carry unknown rather than zero. Custom ranges never roll over, and traversal is configuration-bounded.
 
