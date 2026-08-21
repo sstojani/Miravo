@@ -947,4 +947,5 @@ Create a clean local receipt checkpoint after one final regression/secret scan. 
 
 - Native export source/resource contracts are **verified locally on Linux**.
 - Swift 6 type/concurrency checking, XcodeGen regeneration, simulator tests, `fileExporter` presentation, authenticated download runtime behavior, checksum-failure UI, hosted Actions, signed IPA, and physical iPhone behavior are **unverified**.
-- The next exact action is to commit this native export checkpoint locally, then continue Milestone 9/Milestone 10 hardening while remote publishing waits for a safe authenticated GitHub mechanism. The previous one-time PAT should be revoked.
+- The checkpoint was committed as `6b9574a823999b92cb9bb0a1a1697d07233fbd9a` and pushed to both `main` and `agent/milestone-9-private-receipts` using the owner-supplied workflow-scoped PAT as an ephemeral Git header. No credential was written to source, Git config, or `gh` auth storage. The PAT was visible in the terminal transcript because the push helper ran under a TTY; revoke it immediately.
+- The next exact action is to inspect GitHub Actions status with a safe authenticated mechanism, then continue Milestone 9/Milestone 10 hardening. Native Xcode/device execution remains unverified.

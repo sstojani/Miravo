@@ -38,7 +38,7 @@ Miravo is the final product name; Project Ledger remains the internal code/modul
 
 - PostgreSQL/Redis/Celery/ASGI behavior under Docker.
 - Swift/Xcode project generation, simulator build/tests, device archive, IPA packaging, signer, and physical-device behavior.
-- GitHub Actions execution. The owner supplied `https://github.com/sstojani/Miravo.git`; the local `origin` and current `agent/milestone-9-private-receipts` branch exist, and a user-local GitHub CLI is installed at `../tools/gh`. After the owner added `workflow` scope to the one-time PAT, the push succeeded without storing credentials. Remote `main` and `agent/milestone-9-private-receipts` both point to `b8775fea89d0392b05119e915d49fd6852319ce8`. GitHub Actions status still needs inspection through an authenticated API/CLI session.
+- GitHub Actions execution. The owner supplied `https://github.com/sstojani/Miravo.git`; the local `origin` and current `agent/milestone-9-private-receipts` branch exist, and a user-local GitHub CLI is installed at `../tools/gh`. After the owner added `workflow` scope to the one-time PAT, pushes succeeded without storing credentials. Remote `main` and `agent/milestone-9-private-receipts` contain the native export checkpoint `6b9574a823999b92cb9bb0a1a1697d07233fbd9a`. GitHub Actions status still needs inspection through an authenticated API/CLI session.
 - Ubuntu deployment, real Funnel hostname, backup restore, and external collaboration.
 - Native Shortcut credential/default-management compilation/runtime plus Wallet trigger and offline queue-file behavior on the current physical iPhone.
 - Native budget Swift 6 type/concurrency checking, SwiftData behavior, calculator tests, and Plans UI interaction on a simulator/device.
