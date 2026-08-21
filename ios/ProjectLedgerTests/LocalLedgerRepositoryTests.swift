@@ -106,7 +106,10 @@ struct LocalLedgerRepositoryTests {
         #expect(transaction.baseAmountMinor == 1_250)
         #expect(transaction.rateSnapshot == "1")
         #expect(transaction.rateEffectiveAt == reviewedDate)
-        #expect(try context.fetch(FetchDescriptor<OutboxMutation>()).count == mutationCount + 1)
+        let macroSafeExpectation1: Bool = try {
+            try context.fetch(FetchDescriptor<OutboxMutation>()).count == mutationCount + 1
+        }()
+        #expect(macroSafeExpectation1)
     }
 
     @Test func transactionPayloadUsesIntegerMinorUnitsAndStableIdentifiers() throws {
@@ -181,8 +184,14 @@ struct LocalLedgerRepositoryTests {
                 merchant: "Rejected"
             )
         }
-        #expect(try context.fetch(FetchDescriptor<LedgerTransaction>()).isEmpty)
-        #expect(try context.fetch(FetchDescriptor<OutboxMutation>()).count == before)
+        let macroSafeExpectation2: Bool = try {
+            try context.fetch(FetchDescriptor<LedgerTransaction>()).isEmpty
+        }()
+        #expect(macroSafeExpectation2)
+        let macroSafeExpectation3: Bool = try {
+            try context.fetch(FetchDescriptor<OutboxMutation>()).count == before
+        }()
+        #expect(macroSafeExpectation3)
     }
 
     @Test func crossScopeReferenceIsRejectedWithoutPartialMutation() throws {
@@ -213,8 +222,14 @@ struct LocalLedgerRepositoryTests {
                 merchant: "Rejected"
             )
         }
-        #expect(try context.fetch(FetchDescriptor<LedgerTransaction>()).isEmpty)
-        #expect(try context.fetch(FetchDescriptor<OutboxMutation>()).count == before)
+        let macroSafeExpectation4: Bool = try {
+            try context.fetch(FetchDescriptor<LedgerTransaction>()).isEmpty
+        }()
+        #expect(macroSafeExpectation4)
+        let macroSafeExpectation5: Bool = try {
+            try context.fetch(FetchDescriptor<OutboxMutation>()).count == before
+        }()
+        #expect(macroSafeExpectation5)
     }
 
     @Test func outboxFailureRollsBackTransactionAndFinancialChildrenTogether() throws {
@@ -239,9 +254,18 @@ struct LocalLedgerRepositoryTests {
                 merchant: "Must roll back"
             )
         }
-        #expect(try context.fetch(FetchDescriptor<LedgerTransaction>()).isEmpty)
-        #expect(try context.fetch(FetchDescriptor<LocalAccountMovement>()).isEmpty)
-        #expect(try context.fetch(FetchDescriptor<LocalCategoryAllocation>()).isEmpty)
+        let macroSafeExpectation6: Bool = try {
+            try context.fetch(FetchDescriptor<LedgerTransaction>()).isEmpty
+        }()
+        #expect(macroSafeExpectation6)
+        let macroSafeExpectation7: Bool = try {
+            try context.fetch(FetchDescriptor<LocalAccountMovement>()).isEmpty
+        }()
+        #expect(macroSafeExpectation7)
+        let macroSafeExpectation8: Bool = try {
+            try context.fetch(FetchDescriptor<LocalCategoryAllocation>()).isEmpty
+        }()
+        #expect(macroSafeExpectation8)
     }
 
     @Test func sameCurrencyTransferCreatesBalancedLinkedMovementsAndDuplicatesSafely() throws {
@@ -280,7 +304,10 @@ struct LocalLedgerRepositoryTests {
         #expect(transfer.destinationAmountMinor == 2_500)
         #expect(Set(originalMovements.map(\.signedAmountMinor)) == Set([-2_500, 2_500]))
         #expect(Set(duplicateMovements.map(\.signedAmountMinor)) == Set([-2_500, 2_500]))
-        #expect(try context.fetch(FetchDescriptor<LocalCategoryAllocation>()).isEmpty)
+        let macroSafeExpectation9: Bool = try {
+            try context.fetch(FetchDescriptor<LocalCategoryAllocation>()).isEmpty
+        }()
+        #expect(macroSafeExpectation9)
     }
 
     @Test func crossCurrencyTransferStoresBothAmountsAndExplicitBaseSnapshot() throws {
@@ -453,8 +480,14 @@ struct LocalLedgerRepositoryTests {
                 merchant: "Blocked"
             )
         }
-        #expect(try context.fetch(FetchDescriptor<LedgerTransaction>()).isEmpty)
-        #expect(try context.fetch(FetchDescriptor<OutboxMutation>()).count == before)
+        let macroSafeExpectation10: Bool = try {
+            try context.fetch(FetchDescriptor<LedgerTransaction>()).isEmpty
+        }()
+        #expect(macroSafeExpectation10)
+        let macroSafeExpectation11: Bool = try {
+            try context.fetch(FetchDescriptor<OutboxMutation>()).count == before
+        }()
+        #expect(macroSafeExpectation11)
     }
 
     @Test func trackerPresentationDefaultsAndOrderingAreAtomicAndSyncable() throws {
@@ -487,9 +520,10 @@ struct LocalLedgerRepositoryTests {
             )
         }
         #expect(everyday.name == "Everyday")
-        #expect(
+        let macroSafeExpectation12: Bool = try {
             try context.fetch(FetchDescriptor<OutboxMutation>()).count == beforeInvalidUpdate
-        )
+        }()
+        #expect(macroSafeExpectation12)
 
         try repository.updateTracker(
             everyday,
@@ -557,7 +591,10 @@ struct LocalLedgerRepositoryTests {
             try repository.reorderTrackers([tracker], scopeKey: scope)
         }
         #expect(tracker.name == "Everyday")
-        #expect(try context.fetch(FetchDescriptor<OutboxMutation>()).count == before)
+        let macroSafeExpectation13: Bool = try {
+            try context.fetch(FetchDescriptor<OutboxMutation>()).count == before
+        }()
+        #expect(macroSafeExpectation13)
     }
 
     private func makeContainer() throws -> ModelContainer {

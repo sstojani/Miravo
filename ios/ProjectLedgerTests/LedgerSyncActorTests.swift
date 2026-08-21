@@ -556,8 +556,14 @@ struct LedgerSyncActorTests {
         #expect(savedPlan.name == "Local laptop edit")
         #expect(savedItem.paidMinor == 400)
         #expect(savedItem.state == .partiallyPaid)
-        #expect(try verification.fetch(FetchDescriptor<LedgerTransaction>()).first?.id == transactionID)
-        #expect(try verification.fetch(FetchDescriptor<OutboxMutation>()).first?.operationID == operationID)
+        let macroSafeExpectation1: Bool = try {
+            try verification.fetch(FetchDescriptor<LedgerTransaction>()).first?.id == transactionID
+        }()
+        #expect(macroSafeExpectation1)
+        let macroSafeExpectation2: Bool = try {
+            try verification.fetch(FetchDescriptor<OutboxMutation>()).first?.operationID == operationID
+        }()
+        #expect(macroSafeExpectation2)
     }
 
     @Test func bootstrapRejectsInvalidInstallmentSnapshotEvenWhenLocalPlanIsPreserved() async throws {
@@ -978,8 +984,14 @@ struct LedgerSyncActorTests {
 
         let verification = ModelContext(container)
         #expect(didThrow)
-        #expect(try verification.fetch(FetchDescriptor<LocalRecurringRule>()).isEmpty)
-        #expect(try verification.fetch(FetchDescriptor<SyncCursor>()).first?.cursor == "before")
+        let macroSafeExpectation3: Bool = try {
+            try verification.fetch(FetchDescriptor<LocalRecurringRule>()).isEmpty
+        }()
+        #expect(macroSafeExpectation3)
+        let macroSafeExpectation4: Bool = try {
+            try verification.fetch(FetchDescriptor<SyncCursor>()).first?.cursor == "before"
+        }()
+        #expect(macroSafeExpectation4)
     }
 
     @Test func participantSplitAndSettlementPullApplyAtomically() async throws {
@@ -1096,14 +1108,27 @@ struct LedgerSyncActorTests {
 
         let verification = ModelContext(container)
         #expect(summary.pulledCount == 4)
-        #expect(try verification.fetch(FetchDescriptor<LocalParticipant>()).count == 2)
-        #expect(try verification.fetch(FetchDescriptor<LocalSplitPayment>()).count == 1)
-        #expect(try verification.fetch(FetchDescriptor<LocalSplitShare>()).count == 2)
-        #expect(try verification.fetch(FetchDescriptor<LocalSettlement>()).count == 1)
-        #expect(
+        let macroSafeExpectation5: Bool = try {
+            try verification.fetch(FetchDescriptor<LocalParticipant>()).count == 2
+        }()
+        #expect(macroSafeExpectation5)
+        let macroSafeExpectation6: Bool = try {
+            try verification.fetch(FetchDescriptor<LocalSplitPayment>()).count == 1
+        }()
+        #expect(macroSafeExpectation6)
+        let macroSafeExpectation7: Bool = try {
+            try verification.fetch(FetchDescriptor<LocalSplitShare>()).count == 2
+        }()
+        #expect(macroSafeExpectation7)
+        let macroSafeExpectation8: Bool = try {
+            try verification.fetch(FetchDescriptor<LocalSettlement>()).count == 1
+        }()
+        #expect(macroSafeExpectation8)
+        let macroSafeExpectation9: Bool = try {
             try verification.fetch(FetchDescriptor<SyncCursor>()).first?.cursor ==
                 "after-collaboration"
-        )
+        }()
+        #expect(macroSafeExpectation9)
     }
 
     @Test func attachmentMetadataPullNeverRequiresOrStoresServerStorageKey() async throws {
@@ -1214,7 +1239,10 @@ struct LedgerSyncActorTests {
         )
 
         #expect(summary.acknowledged)
-        #expect(try await store.load(scopeKey: scope) == refreshed)
+        let macroSafeExpectation10: Bool = try {
+            try await store.load(scopeKey: scope) == refreshed
+        }()
+        #expect(macroSafeExpectation10)
         #expect(await transport.refreshCount() == 1)
         #expect(await transport.pullCount() == 2)
         try await store.delete(scopeKey: scope)

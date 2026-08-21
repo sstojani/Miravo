@@ -8,11 +8,14 @@ struct LocalInstallmentTests {
     private let scope = "https://ledger.example|10000000-0000-0000-0000-000000000001"
 
     @Test func scheduleMatchesServerRemaindersAndOriginalMonthAnchor() throws {
-        #expect(try LocalInstallmentCalculator.scheduleItemID(
-            planID: UUID(uuidString: "10000000-0000-0000-0000-000000000001")!,
-            revisionNumber: 1,
-            sequence: 1
-        ) == UUID(uuidString: "6aeb1cec-6102-510c-975b-96cdfc43718e"))
+        let macroSafeExpectation1: Bool = try {
+            try LocalInstallmentCalculator.scheduleItemID(
+                        planID: UUID(uuidString: "10000000-0000-0000-0000-000000000001")!,
+                        revisionNumber: 1,
+                        sequence: 1
+                    ) == UUID(uuidString: "6aeb1cec-6102-510c-975b-96cdfc43718e")
+        }()
+        #expect(macroSafeExpectation1)
         let schedule = try LocalInstallmentCalculator.buildSchedule(
             principalMinor: 1_000,
             interestMinor: 101,
@@ -161,7 +164,10 @@ struct LocalInstallmentTests {
                 confirmOverpayment: false
             )
         }
-        #expect(try context.fetch(FetchDescriptor<LedgerTransaction>()).isEmpty)
+        let macroSafeExpectation2: Bool = try {
+            try context.fetch(FetchDescriptor<LedgerTransaction>()).isEmpty
+        }()
+        #expect(macroSafeExpectation2)
 
         let first = try repository.recordInstallmentPayment(
             in: plan,
@@ -177,7 +183,10 @@ struct LocalInstallmentTests {
         #expect(first.syncState == .pending)
         #expect(items[0].paidMinor == 400)
         #expect(items[0].state == .partiallyPaid)
-        #expect(try context.fetch(FetchDescriptor<LocalInstallmentPayment>()).isEmpty)
+        let macroSafeExpectation3: Bool = try {
+            try context.fetch(FetchDescriptor<LocalInstallmentPayment>()).isEmpty
+        }()
+        #expect(macroSafeExpectation3)
         let movement = try #require(
             context.fetch(FetchDescriptor<LocalAccountMovement>())
                 .first { $0.transactionID == transactionID }
@@ -284,7 +293,10 @@ struct LocalInstallmentTests {
                 startsOn: try dateOnly("2026-08-13")
             )
         }
-        #expect(try context.fetch(FetchDescriptor<OutboxMutation>()).count == before)
+        let macroSafeExpectation4: Bool = try {
+            try context.fetch(FetchDescriptor<OutboxMutation>()).count == before
+        }()
+        #expect(macroSafeExpectation4)
     }
 
     @Test func crossCurrencyAccountAmountMustBeExplicitAndIsPreserved() throws {
@@ -326,7 +338,10 @@ struct LocalInstallmentTests {
                 amount: Money(minorUnits: 500, currencyCode: "ALL", exponent: 2)
             )
         }
-        #expect(try context.fetch(FetchDescriptor<LedgerTransaction>()).isEmpty)
+        let macroSafeExpectation5: Bool = try {
+            try context.fetch(FetchDescriptor<LedgerTransaction>()).isEmpty
+        }()
+        #expect(macroSafeExpectation5)
 
         let transaction = try repository.recordInstallmentPayment(
             in: plan,
