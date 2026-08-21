@@ -912,4 +912,6 @@ Create a clean local receipt checkpoint after one final regression/secret scan. 
 
 - Backend export creation, download authorization, expiry, checksum, audit, and schema generation are **verified locally on Linux/SQLite** at the focused-test tier.
 - Docker/PostgreSQL/Redis, hosted CI, asynchronous Celery generation, PDF visual layout polish, native export UI/download management, signer/device behavior, and real server storage permissions remain unverified.
-- The next exact action is to run the full local gate, commit this export checkpoint, retry pushing `main` and `agent/milestone-9-private-receipts` with the workflow-scoped PAT, then continue native export UI if the push succeeds.
+- The full local gate passed and the export checkpoint was committed as `7213f29650b098cfda1e5b65159fb9c46b182e42`.
+- `GIT_TERMINAL_PROMPT=0 git -c http.extraheader=... push origin HEAD:main` and `... HEAD:agent/milestone-9-private-receipts`: **passed** after the owner added `workflow` scope to the one-time PAT. Remote `main` and `agent/milestone-9-private-receipts` were verified at `7213f29650b098cfda1e5b65159fb9c46b182e42`. The token was not written to source, git config, or `gh` auth storage and should now be revoked by the owner.
+- The next exact action is to inspect GitHub Actions status when authenticated run metadata is available, then continue native export UI/download management.

@@ -37,7 +37,7 @@ Miravo is the final product name; Project Ledger remains the internal code/modul
 
 - PostgreSQL/Redis/Celery/ASGI behavior under Docker.
 - Swift/Xcode project generation, simulator build/tests, device archive, IPA packaging, signer, and physical-device behavior.
-- GitHub Actions execution. The owner supplied `https://github.com/sstojani/Miravo.git`; the local `origin` and current `agent/milestone-9-private-receipts` branch exist, and a user-local GitHub CLI is installed at `../tools/gh`. The public repository is readable. A one-time PAT authenticated but GitHub rejected the first push because workflow files require the `workflow` scope; the owner has since added that scope and the next push should retry after the current checkpoint commit.
+- GitHub Actions execution. The owner supplied `https://github.com/sstojani/Miravo.git`; the local `origin` and current `agent/milestone-9-private-receipts` branch exist, and a user-local GitHub CLI is installed at `../tools/gh`. After the owner added `workflow` scope to the one-time PAT, the push succeeded without storing credentials. Remote `main` and `agent/milestone-9-private-receipts` both point to `7213f29650b098cfda1e5b65159fb9c46b182e42`. GitHub Actions status still needs inspection through an authenticated API/CLI session.
 - Ubuntu deployment, real Funnel hostname, backup restore, and external collaboration.
 - Native Shortcut credential/default-management compilation/runtime plus Wallet trigger and offline queue-file behavior on the current physical iPhone.
 - Native budget Swift 6 type/concurrency checking, SwiftData behavior, calculator tests, and Plans UI interaction on a simulator/device.
@@ -48,7 +48,7 @@ Miravo is the final product name; Project Ledger remains the internal code/modul
 ## Configuration still required later
 
 - Final bundle identifier; `com.example.projectledger` remains provisional.
-- GitHub authentication for `sstojani/Miravo`, either by installing the connected GitHub app on the repository or by authenticating the already-downloaded `../tools/gh`/Git session in the workspace. Do not commit a token.
+- Revoke the one-time GitHub PAT used for the initial push. Future publishing needs a new ephemeral PAT, installed GitHub app write access, or an authenticated `../tools/gh`/Git session. Do not commit a token.
 - Actual public `*.ts.net` API URL.
 - Production secrets and initial owner credentials supplied only at deployment.
 
