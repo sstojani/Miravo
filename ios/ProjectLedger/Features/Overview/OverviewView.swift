@@ -4,38 +4,53 @@ import SwiftUI
 struct OverviewView: View {
     @EnvironmentObject private var session: SessionController
     @EnvironmentObject private var sync: SyncController
-    @Query private var transactions: [LedgerTransaction]
-    @Query private var trackers: [LocalTracker]
-    @Query private var accounts: [LocalAccount]
-    @Query private var outbox: [OutboxMutation]
+    @Query private var rawTransactions: [LedgerTransaction]
+    @Query private var rawTrackers: [LocalTracker]
+    @Query private var rawAccounts: [LocalAccount]
+    @Query private var rawOutbox: [OutboxMutation]
 
     init(scopeKey: String) {
-        _transactions = Query(
-            filter: #Predicate {
-                $0.scopeKey == scopeKey && $0.deletedAt == nil && $0.statusRaw != "voided"
-            },
+        _rawTransactions = Query(
+            filter: #Predicate { $0.scopeKey == scopeKey },
             sort: \LedgerTransaction.occurredAt,
             order: .reverse
         )
-        _trackers = Query(
-            filter: #Predicate {
-                $0.scopeKey == scopeKey &&
-                    $0.deletedAt == nil &&
-                    $0.archivedAt == nil &&
-                    $0.accessRevokedAt == nil
-            },
+        _rawTrackers = Query(
+            filter: #Predicate { $0.scopeKey == scopeKey },
             sort: \LocalTracker.sortOrder
         )
-        _accounts = Query(
-            filter: #Predicate {
-                $0.scopeKey == scopeKey && $0.deletedAt == nil && $0.archivedAt == nil
-            },
+        _rawAccounts = Query(
+            filter: #Predicate { $0.scopeKey == scopeKey },
             sort: \LocalAccount.name
         )
-        _outbox = Query(
-            filter: #Predicate { $0.scopeKey == scopeKey && $0.stateRaw == "pending" },
+        _rawOutbox = Query(
+            filter: #Predicate { $0.scopeKey == scopeKey },
             sort: \OutboxMutation.createdAt
         )
+    }
+
+    private var transactions: [LedgerTransaction] {
+        rawTransactions.filter { transaction in
+            transaction.deletedAt == nil && transaction.statusRaw != "voided"
+        }
+    }
+
+    private var trackers: [LocalTracker] {
+        rawTrackers.filter { tracker in
+            tracker.deletedAt == nil &&
+                tracker.archivedAt == nil &&
+                tracker.accessRevokedAt == nil
+        }
+    }
+
+    private var accounts: [LocalAccount] {
+        rawAccounts.filter { account in
+            account.deletedAt == nil && account.archivedAt == nil
+        }
+    }
+
+    private var outbox: [OutboxMutation] {
+        rawOutbox.filter { $0.stateRaw == "pending" }
     }
 
     private var monthTransactions: [LedgerTransaction] {

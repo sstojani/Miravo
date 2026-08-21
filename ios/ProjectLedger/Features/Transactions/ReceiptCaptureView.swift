@@ -678,12 +678,18 @@ struct ReceiptAttachmentRow: View {
             return "exclamationmark.shield"
         }
         switch transfer?.state {
-        case .pending: "clock"
-        case .uploading: "arrow.up.circle"
-        case .failed: "exclamationmark.triangle"
-        case .cancelled: "xmark.circle"
-        case .uploaded: "lock.shield"
-        case nil: attachment.uploadState == .ready ? "lock.shield" : "clock"
+        case .pending:
+            return "clock"
+        case .uploading:
+            return "arrow.up.circle"
+        case .failed:
+            return "exclamationmark.triangle"
+        case .cancelled:
+            return "xmark.circle"
+        case .uploaded:
+            return "lock.shield"
+        case nil:
+            return attachment.uploadState == .ready ? "lock.shield" : "clock"
         }
     }
 

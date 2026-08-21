@@ -581,7 +581,7 @@ private struct RecurringRuleEditorView: View {
                     }
                 }
 
-                Section("Recurring rule") {
+                Section {
                     TextField("Name", text: $name)
                     Picker("Type", selection: $kind) {
                         ForEach(RecurringRuleKind.allCases, id: \.self) {
@@ -610,11 +610,13 @@ private struct RecurringRuleEditorView: View {
                     TextField("Merchant or payee", text: $merchant)
                     TextField("Note", text: $note, axis: .vertical)
                         .lineLimit(2 ... 5)
+                } header: {
+                    Text("Recurring rule")
                 } footer: {
                     Text("New rules use the tracker base currency. Existing converted rules keep their amount and stored rate; account changes are limited to matching-currency accounts.")
                 }
 
-                Section("Schedule") {
+                Section {
                     Picker("Cadence", selection: $cadence) {
                         ForEach(RecurringCadence.allCases, id: \.self) {
                             Text($0.displayName).tag($0)
@@ -641,6 +643,8 @@ private struct RecurringRuleEditorView: View {
                     if hasEndDate {
                         DatePicker("Ends", selection: $endsOn, displayedComponents: .date)
                     }
+                } header: {
+                    Text("Schedule")
                 } footer: {
                     Text(
                         String.localizedStringWithFormat(

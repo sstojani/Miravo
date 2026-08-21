@@ -213,7 +213,7 @@ struct CollaborationSettingsView: View {
 
     @ViewBuilder
     private var memberSection: some View {
-        Section("Members") {
+        Section {
             ForEach(selectedMemberships) { member in
                 HStack {
                     VStack(alignment: .leading, spacing: 3) {
@@ -235,6 +235,8 @@ struct CollaborationSettingsView: View {
                     }
                 }
             }
+        } header: {
+            Text("Members")
         } footer: {
             Text("Roles are enforced by the server. Viewer access is read only; editors may change financial records; admins manage tracker collaboration.")
         }
@@ -281,7 +283,7 @@ struct CollaborationSettingsView: View {
 
     @ViewBuilder
     private var guestMergeSection: some View {
-        Section("Guest identity") {
+        Section {
             Button {
                 guard let selectedTrackerID else { return }
                 sheet = .mergeGuest(selectedTrackerID)
@@ -289,6 +291,8 @@ struct CollaborationSettingsView: View {
                 Label("Merge guest into member", systemImage: "person.2.badge.gearshape")
             }
             .disabled(!canMergeGuests || !localQueueIsClean)
+        } header: {
+            Text("Guest identity")
         } footer: {
             Text(
                 localQueueIsClean
@@ -378,11 +382,13 @@ private struct AcceptTrackerInvitationView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Invitation") {
+                Section {
                     TextField("Code or invitation link", text: $enteredValue, axis: .vertical)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .privacySensitive()
+                } header: {
+                    Text("Invitation")
                 } footer: {
                     Text("The invitation must be active and addressed to the email on your Miravo account.")
                 }
@@ -447,7 +453,7 @@ private struct CreateTrackerInvitationView: View {
                 }
             } else {
                 Form {
-                    Section("Member") {
+                    Section {
                         TextField("Email address", text: $email)
                             .keyboardType(.emailAddress)
                             .textContentType(.emailAddress)
@@ -464,6 +470,8 @@ private struct CreateTrackerInvitationView: View {
                         ) {
                             LabeledContent("Valid for", value: expiresInDays, format: .number)
                         }
+                    } header: {
+                        Text("Member")
                     } footer: {
                         Text("The raw invitation code appears once. Send it privately to the intended account holder.")
                     }
@@ -698,7 +706,7 @@ private struct MergeGuestParticipantView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Identity merge") {
+                Section {
                     Picker("Guest", selection: $guestID) {
                         Text("Choose guest").tag(UUID?.none)
                         ForEach(guests) { guest in
@@ -712,6 +720,8 @@ private struct MergeGuestParticipantView: View {
                         }
                     }
                     Toggle("I understand this cannot be undone", isOn: $confirmed)
+                } header: {
+                    Text("Identity merge")
                 } footer: {
                     Text("Every split, payment, and settlement referring to the guest will move to the registered member. Collapsed balances remain auditable.")
                 }

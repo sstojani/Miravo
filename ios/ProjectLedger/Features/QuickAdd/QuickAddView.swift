@@ -7,10 +7,10 @@ struct QuickAddView: View {
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject private var session: SessionController
     @EnvironmentObject private var sync: SyncController
-    @Query private var trackers: [LocalTracker]
-    @Query private var accounts: [LocalAccount]
-    @Query private var categories: [LocalCategory]
-    @Query private var tags: [LocalTag]
+    @Query private var rawTrackers: [LocalTracker]
+    @Query private var rawAccounts: [LocalAccount]
+    @Query private var rawCategories: [LocalCategory]
+    @Query private var rawTags: [LocalTag]
     @State private var kind = TransactionKind.expense
     @State private var amount = ""
     @State private var merchant = ""
@@ -29,33 +29,48 @@ struct QuickAddView: View {
 
     init(scopeKey: String) {
         self.scopeKey = scopeKey
-        _trackers = Query(
-            filter: #Predicate {
-                $0.scopeKey == scopeKey &&
-                    $0.deletedAt == nil &&
-                    $0.archivedAt == nil &&
-                    $0.accessRevokedAt == nil
-            },
+        _rawTrackers = Query(
+            filter: #Predicate { $0.scopeKey == scopeKey },
             sort: \LocalTracker.sortOrder
         )
-        _accounts = Query(
-            filter: #Predicate {
-                $0.scopeKey == scopeKey && $0.deletedAt == nil && $0.archivedAt == nil
-            },
+        _rawAccounts = Query(
+            filter: #Predicate { $0.scopeKey == scopeKey },
             sort: \LocalAccount.name
         )
-        _categories = Query(
-            filter: #Predicate {
-                $0.scopeKey == scopeKey && $0.deletedAt == nil && $0.archivedAt == nil
-            },
+        _rawCategories = Query(
+            filter: #Predicate { $0.scopeKey == scopeKey },
             sort: \LocalCategory.sortOrder
         )
-        _tags = Query(
-            filter: #Predicate {
-                $0.scopeKey == scopeKey && $0.deletedAt == nil && $0.archivedAt == nil
-            },
+        _rawTags = Query(
+            filter: #Predicate { $0.scopeKey == scopeKey },
             sort: \LocalTag.name
         )
+    }
+
+    private var trackers: [LocalTracker] {
+        rawTrackers.filter { tracker in
+            tracker.deletedAt == nil &&
+                tracker.archivedAt == nil &&
+                tracker.accessRevokedAt == nil
+        }
+    }
+
+    private var accounts: [LocalAccount] {
+        rawAccounts.filter { account in
+            account.deletedAt == nil && account.archivedAt == nil
+        }
+    }
+
+    private var categories: [LocalCategory] {
+        rawCategories.filter { category in
+            category.deletedAt == nil && category.archivedAt == nil
+        }
+    }
+
+    private var tags: [LocalTag] {
+        rawTags.filter { tag in
+            tag.deletedAt == nil && tag.archivedAt == nil
+        }
     }
 
     private var editableTrackers: [LocalTracker] {

@@ -540,7 +540,7 @@ private struct BudgetEditorView: View {
                     }
                 }
 
-                Section("Dates") {
+                Section {
                     DatePicker("Starts", selection: $startsOn, displayedComponents: .date)
                     if period == .custom {
                         DatePicker("Ends", selection: $endsOn, displayedComponents: .date)
@@ -552,6 +552,8 @@ private struct BudgetEditorView: View {
                     }
                     Toggle("Roll unused amount forward", isOn: $rollover)
                         .disabled(period == .custom)
+                } header: {
+                    Text("Dates")
                 } footer: {
                     Text(
                         String.localizedStringWithFormat(
@@ -561,9 +563,11 @@ private struct BudgetEditorView: View {
                     )
                 }
 
-                Section("Alerts") {
+                Section {
                     Text(thresholdValues.map { "\($0)%" }.joined(separator: " · "))
                         .monospacedDigit()
+                } header: {
+                    Text("Alerts")
                 } footer: {
                     Text("These thresholds mark progress locally. Notifications are not required for correct totals.")
                 }
