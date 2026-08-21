@@ -958,6 +958,8 @@ Create a clean local receipt checkpoint after one final regression/secret scan. 
 - Reproduced the Python audit locally with an explicit writable cache. `pip-audit` reported four `sqlparse 0.5.5` advisories fixed by `0.6.0`.
 - Added an explicit runtime dependency bound `sqlparse>=0.6.0,<0.7`, refreshed `uv.lock`, and synchronized the local environment to `sqlparse 0.6.0`.
 - Changed `.github/workflows/dependency-audit.yml` to run `uv run pip-audit --cache-dir .cache/pip-audit` and removed the unused `security-events: write` permission because the Trivy job emits table output rather than uploading SARIF.
+- Downloaded the authenticated GitHub Actions log for the failing audit run into `/tmp/miravo-actions-logs`; the container-audit setup failure was `Unable to resolve action aquasecurity/trivy-action@0.32.0, unable to find version 0.32.0`.
+- Re-checked the upstream Trivy action release page on 2026-08-21 and changed the workflow to `aquasecurity/trivy-action@v0.36.0`.
 
 ### Commands and outcomes
 
@@ -965,6 +967,7 @@ Create a clean local receipt checkpoint after one final regression/secret scan. 
 - `UV_CACHE_DIR=/tmp/miravo-uv-cache uv sync --all-groups --frozen`: **passed locally**.
 - `UV_CACHE_DIR=/tmp/miravo-uv-cache uv run pip-audit --cache-dir /tmp/miravo-pip-audit-cache`: **passed locally** with no known vulnerabilities.
 - `UV_CACHE_DIR=/tmp/miravo-uv-cache PROJECT_LEDGER_ENV=test PROJECT_LEDGER_DATABASE_URL=sqlite:///:memory: make check`: **passed locally** — 96 tests, 82.26% coverage, Ruff format/lint, Django checks, strict mypy over 108 source files, OpenAPI validation, and byte-current schema.
+- Authenticated GitHub Actions log download for run `32490818710`: **passed** for diagnosis only; no token was stored.
 - `./ios/check-localizations.sh`: **passed locally** — 783 literal UI keys.
 - `python3 -m py_compile ios/check-project-contract.py && python3 ios/check-project-contract.py`: **passed locally**.
 - `git diff --check`: **passed locally**.
@@ -972,5 +975,5 @@ Create a clean local receipt checkpoint after one final regression/secret scan. 
 ### Verification boundary and next exact action
 
 - Python dependency audit is **verified locally** after the lock update.
-- The GitHub container audit failure could not be diagnosed from logs because GitHub's log download endpoint requires admin rights; the workflow permission reduction is a least-privilege fix, but hosted re-run status remains external.
+- The GitHub container audit failure was diagnosed as a bad action tag. Hosted re-run status remains external until the next push completes.
 - The next exact action is to commit and push this audit follow-up, then inspect public workflow metadata again.
