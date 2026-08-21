@@ -839,3 +839,41 @@ Commit the completed native-installment/Miravo checkpoint locally. Continue Mile
 ### Next exact action
 
 Create a clean local receipt checkpoint after one final regression/secret scan. Then implement the Milestone 9 analytics vertical slice with a shared, deterministic reporting definition: offline native category/trend/cash-flow/account/budget/subscription/installment/split/merchant/source summaries first, matching authorized server aggregates and golden-data tests second. Publishing resumes immediately when a connected GitHub app or authenticated Git/`gh` session becomes available.
+
+## 2026-08-21 — Milestone 9 deterministic analytics checkpoint
+
+### Acceptance checkpoint
+
+- Insights can be computed from local data without network access and compared against an authorized backend summary endpoint after synchronization.
+- Spending/income reports are deterministic: transfers, settlements, drafts, pending, voided, and deleted rows are excluded; linked refunds reduce the original expense category/merchant where known.
+- Cross-currency reporting uses only original-currency matches or stored historical base snapshots. Missing snapshots are reported as partial conversion, not guessed.
+- Trend buckets use the selected civil time zone, ISO Monday week semantics, and bounded all-time output. Category allocation conversion preserves exact totals with deterministic largest-remainder allocation.
+- Chart data carries accessible textual summaries, and implemented English/Albanian strings remain complete.
+
+### Material work
+
+- Added `backend/apps/ledger/services/analytics.py` and `analytics_serializers.py`, plus `GET /api/v1/analytics/summary`.
+- Added strict tracker/account authorization, query validation, safe 409 invariant errors, normalized merchant grouping, source/category/subcategory summaries, account balance/net-worth output, and explicit unconverted currency caveats.
+- Added golden backend tests for EUR/ALL snapshots, refunds, allocation rounding, source/merchant totals, partial conversion, account filtering, viewer/outsider authorization, invalid filters, ISO week boundaries, and a 241-month bounded all-time trend.
+- Added `LocalAnalyticsCalculator.swift` and `LocalAnalyticsCalculatorTests.swift` for matching local integer/Decimal reporting semantics.
+- Reworked `InsightsView.swift` from placeholder cards into tracker/range/account/currency controls, overview cards, trend/category/merchant/source/account/budget/subscription/installment/split sections, partial conversion messaging, and accessibility labels.
+- Regenerated the committed OpenAPI schema and updated user/API/architecture/status/test/accessibility documentation; recorded D-037.
+- Downloaded GitHub CLI 2.98.0 into `../tools/gh`. `gh auth status` reports no login. After the owner made `sstojani/Miravo` public, the repository became readable, but plain Git still lacks credentials and the GitHub connector returns 403 for Git blob/ref writes, so remote publishing remains blocked by authentication/integration write permission, not by the missing binary.
+
+### Commands and outcomes
+
+- `PROJECT_LEDGER_ENV=test PROJECT_LEDGER_DATABASE_URL=sqlite:///:memory: .venv/bin/pytest backend/tests/test_analytics.py -q`: **3 passed locally**.
+- `PROJECT_LEDGER_ENV=test PROJECT_LEDGER_DATABASE_URL=sqlite:///:memory: .venv/bin/ruff check backend/apps/ledger/services/analytics.py backend/apps/ledger/analytics_serializers.py backend/tests/test_analytics.py`: **passed locally**.
+- `PROJECT_LEDGER_ENV=test PROJECT_LEDGER_DATABASE_URL=sqlite:///:memory: .venv/bin/mypy backend/config backend/apps`: **passed locally** over 107 source files.
+- `make schema`: **passed locally** and refreshed `backend/openapi-schema.yml`.
+- `make check`: **passed locally** — 93 tests, 82.06% coverage, Ruff format/lint, Django checks, strict mypy over 107 source files, OpenAPI validation, and byte-current schema.
+- `./ios/check-localizations.sh`: **passed locally** — 762 literal UI keys, identical English/Albanian sets, and compatible placeholders.
+- `python3 ios/check-project-contract.py`: **passed locally**, including the analytics source contract.
+- `git diff --check`: **passed locally**.
+
+### Verification boundary and next exact action
+
+- Backend analytics behavior, authorization, OpenAPI generation, localization parity, and Linux source/privacy contracts are **verified locally on Linux**.
+- Native Swift analytics tests are authored but **not executed** because this Linux environment has no Swift/Xcode toolchain. Simulator performance, accessibility inspection, and UI behavior remain GitHub macOS/device checks.
+- Remote GitHub publication is authorized by the owner but still blocked until `../tools/gh` or Git receives an authenticated write session for `sstojani/Miravo`, or the connected GitHub integration is granted write access that can create Git blobs/commits/refs.
+- The next exact product action is the Milestone 9 export vertical slice: authenticated, expiring CSV/PDF/full-export jobs whose totals reuse the analytics reporting definition and whose files are stored in private media with audit and expiry.

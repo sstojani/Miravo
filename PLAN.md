@@ -1,8 +1,8 @@
 # Miravo implementation plan
 
-Last updated: 2026-08-13. A checked item is complete; its verification tier is recorded in `IMPLEMENT.md`. Items are not checked merely because scaffolding exists.
+Last updated: 2026-08-21. A checked item is complete; its verification tier is recorded in `IMPLEMENT.md`. Items are not checked merely because scaffolding exists.
 
-Current focus: **Milestone 9 — analytics and exports after the private-receipt slice**. Miravo is the final product name and the owner supplied `https://github.com/sstojani/Miravo.git`; publishing remains paused because this workspace lacks an authenticated GitHub CLI/credential. The attachment API, isolated storage, sync metadata, native protected-file queue, camera/photo/file capture, metadata-stripped image/PDF preparation, on-device OCR review, and authenticated checksum-verified preview/download are implemented at the local/source tier. Xcode execution and physical camera/OCR testing remain external.
+Current focus: **Milestone 9 — exports after the private-receipt and analytics slices**. Miravo is the final product name and the owner supplied `https://github.com/sstojani/Miravo.git`. The repository is public/readable and a user-local GitHub CLI is installed at `../tools/gh`, but publishing remains blocked because this workspace has no GitHub CLI/git credential and the connected GitHub integration is not permitted to write Git objects or refs. The attachment API, isolated storage, sync metadata, native protected-file queue, camera/photo/file capture, metadata-stripped image/PDF preparation, on-device OCR review, authenticated checksum-verified preview/download, deterministic backend analytics API, and matching offline native analytics calculator/UI source are implemented at the local/source tier. Xcode execution, physical camera/OCR testing, hosted CI, and remote publishing remain external.
 
 ## Milestone 0 — Discovery and durable project plan
 
@@ -92,7 +92,7 @@ Current acceptance: an authenticated device can push an ordered offline tracker/
 - [x] Local receipt capture/files/PDF, metadata stripping, display/thumbnail derivatives, checksum queue, pending cancellation/resume, and restart survival (source/tests authored; Xcode/device execution pending).
 - [x] On-device Vision OCR proposal and mandatory editable review (source/extractor tests authored; Vision/device accuracy pending).
 - [x] Authenticated private upload/download, quarantine hook, bounded streaming, tombstone sync, and authorization tests (backend passing locally; native source uncompiled).
-- [ ] Offline-consistent charts/analytics and accessible summaries.
+- [x] Offline-consistent charts/analytics and accessible summaries (backend service/API verified locally; native calculator/source/contracts authored and Linux-checked; Xcode execution pending).
 - [ ] Expiring, audited CSV/PDF/portable exports whose totals match source data.
 
 ## Milestone 10 — Production hardening and unsigned IPA

@@ -22,6 +22,12 @@ For a shared expense, open its detail and choose Add/Edit split. Select one or m
 
 Transaction search covers merchant/payee, note, tracker, source or destination account, category, tag, currency, and locale-formatted amount. It is debounced so typing does not trigger network work. Filters for tracker, account, category, tag, type, source, status, sync state, currency, and date range combine; Clear Filters resets them predictably. Results are grouped by local day, and each day shows separate per-currency net totals so unlike currencies are never added together.
 
+## Insights
+
+Insights reads the local store, so synchronized history remains reportable offline. Choose a tracker, optional account, time range, and reporting currency. Miravo shows spending, income, net cash flow, trend, category/subcategory, merchant, source, account balance/net worth, budget, subscription, installment, and split summaries with chart accessibility labels.
+
+Transfers, settlements, voided records, drafts, and tombstones are excluded from income and spending. Refunds reduce the original expense category and merchant when that relationship is known. Cross-currency reports use the stored transaction snapshot only; if a rate is missing, the report is marked partial and lists the unconverted currency instead of guessing.
+
 ## Sync status
 
 Pending means stored locally and durably queued. Foreground synchronization pushes stable operations, pulls bounded pages, and resumes a staged full download when a cursor is too old. Settings shows pending/failed/conflict counts, last success, safe status codes, manual synchronization/retry, and a field-by-field conflict review with “keep server” or “keep mine” decisions. Receipt rows separately show pending upload, uploading, failed, cancelled, private, or quarantined state.

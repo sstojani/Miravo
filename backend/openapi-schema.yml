@@ -188,6 +188,66 @@ paths:
               schema:
                 $ref: '#/components/schemas/Account'
           description: ''
+  /api/v1/analytics/summary:
+    get:
+      operationId: analytics_summary_retrieve
+      parameters:
+      - in: query
+        name: account_id
+        schema:
+          type: string
+          format: uuid
+          nullable: true
+      - in: query
+        name: as_of
+        schema:
+          type: string
+          format: date-time
+      - in: query
+        name: range
+        schema:
+          enum:
+          - this_month
+          - three_months
+          - this_year
+          - all_time
+          type: string
+          default: this_month
+          minLength: 1
+        description: |-
+          * `this_month` - this_month
+          * `three_months` - three_months
+          * `this_year` - this_year
+          * `all_time` - all_time
+      - in: query
+        name: reporting_currency
+        schema:
+          type: string
+          minLength: 3
+          maxLength: 3
+      - in: query
+        name: time_zone
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 64
+      - in: query
+        name: tracker_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - analytics
+      security:
+      - accessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalyticsSummary'
+          description: ''
   /api/v1/attachments/:
     get:
       operationId: attachments_list
@@ -3912,6 +3972,177 @@ components:
       - amount_minor
       - category_id
       - category_version
+    AnalyticsBreakdown:
+      type: object
+      description: Serializer that rejects misspelled or unsupported request fields.
+      properties:
+        id:
+          type: string
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+        amount_minor:
+          type: integer
+          readOnly: true
+        transaction_count:
+          type: integer
+          minimum: 1
+          readOnly: true
+      required:
+      - amount_minor
+      - id
+      - name
+      - transaction_count
+    AnalyticsSummary:
+      type: object
+      description: Serializer that rejects misspelled or unsupported request fields.
+      properties:
+        tracker_id:
+          type: string
+          format: uuid
+          readOnly: true
+        account_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        reporting_currency:
+          type: string
+          readOnly: true
+        reporting_currency_exponent:
+          type: integer
+          maximum: 4
+          minimum: 0
+          readOnly: true
+        range:
+          allOf:
+          - $ref: '#/components/schemas/RangeEnum'
+          readOnly: true
+        time_zone:
+          type: string
+          readOnly: true
+        range_start:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        range_end:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        record_count:
+          type: integer
+          minimum: 0
+          readOnly: true
+        spending_minor:
+          type: integer
+          readOnly: true
+        income_minor:
+          type: integer
+          readOnly: true
+        cash_flow_minor:
+          type: integer
+          readOnly: true
+        categories:
+          type: array
+          items:
+            $ref: '#/components/schemas/AnalyticsBreakdown'
+          readOnly: true
+        merchants:
+          type: array
+          items:
+            $ref: '#/components/schemas/AnalyticsBreakdown'
+          readOnly: true
+        sources:
+          type: array
+          items:
+            $ref: '#/components/schemas/AnalyticsBreakdown'
+          readOnly: true
+        trend:
+          type: array
+          items:
+            $ref: '#/components/schemas/AnalyticsTrendPoint'
+          readOnly: true
+        trend_was_truncated:
+          type: boolean
+          readOnly: true
+        partial:
+          type: boolean
+          readOnly: true
+        unconverted:
+          type: array
+          items:
+            $ref: '#/components/schemas/AnalyticsUnconverted'
+          readOnly: true
+      required:
+      - account_id
+      - cash_flow_minor
+      - categories
+      - income_minor
+      - merchants
+      - partial
+      - range
+      - range_end
+      - range_start
+      - record_count
+      - reporting_currency
+      - reporting_currency_exponent
+      - sources
+      - spending_minor
+      - time_zone
+      - tracker_id
+      - trend
+      - trend_was_truncated
+      - unconverted
+    AnalyticsTrendPoint:
+      type: object
+      description: Serializer that rejects misspelled or unsupported request fields.
+      properties:
+        bucket_start:
+          type: string
+          format: date
+          readOnly: true
+        spending_minor:
+          type: integer
+          readOnly: true
+        income_minor:
+          type: integer
+          readOnly: true
+        cash_flow_minor:
+          type: integer
+          readOnly: true
+      required:
+      - bucket_start
+      - cash_flow_minor
+      - income_minor
+      - spending_minor
+    AnalyticsUnconverted:
+      type: object
+      description: Serializer that rejects misspelled or unsupported request fields.
+      properties:
+        currency:
+          type: string
+          readOnly: true
+        currency_exponent:
+          type: integer
+          maximum: 4
+          minimum: 0
+          readOnly: true
+        amount_minor:
+          type: integer
+          minimum: 1
+          readOnly: true
+        transaction_count:
+          type: integer
+          minimum: 1
+          readOnly: true
+      required:
+      - amount_minor
+      - currency
+      - currency_exponent
+      - transaction_count
     Attachment:
       type: object
       description: Model serializer with strict input-field handling.
@@ -6341,6 +6572,18 @@ components:
         * `monthly` - Monthly
         * `weekly` - Weekly
         * `custom` - Custom range
+    RangeEnum:
+      enum:
+      - this_month
+      - three_months
+      - this_year
+      - all_time
+      type: string
+      description: |-
+        * `this_month` - this_month
+        * `three_months` - three_months
+        * `this_year` - this_year
+        * `all_time` - all_time
     RecurringOccurrence:
       type: object
       description: Model serializer with strict input-field handling.

@@ -164,10 +164,22 @@ Upload requires the reserved `Content-Type` and, when present, exact `Content-Le
 
 Attachment metadata and tombstones are emitted through ordinary sync after their owning transaction. Full bootstrap orders transactions before attachments and rejects cross-tracker links. Binary content never appears in sync JSON, WebSocket events, or logs. The default limit is 12 MiB and is reported by `/config/public` as `attachment_max_bytes`; a proxy limit must be kept at least as restrictive when operators change it.
 
+## Implemented in Milestone 9 (analytics summary)
+
+| Method/path | Minimum tracker role | Purpose |
+|---|---|---|
+| `GET /analytics/summary?tracker_id=...` | viewer | Return deterministic tracker/account/range reporting summaries for locally comparable Insights views |
+
+Supported query fields are `tracker_id`, optional `account_id`, optional `reporting_currency`, `range` (`this_month`, `three_months`, `this_year`, or `all_time`), `time_zone`, and optional `as_of`. The endpoint rejects invalid zones, cross-tracker accounts, and unauthorized trackers before running aggregates.
+
+The summary uses posted/reconciled expense, income, and refund rows only. Transfers, settlements, voided rows, drafts, pending rows, and tombstones are excluded from spending/income. Linked refunds subtract from the original expense category and merchant where available. Same-currency rows report the original minor units; converted rows use only the stored tracker/base snapshot with decimal arithmetic and integer minor-unit output. Missing conversion data is surfaced as `partial_conversion` with per-currency unconverted totals and counts. Trend buckets use the requested civil time zone, ISO Monday weeks, and a maximum of 240 points for all-time requests.
+
+The response includes totals, trend points, category/subcategory breakdowns, merchant totals, source totals, account balances/net worth, budget/subscription/installment/split placeholders or summaries where synchronized data exists, and accessibility-oriented labels for chart consumers. The native app uses a matching local calculator so Insights remains available offline; the server endpoint is the authorized comparison/reporting surface.
+
 ## Planned resource surface
 
 - Profile and configured recovery.
-- Currency rates, analytics, audit history, export jobs/expiring downloads.
+- Currency rates, audit history, export jobs/expiring downloads.
 
 Collection endpoints use bounded cursor pagination, explicit filters/order, and stable error codes. Authorization returns 404 where revealing object existence would be inappropriate.
 

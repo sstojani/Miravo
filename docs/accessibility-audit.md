@@ -27,7 +27,7 @@ Status: source-audited on Linux through 2026-08-13; simulator Accessibility Insp
 ## Required macOS/device closure
 
 1. Run unit/UI tests on the pinned hosted macOS/Xcode image and retain the xcresult.
-2. Test the largest accessibility Dynamic Type sizes in English and Albanian on Quick Add, transaction list/detail/split editor/receipt review, Plans/split balances, Local Data, Collaboration, conflict review, and Wallet Shortcut management.
+2. Test the largest accessibility Dynamic Type sizes in English and Albanian on Quick Add, transaction list/detail/split editor/receipt review, Insights charts, Plans/split balances, Local Data, Collaboration, conflict review, and Wallet Shortcut management.
 3. Use Accessibility Inspector and VoiceOver to confirm labels, values, order, and modal focus.
 4. Enable Increase Contrast, Differentiate Without Color, Reduce Motion, and light/dark appearance.
 5. Run the 50,000-record test on the representative simulator profile and profile SwiftData fetch/render separately from the pure filtering ceiling.

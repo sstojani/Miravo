@@ -3,6 +3,7 @@ from rest_framework.routers import DefaultRouter
 
 from apps.ledger.views import (
     AccountViewSet,
+    AnalyticsSummaryView,
     AuditEventViewSet,
     CategoryViewSet,
     InviteAcceptView,
@@ -27,6 +28,7 @@ router.register("transactions", TransactionViewSet, basename="transaction")
 router.register("audit-events", AuditEventViewSet, basename="audit-event")
 
 urlpatterns = [
+    path("analytics/summary", AnalyticsSummaryView.as_view(), name="analytics-summary"),
     path("tracker-invites/accept", InviteAcceptView.as_view(), name="invite-accept"),
     path("split-balances", SplitBalanceView.as_view(), name="split-balances"),
     *router.urls,

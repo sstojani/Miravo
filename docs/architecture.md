@@ -34,12 +34,12 @@ The app’s SwiftData store is the immediate UI source. Django is the durable mu
 - `apps.common`: UUID/timestamp primitives, request context, error envelope, safe logs, health/config.
 - `apps.users`: identity, profiles, device sessions, access JWT validation, rotating refresh credentials.
 - `apps.audit`: append-only safe security/administrative audit events.
-- `apps.ledger`: trackers/memberships, accounts/taxonomy, authoritative transactions, registered/guest participants, parent-owned split rows, deterministic debt balances, bounded settlements, relational revisions, and audit integration.
+- `apps.ledger`: trackers/memberships, accounts/taxonomy, authoritative transactions, registered/guest participants, parent-owned split rows, deterministic debt balances, bounded settlements, deterministic analytics summaries, relational revisions, and audit integration.
 - `sync`: transactional reference change log, strict offline command transport, signed cursors, per-user operation receipts, bootstrap, acknowledgement, retention cleanup, and sequence-only Channels fan-out.
 - `apps.attachments`: transaction-scoped metadata reservation, content verification, randomized private/quarantine storage, authenticated download, audit, and sync representations.
 - `apps.shortcut`: independently keyed scoped credentials, narrow lookup/capture endpoints, user-scoped idempotency receipts, and scheduled receipt expiry.
 - `apps.planning`: budget aggregate; civil-calendar recurring/subscription rules, revisions, deterministic occurrences and bounded Celery catch-up; and installment terms, exact component schedules, immutable revisions, ledger-backed payments and payoff. The boundary owns permissions, audit, REST, and sync representations.
-- Later apps: analytics/exports. Native collaboration and private-receipt source are present; macOS and multi-device execution remain verification work.
+- Later apps: exports. Native collaboration, private-receipt, and Insights analytics source are present; macOS and multi-device execution remain verification work.
 
 Core financial changes are performed by domain services inside database transactions. REST serializers validate transport shapes; models/constraints protect persistence invariants; views coordinate permissions and service calls.
 
@@ -62,6 +62,7 @@ Foreground sockets authenticate the same short-lived device-bound access JWT as 
 - Every local entity and outbox record carries a scope composed from the normalized server origin and the authenticated JWT user UUID. Queries never expose another scope after an account/server change.
 - Tracker, account, category, transaction, budget, derived movement/allocation, conversion snapshot, and outbox changes execute through a main-actor repository and one rollback-guarded `ModelContext.save()`. Any enqueue or save failure rolls the complete local command back.
 - Budget progress is calculated from the local ledger with the same stored civil-date/time-zone, posted-expense, allocation, historical-conversion, partial-result, threshold, and signed-rollover rules as the server. The Plans UI never requires a progress network response.
+- Insights analytics are calculated from the local ledger first with the same integer minor-unit, stored historical conversion snapshot, refund netting, transfer/settlement exclusion, ISO-week, bounded-trend, merchant normalization, and explicit missing-rate rules as the server endpoint. The UI shows partial conversion states rather than inventing rates.
 - Recurring and installment planning use scoped SwiftData roots plus server-authored history rows. Native calculators mirror the server's civil recurrence and exact installment schedule math. Installment payments project one ordinary local ledger expense immediately while only the plan command enters the outbox; canonical payment history arrives from Django.
 - A plan mutation protects its owned preview schedule during pull/bootstrap. Failed or conflicted predecessors block only later commands for that same entity, while unrelated trackers and records continue synchronizing.
 - `SyncCursor.nextOutboxSequence` allocates a monotonically increasing per-scope sequence in the same store transaction. Push order therefore does not depend on timestamp precision or random UUID order.

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any, cast
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from django.db import transaction
 from django.db.models import Q, QuerySet
@@ -10,13 +11,17 @@ from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import PermissionDenied, ValidationError
+from rest_framework.exceptions import APIException, PermissionDenied, ValidationError
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.audit.models import AuditEvent
 from apps.audit.services import record_audit_event
+from apps.ledger.analytics_serializers import (
+    AnalyticsQuerySerializer,
+    AnalyticsSummarySerializer,
+)
 from apps.ledger.models import (
     Account,
     Category,
@@ -57,6 +62,12 @@ from apps.ledger.serializers import (
     TransactionSplitUpdateSerializer,
     TransactionWriteSerializer,
     TransferOwnershipSerializer,
+)
+from apps.ledger.services.analytics import (
+    AnalyticsCalculationError,
+    AnalyticsRange,
+    AnalyticsRequest,
+    analytics_summary,
 )
 from apps.ledger.services.collaboration import (
     accept_invite,
@@ -901,6 +912,58 @@ class SplitBalanceView(APIView):
                 "simplified_debts": SimplifiedDebtSerializer(cast(Any, debts), many=True).data,
             }
         )
+
+
+class AnalyticsUnavailable(APIException):
+    status_code = status.HTTP_409_CONFLICT
+    default_detail = "The report could not be calculated from the stored financial records."
+    default_code = "analytics_invariant_failed"
+
+
+class AnalyticsSummaryView(APIView):
+    @extend_schema(
+        parameters=[AnalyticsQuerySerializer],
+        responses=AnalyticsSummarySerializer,
+    )
+    def get(self, request: Request) -> Response:
+        serializer = AnalyticsQuerySerializer(data=request.query_params)
+        serializer.is_valid(raise_exception=True)
+        values = serializer.validated_data
+        tracker = get_object_or_404(
+            visible_trackers(_user(request)),
+            id=values["tracker_id"],
+        )
+        require_tracker_role(_user(request), tracker, TrackerMembership.Role.VIEWER)
+        account = None
+        if account_id := values.get("account_id"):
+            account = get_object_or_404(
+                Account,
+                id=account_id,
+                tracker=tracker,
+                deleted_at__isnull=True,
+            )
+        time_zone_name = values.get("time_zone", _user(request).profile.time_zone)
+        try:
+            report_time_zone = ZoneInfo(time_zone_name)
+        except (ValueError, ZoneInfoNotFoundError) as exc:
+            raise AnalyticsUnavailable() from exc
+        try:
+            result = analytics_summary(
+                AnalyticsRequest(
+                    tracker=tracker,
+                    account=account,
+                    reporting_currency=values.get(
+                        "reporting_currency",
+                        tracker.base_currency,
+                    ),
+                    range_name=cast(AnalyticsRange, values["range"]),
+                    time_zone=report_time_zone,
+                    as_of=values.get("as_of", timezone.now()),
+                )
+            )
+        except AnalyticsCalculationError as exc:
+            raise AnalyticsUnavailable() from exc
+        return Response(AnalyticsSummarySerializer(result).data)
 
 
 class TransactionViewSet(viewsets.ModelViewSet):  # type: ignore[type-arg]

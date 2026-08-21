@@ -464,7 +464,51 @@ def main() -> int:
         if fragment not in split_calculator:
             fail(f"Deterministic local split math contract drift: {fragment}")
 
-    print("iOS transport, privacy, plan, and collaboration contracts verified.")
+    analytics_calculator = (
+        IOS_ROOT / "ProjectLedger/Domain/LocalAnalyticsCalculator.swift"
+    ).read_text(encoding="utf-8")
+    for fragment in (
+        "Decimal(totalMinor) * Decimal(item.weight) / Decimal(weightTotal)",
+        "NSDecimalRound(&floor, &source, 0, .down)",
+        "LocalAnalyticsUnconvertedAmount",
+        "case .transfer, .settlement:",
+        "spendingMinor = try subtract(spendingMinor, convertedAmount)",
+        "transaction.status == .posted || transaction.status == .reconciled",
+        "invalidAllocations",
+        "rateSource.trimmingCharacters",
+        "static let maximumTrendPointCount = 240",
+        "AnalyticsReportingCalendar.make()",
+        "value.firstWeekday = 2",
+        "value.minimumDaysInFirstWeek = 4",
+    ):
+        if fragment not in analytics_calculator:
+            fail(f"Deterministic offline analytics contract drift: {fragment}")
+    if "Double(" in analytics_calculator:
+        fail("Stored analytics math must remain integer/Decimal, never binary floating point.")
+
+    insights_view = (
+        IOS_ROOT / "ProjectLedger/Features/Insights/InsightsView.swift"
+    ).read_text(encoding="utf-8")
+    for fragment in (
+        "import Charts",
+        'Picker("Tracker"',
+        'Picker("Time range"',
+        'Picker("Account"',
+        'Picker("Reporting currency"',
+        'Text("Spending by category")',
+        'Text("Merchant totals")',
+        'Text("Expense sources")',
+        'Text("Account balances and net worth")',
+        'Text("Active subscription cost")',
+        'Text("Installment remaining")',
+        'Text("Open split balances")',
+        'Label("Partial currency conversion"',
+        ".accessibilityValue(categoryAccessibilitySummary(snapshot))",
+    ):
+        if fragment not in insights_view:
+            fail(f"Offline analytics UI/accessibility contract drift: {fragment}")
+
+    print("iOS transport, privacy, plan, collaboration, and analytics contracts verified.")
     return 0
 
 
