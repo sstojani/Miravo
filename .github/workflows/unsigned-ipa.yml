@@ -43,7 +43,7 @@ jobs:
         run: |
           python3 check-project-contract.py
           ./check-localizations.sh
-          swiftformat --config .swiftformat --lint ProjectLedger ProjectLedgerTests ProjectLedgerUITests
+          swiftformat . --config .swiftformat --lint
           xcodegen generate --spec project.yml
           git diff --exit-code -- .
 
