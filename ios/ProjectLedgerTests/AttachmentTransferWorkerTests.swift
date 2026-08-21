@@ -95,9 +95,7 @@ struct AttachmentTransferWorkerTests {
         #expect(transfer.state == .pending)
         #expect(transfer.nextAttemptAt != nil)
         #expect(transfer.lastSafeErrorCode == "server_unavailable")
-        let macroSafeExpectation1: Bool = try await evaluateExpectation {
-            try await queue.readyBatch(scopeKey: fixture.scopeKey).isEmpty
-        }
+        let macroSafeExpectation1: Bool = try await queue.readyBatch(scopeKey: fixture.scopeKey).isEmpty
         #expect(macroSafeExpectation1)
     }
 

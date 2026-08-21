@@ -1239,9 +1239,7 @@ struct LedgerSyncActorTests {
         )
 
         #expect(summary.acknowledged)
-        let macroSafeExpectation10: Bool = try await evaluateExpectation {
-            try await store.load(scopeKey: scope) == refreshed
-        }
+        let macroSafeExpectation10: Bool = try await store.load(scopeKey: scope) == refreshed
         #expect(macroSafeExpectation10)
         #expect(await transport.refreshCount() == 1)
         #expect(await transport.pullCount() == 2)

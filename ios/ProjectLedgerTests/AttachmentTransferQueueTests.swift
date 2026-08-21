@@ -115,9 +115,7 @@ struct AttachmentTransferQueueTests {
             attachmentID: request.attachmentID
         )
 
-        let macroSafeExpectation1: Bool = try await evaluateExpectation {
-            try await queue.readyBatch(scopeKey: fixture.scopeKey).isEmpty
-        }
+        let macroSafeExpectation1: Bool = try await queue.readyBatch(scopeKey: fixture.scopeKey).isEmpty
         #expect(macroSafeExpectation1)
         let transfer = try #require(
             fixture.container.mainContext.fetch(FetchDescriptor<AttachmentTransfer>()).first
@@ -132,9 +130,7 @@ struct AttachmentTransferQueueTests {
             scopeKey: fixture.scopeKey,
             attachmentID: request.attachmentID
         )
-        let macroSafeExpectation3: Bool = try await evaluateExpectation {
-            try await queue.readyBatch(scopeKey: fixture.scopeKey).count == 1
-        }
+        let macroSafeExpectation3: Bool = try await queue.readyBatch(scopeKey: fixture.scopeKey).count == 1
         #expect(macroSafeExpectation3)
         #expect(transfer.state == .pending)
 
