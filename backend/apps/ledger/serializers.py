@@ -40,6 +40,7 @@ class TrackerSerializer(StrictModelSerializer):
     owner_id = serializers.UUIDField(read_only=True)
     role = serializers.SerializerMethodField()
     base_currency_exponent = serializers.SerializerMethodField()
+    sort_order = serializers.IntegerField(min_value=0, max_value=2_147_483_647, required=False)
     default_account_id = serializers.UUIDField(required=False, allow_null=True)
     default_category_id = serializers.UUIDField(required=False, allow_null=True)
 
@@ -234,6 +235,7 @@ class CategorySerializer(StrictModelSerializer):
         allow_null=True,
         required=False,
     )
+    sort_order = serializers.IntegerField(min_value=0, max_value=2_147_483_647, required=False)
 
     class Meta:
         model = Category

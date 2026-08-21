@@ -31,7 +31,7 @@ jobs:
 
       - name: Install pinned XcodeGen
         run: |
-          brew install mint
+          brew install mint ripgrep
           mint install "yonaskolb/XcodeGen@$XCODEGEN_VERSION"
           echo "$HOME/.mint/bin" >> "$GITHUB_PATH"
           test "$("$HOME/.mint/bin/xcodegen" --version)" = "Version: $XCODEGEN_VERSION"

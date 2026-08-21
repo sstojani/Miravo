@@ -270,6 +270,9 @@ class RecurringRuleSerializer(StrictModelSerializer):
     rate_source = serializers.CharField(max_length=80, required=False)
     rate_effective_at = serializers.DateTimeField(required=False)
     account_amount_minor = serializers.IntegerField(min_value=1, required=False)
+    custom_interval_count = serializers.IntegerField(
+        min_value=1, max_value=MAXIMUM_CUSTOM_INTERVAL, required=False
+    )
     renewal_date = serializers.SerializerMethodField()
 
     class Meta:
@@ -664,6 +667,7 @@ class InstallmentPlanSerializer(StrictModelSerializer):
     currency_exponent = serializers.IntegerField(read_only=True)
     planned_total_minor = serializers.IntegerField(read_only=True)
     anchor_day = serializers.IntegerField(read_only=True)
+    installment_count = serializers.IntegerField(min_value=1, max_value=600)
     base_version = serializers.IntegerField(min_value=1, write_only=True, required=False)
     progress = serializers.SerializerMethodField()
 

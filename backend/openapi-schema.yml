@@ -4666,9 +4666,8 @@ components:
           maxLength: 16
         sort_order:
           type: integer
-          maximum: 9223372036854775807
+          maximum: 2147483647
           minimum: 0
-          format: int64
         archived_at:
           type: string
           format: date-time
@@ -4739,9 +4738,8 @@ components:
           maxLength: 16
         sort_order:
           type: integer
-          maximum: 9223372036854775807
+          maximum: 2147483647
           minimum: 0
-          format: int64
       required:
       - kind
       - name
@@ -5228,9 +5226,8 @@ components:
           readOnly: true
         installment_count:
           type: integer
-          maximum: 9223372036854775807
-          minimum: 0
-          format: int64
+          maximum: 600
+          minimum: 1
         planned_installment_minor:
           type: integer
           maximum: 9223372036854775807
@@ -5361,9 +5358,8 @@ components:
           maxLength: 3
         installment_count:
           type: integer
-          maximum: 9223372036854775807
-          minimum: 0
-          format: int64
+          maximum: 600
+          minimum: 1
         planned_installment_minor:
           type: integer
           maximum: 9223372036854775807
@@ -6699,9 +6695,8 @@ components:
           maxLength: 16
         sort_order:
           type: integer
-          maximum: 9223372036854775807
+          maximum: 2147483647
           minimum: 0
-          format: int64
     PatchedMembershipUpdateRequest:
       type: object
       description: Serializer that rejects misspelled or unsupported request fields.
@@ -6774,9 +6769,8 @@ components:
           maxLength: 3
         sort_order:
           type: integer
-          maximum: 9223372036854775807
+          maximum: 2147483647
           minimum: 0
-          format: int64
         default_account_id:
           type: string
           format: uuid
@@ -6966,9 +6960,8 @@ components:
           - $ref: '#/components/schemas/BlankEnum'
         custom_interval_count:
           type: integer
-          maximum: 9223372036854775807
-          minimum: 0
-          format: int64
+          maximum: 365
+          minimum: 1
         time_zone:
           type: string
           maxLength: 64
@@ -7144,9 +7137,8 @@ components:
           - $ref: '#/components/schemas/BlankEnum'
         custom_interval_count:
           type: integer
-          maximum: 9223372036854775807
-          minimum: 0
-          format: int64
+          maximum: 365
+          minimum: 1
         time_zone:
           type: string
           minLength: 1
@@ -8527,9 +8519,8 @@ components:
           readOnly: true
         sort_order:
           type: integer
-          maximum: 9223372036854775807
+          maximum: 2147483647
           minimum: 0
-          format: int64
         default_account_id:
           type: string
           format: uuid
@@ -8589,9 +8580,8 @@ components:
           maxLength: 3
         sort_order:
           type: integer
-          maximum: 9223372036854775807
+          maximum: 2147483647
           minimum: 0
-          format: int64
         default_account_id:
           type: string
           format: uuid

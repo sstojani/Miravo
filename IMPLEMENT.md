@@ -1026,3 +1026,32 @@ Create a clean local receipt checkpoint after one final regression/secret scan. 
 
 - Linux iOS resource/source contracts remain **verified locally**.
 - SwiftFormat lint with the narrowed profile requires the next GitHub macOS run for verification. Full-tree Swift style normalization remains unverified and should be addressed once a Mac runner can auto-format and commit the result.
+
+## 2026-08-21 — Hosted CI follow-up: deterministic schema, image hygiene, and iOS test host
+
+### Material work
+
+- Inspected latest GitHub Actions runs for `1b6c506685539b0ec24b27f71071722395fb3bc8`. `Dependency audit` failed in the container Trivy job, `Backend CI` failed at OpenAPI schema diff, and `iOS CI` failed during simulator test host setup.
+- Used the GitHub connector to fetch job logs without re-entering the owner PAT.
+- Backend schema drift was caused by database-backend-specific integer introspection: SQLite generated 64-bit bounds for positive/small integers, while PostgreSQL generated 32-bit/16-bit bounds. Added explicit serializer bounds for tracker/category `sort_order`, recurring `custom_interval_count`, and installment `installment_count`, then regenerated the committed OpenAPI schema.
+- Container Trivy still reported `msgpack 1.1.2` from `/root/.cache/uv` and `setuptools 70.3.0` from global package/test metadata. The lock already pins `msgpack 1.2.1`; the Dockerfile now removes uv/pip caches, removes unused global `setuptools` after dependency installation, and deletes bundled `pkg_resources` test fixtures from the final runtime image.
+- iOS simulator failure was `Could not find test host for ProjectLedgerTests` because the app product is now `Miravo.app/Miravo` while the default test host evaluated to `ProjectLedger.app/ProjectLedger`. Added explicit `TEST_HOST` and `BUNDLE_LOADER` settings in `ios/project.yml`.
+- The same iOS log showed the secret-pattern scan did not actually run because `rg` was unavailable on the macOS runner. The workflow now installs `ripgrep` with `mint`.
+
+### Commands and outcomes
+
+- `UV_CACHE_DIR=/tmp/miravo-uv-cache PROJECT_LEDGER_ENV=test PROJECT_LEDGER_DATABASE_URL=sqlite:///:memory: uv run python backend/manage.py spectacular --file backend/openapi-schema.yml --validate`: **passed locally**, schema regenerated with explicit bounds.
+- `UV_CACHE_DIR=/tmp/miravo-uv-cache PROJECT_LEDGER_ENV=test PROJECT_LEDGER_DATABASE_URL=sqlite:///:memory: uv run python backend/manage.py spectacular --file /tmp/openapi-schema-sqlite.yml --validate && diff -u backend/openapi-schema.yml /tmp/openapi-schema-sqlite.yml`: **passed locally**.
+- `UV_CACHE_DIR=/tmp/miravo-uv-cache PROJECT_LEDGER_ENV=test PROJECT_LEDGER_DATABASE_URL=sqlite:///:memory: make check`: **passed locally** — 96 tests, 84.15% coverage, Ruff format/lint, Django checks, strict mypy over 108 source files, OpenAPI validation, and byte-current schema.
+- `UV_CACHE_DIR=/tmp/miravo-uv-cache uv lock --check`: **passed locally**.
+- `UV_CACHE_DIR=/tmp/miravo-uv-cache uv run pip-audit --cache-dir /tmp/miravo-pip-audit-cache`: **passed locally** with no known vulnerabilities.
+- `./ios/check-localizations.sh`: **passed locally** — 783 literal UI keys.
+- `python3 ios/check-project-contract.py`: **passed locally**.
+- `git diff --check`: **passed locally**.
+- `.github/workflows/ios-ci.yml`: **updated** to install `ripgrep`; hosted verification is pending.
+
+### Verification boundary and next exact action
+
+- Backend/schema behavior is **verified locally** against SQLite and should be deterministic on hosted PostgreSQL because the serializers now define bounds explicitly.
+- Docker image cleanup and iOS test-host behavior are **designed from hosted Actions logs** but require the next GitHub Actions run for verification because this workspace has no Docker daemon or Xcode.
+- The next exact action is to commit and push this fix, then inspect the new hosted Backend CI, Dependency audit, and iOS CI runs.
