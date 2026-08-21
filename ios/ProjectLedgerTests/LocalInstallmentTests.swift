@@ -10,10 +10,10 @@ struct LocalInstallmentTests {
     @Test func scheduleMatchesServerRemaindersAndOriginalMonthAnchor() throws {
         let macroSafeExpectation1: Bool = try evaluateExpectation {
             try LocalInstallmentCalculator.scheduleItemID(
-                        planID: UUID(uuidString: "10000000-0000-0000-0000-000000000001")!,
-                        revisionNumber: 1,
-                        sequence: 1
-                    ) == UUID(uuidString: "6aeb1cec-6102-510c-975b-96cdfc43718e")
+                planID: UUID(uuidString: "10000000-0000-0000-0000-000000000001")!,
+                revisionNumber: 1,
+                sequence: 1
+            ) == UUID(uuidString: "6aeb1cec-6102-510c-975b-96cdfc43718e")
         }
         #expect(macroSafeExpectation1)
         let schedule = try LocalInstallmentCalculator.buildSchedule(
