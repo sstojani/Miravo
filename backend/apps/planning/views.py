@@ -230,7 +230,7 @@ class RecurringRuleViewSet(viewsets.ModelViewSet):  # type: ignore[type-arg]
         with transaction.atomic():
             visible = self.get_object()
             rule = (
-                RecurringRule.objects.select_for_update()
+                RecurringRule.objects.select_for_update(of=("self",))
                 .select_related("tracker", "account", "category")
                 .get(id=visible.id)
             )
@@ -260,7 +260,7 @@ class RecurringRuleViewSet(viewsets.ModelViewSet):  # type: ignore[type-arg]
         with transaction.atomic():
             visible = self.get_object()
             rule = (
-                RecurringRule.objects.select_for_update()
+                RecurringRule.objects.select_for_update(of=("self",))
                 .select_related("tracker")
                 .get(id=visible.id)
             )
@@ -317,7 +317,7 @@ class RecurringRuleViewSet(viewsets.ModelViewSet):  # type: ignore[type-arg]
         with transaction.atomic():
             visible = self.get_object()
             rule = (
-                RecurringRule.objects.select_for_update()
+                RecurringRule.objects.select_for_update(of=("self",))
                 .select_related("tracker")
                 .get(id=visible.id)
             )
@@ -326,7 +326,9 @@ class RecurringRuleViewSet(viewsets.ModelViewSet):  # type: ignore[type-arg]
             if rule.state == RecurringRule.State.ENDED:
                 raise ValidationError({"state": "An ended rule has no next occurrence."})
             now = timezone.now()
-            occurrence, created = RecurringOccurrence.objects.select_for_update().get_or_create(
+            occurrence, created = RecurringOccurrence.objects.select_for_update(
+                of=("self",)
+            ).get_or_create(
                 rule=rule,
                 due_on=rule.next_due_on,
                 defaults={
@@ -366,7 +368,7 @@ class RecurringRuleViewSet(viewsets.ModelViewSet):  # type: ignore[type-arg]
         with transaction.atomic():
             visible = self.get_object()
             rule = (
-                RecurringRule.objects.select_for_update()
+                RecurringRule.objects.select_for_update(of=("self",))
                 .select_related("tracker")
                 .get(id=visible.id)
             )
@@ -475,7 +477,7 @@ class InstallmentPlanViewSet(viewsets.ModelViewSet):  # type: ignore[type-arg]
         with transaction.atomic():
             visible = self.get_object()
             plan = (
-                InstallmentPlan.objects.select_for_update()
+                InstallmentPlan.objects.select_for_update(of=("self",))
                 .select_related("tracker", "account", "category")
                 .get(id=visible.id)
             )
@@ -503,7 +505,7 @@ class InstallmentPlanViewSet(viewsets.ModelViewSet):  # type: ignore[type-arg]
         with transaction.atomic():
             visible = self.get_object()
             plan = (
-                InstallmentPlan.objects.select_for_update()
+                InstallmentPlan.objects.select_for_update(of=("self",))
                 .select_related("tracker")
                 .get(id=visible.id)
             )
@@ -543,7 +545,7 @@ class InstallmentPlanViewSet(viewsets.ModelViewSet):  # type: ignore[type-arg]
         with transaction.atomic():
             visible = self.get_object()
             plan = (
-                InstallmentPlan.objects.select_for_update()
+                InstallmentPlan.objects.select_for_update(of=("self",))
                 .select_related("tracker")
                 .get(id=visible.id)
             )
@@ -679,7 +681,7 @@ class InstallmentPlanViewSet(viewsets.ModelViewSet):  # type: ignore[type-arg]
         with transaction.atomic():
             visible = self.get_object()
             plan = (
-                InstallmentPlan.objects.select_for_update()
+                InstallmentPlan.objects.select_for_update(of=("self",))
                 .select_related("tracker")
                 .get(id=visible.id)
             )

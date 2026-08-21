@@ -225,7 +225,7 @@ def materialize_rule(
     for _ in range(limit):
         with transaction.atomic():
             rule = (
-                RecurringRule.objects.select_for_update()
+                RecurringRule.objects.select_for_update(of=("self",))
                 .select_related("tracker", "tracker__owner", "created_by", "account", "category")
                 .get(id=rule_id)
             )

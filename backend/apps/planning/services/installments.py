@@ -370,8 +370,8 @@ def reschedule_installment_item(
     actor: User,
     request: object | None = None,
 ) -> InstallmentScheduleItem:
-    locked = InstallmentPlan.objects.select_for_update().get(id=plan.id)
-    locked_item = InstallmentScheduleItem.objects.select_for_update().get(id=item.id)
+    locked = InstallmentPlan.objects.select_for_update(of=("self",)).get(id=plan.id)
+    locked_item = InstallmentScheduleItem.objects.select_for_update(of=("self",)).get(id=item.id)
     if locked.version != base_version:
         raise VersionConflict()
     if locked.state != InstallmentPlan.State.ACTIVE or locked.deleted_at is not None:
@@ -422,8 +422,8 @@ def skip_installment_item(
     actor: User,
     request: object | None = None,
 ) -> InstallmentScheduleItem:
-    locked = InstallmentPlan.objects.select_for_update().get(id=plan.id)
-    locked_item = InstallmentScheduleItem.objects.select_for_update().get(id=item.id)
+    locked = InstallmentPlan.objects.select_for_update(of=("self",)).get(id=plan.id)
+    locked_item = InstallmentScheduleItem.objects.select_for_update(of=("self",)).get(id=item.id)
     if locked.version != base_version:
         raise VersionConflict()
     if locked.state != InstallmentPlan.State.ACTIVE or locked.deleted_at is not None:
@@ -515,7 +515,9 @@ def _apply_to_schedule(
     )
     locked_by_id = {
         item.id: item
-        for item in InstallmentScheduleItem.objects.select_for_update().filter(id__in=item_ids)
+        for item in InstallmentScheduleItem.objects.select_for_update(of=("self",)).filter(
+            id__in=item_ids
+        )
     }
     for item_id in item_ids:
         if remaining == 0:
@@ -554,13 +556,13 @@ def record_installment_payment(  # noqa: PLR0912, PLR0915
     request: object | None = None,
 ) -> InstallmentPayment:
     locked = (
-        InstallmentPlan.objects.select_for_update()
+        InstallmentPlan.objects.select_for_update(of=("self",))
         .select_related("tracker", "account", "category")
         .get(id=plan.id)
     )
     if payment_id is not None:
         existing = (
-            InstallmentPayment.objects.select_for_update()
+            InstallmentPayment.objects.select_for_update(of=("self",))
             .select_related("transaction")
             .filter(id=payment_id)
             .first()
@@ -604,7 +606,9 @@ def record_installment_payment(  # noqa: PLR0912, PLR0915
         )
     locked_item: InstallmentScheduleItem | None = None
     if schedule_item is not None:
-        locked_item = InstallmentScheduleItem.objects.select_for_update().get(id=schedule_item.id)
+        locked_item = InstallmentScheduleItem.objects.select_for_update(of=("self",)).get(
+            id=schedule_item.id
+        )
         if locked_item.plan_id != locked.id or locked_item.superseded_at is not None:
             raise serializers.ValidationError(
                 {"schedule_item_id": "Choose an active schedule item in this plan."}

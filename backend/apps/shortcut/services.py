@@ -177,7 +177,9 @@ def revoke_shortcut_credential(
     actor: User,
     request: Any | None = None,
 ) -> None:
-    locked = ShortcutCredential.objects.select_for_update().get(id=credential.id, user=actor)
+    locked = ShortcutCredential.objects.select_for_update(of=("self",)).get(
+        id=credential.id, user=actor
+    )
     if locked.revoked_at is None:
         locked.revoked_at = timezone.now()
         locked.save(update_fields=("revoked_at", "updated_at"))
@@ -270,7 +272,7 @@ def create_shortcut_transaction(
 ) -> ShortcutTransactionOutcome:
     credential = (
         ShortcutCredential.objects.select_related("user", "tracker")
-        .select_for_update()
+        .select_for_update(of=("self",))
         .get(id=credential.id)
     )
     now = timezone.now()
@@ -278,13 +280,13 @@ def create_shortcut_transaction(
         raise AuthenticationFailed("The Shortcut token was revoked.", code="shortcut_token_revoked")
     if credential.expires_at is not None and credential.expires_at <= now:
         raise AuthenticationFailed("The Shortcut token expired.", code="shortcut_token_expired")
-    User.objects.select_for_update().get(id=credential.user_id)
+    User.objects.select_for_update(of=("self",)).get(id=credential.user_id)
     tracker = resolve_shortcut_tracker(
         credential,
         cast(UUID, payload["tracker_id"]),
         minimum_role=TrackerMembership.Role.EDITOR,
     )
-    Tracker.objects.select_for_update().get(id=tracker.id)
+    Tracker.objects.select_for_update(of=("self",)).get(id=tracker.id)
     fingerprint = shortcut_request_fingerprint(payload)
 
     existing_key = (

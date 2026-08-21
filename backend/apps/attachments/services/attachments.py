@@ -59,7 +59,7 @@ def reserve_attachment(
     tracker = get_object_or_404(visible_trackers(actor), id=values["tracker_id"])
     require_tracker_role(actor, tracker, TrackerMembership.Role.EDITOR)
     financial_transaction = get_object_or_404(
-        Transaction.objects.select_for_update().filter(deleted_at__isnull=True),
+        Transaction.objects.select_for_update(of=("self",)).filter(deleted_at__isnull=True),
         id=values["transaction_id"],
         tracker=tracker,
     )
@@ -109,7 +109,7 @@ def commit_attachment_upload(
     request: Any | None = None,
 ) -> tuple[Attachment, bool]:
     attachment = get_object_or_404(
-        Attachment.objects.select_for_update().select_related("tracker"),
+        Attachment.objects.select_for_update(of=("self",)).select_related("tracker"),
         id=attachment_id,
         deleted_at__isnull=True,
     )
@@ -170,7 +170,8 @@ def tombstone_attachment(
     request: Any | None = None,
 ) -> None:
     locked = get_object_or_404(
-        Attachment.objects.select_for_update().select_related("tracker"), id=attachment.id
+        Attachment.objects.select_for_update(of=("self",)).select_related("tracker"),
+        id=attachment.id,
     )
     require_tracker_role(actor, locked.tracker, TrackerMembership.Role.EDITOR)
     if locked.version != base_version:

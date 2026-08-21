@@ -201,7 +201,7 @@ def tombstone_settlement(
 ) -> Settlement:
     locked = (
         Settlement.objects.select_related("tracker", "transaction")
-        .select_for_update()
+        .select_for_update(of=("self",))
         .get(id=settlement.id)
     )
     require_tracker_role(actor, locked.tracker, TrackerMembership.Role.EDITOR)
@@ -241,7 +241,7 @@ def restore_settlement(
 ) -> Settlement:
     locked = (
         Settlement.objects.select_related("tracker", "transaction")
-        .select_for_update()
+        .select_for_update(of=("self",))
         .get(id=settlement.id)
     )
     require_tracker_role(actor, locked.tracker, TrackerMembership.Role.EDITOR)

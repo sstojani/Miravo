@@ -85,7 +85,7 @@ def issue_session_tokens(
     now = timezone.now()
     with transaction.atomic():
         previous = list(
-            DeviceSession.objects.select_for_update().filter(
+            DeviceSession.objects.select_for_update(of=("self",)).filter(
                 user=user,
                 device_id=device_id,
                 revoked_at__isnull=True,
@@ -136,7 +136,7 @@ def rotate_refresh_token(*, raw_token: str, request_id: str) -> SessionTokens:
     with transaction.atomic():
         try:
             credential = (
-                RefreshCredential.objects.select_for_update()
+                RefreshCredential.objects.select_for_update(of=("self",))
                 .select_related("session__user")
                 .get(token_prefix=prefix)
             )
@@ -201,7 +201,9 @@ def rotate_refresh_token(*, raw_token: str, request_id: str) -> SessionTokens:
 def revoke_session(*, session: DeviceSession, actor: User, request_id: str, reason: str) -> None:
     now = timezone.now()
     with transaction.atomic():
-        locked = DeviceSession.objects.select_for_update().get(id=session.id, user=actor)
+        locked = DeviceSession.objects.select_for_update(of=("self",)).get(
+            id=session.id, user=actor
+        )
         if locked.revoked_at is None:
             locked.revoked_at = now
             locked.save(update_fields=("revoked_at", "updated_at"))

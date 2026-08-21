@@ -132,13 +132,13 @@ def transfer_tracker_ownership(
     if actor.id == new_owner.id:
         return tracker
     try:
-        target_membership = TrackerMembership.objects.select_for_update().get(
+        target_membership = TrackerMembership.objects.select_for_update(of=("self",)).get(
             tracker=tracker,
             user=new_owner,
             state=TrackerMembership.State.ACTIVE,
             deleted_at__isnull=True,
         )
-        current_membership = TrackerMembership.objects.select_for_update().get(
+        current_membership = TrackerMembership.objects.select_for_update(of=("self",)).get(
             tracker=tracker,
             user=actor,
             role=TrackerMembership.Role.OWNER,
@@ -234,7 +234,7 @@ def create_invite(
 def accept_invite(*, user: User, raw_token: str, request: Any | None = None) -> TrackerMembership:
     try:
         invite = (
-            TrackerInvite.objects.select_for_update()
+            TrackerInvite.objects.select_for_update(of=("self",))
             .select_related("tracker")
             .get(token_prefix=raw_token[:16], token_digest=_invite_digest(raw_token))
         )

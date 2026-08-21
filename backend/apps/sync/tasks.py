@@ -20,7 +20,9 @@ def prune_sync_history() -> dict[str, int]:
         deleted_changes = 0
         if highest:
             deleted_changes, _ = eligible.filter(sequence__lte=highest).delete()
-            state, _ = SyncRetentionState.objects.select_for_update().get_or_create(key=1)
+            state, _ = SyncRetentionState.objects.select_for_update(of=("self",)).get_or_create(
+                key=1
+            )
             if highest > state.minimum_sequence:
                 state.minimum_sequence = highest
                 state.save(update_fields=("minimum_sequence", "updated_at"))

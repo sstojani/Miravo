@@ -181,7 +181,7 @@ class SyncAckView(APIView):
             user=actor,
             cursor=serializer.validated_data["cursor"],
         )
-        state, _ = SyncDeviceState.objects.select_for_update().get_or_create(
+        state, _ = SyncDeviceState.objects.select_for_update(of=("self",)).get_or_create(
             device_session=_device_session(request)
         )
         now = timezone.now()

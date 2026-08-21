@@ -363,7 +363,11 @@ def replace_transaction_split(
         snapshot_transaction,
     )
 
-    locked = Transaction.objects.select_related("tracker").select_for_update().get(id=record.id)
+    locked = (
+        Transaction.objects.select_related("tracker")
+        .select_for_update(of=("self",))
+        .get(id=record.id)
+    )
     require_tracker_role(actor, locked.tracker, TrackerMembership.Role.EDITOR)
     if locked.version != base_version:
         raise VersionConflict()
@@ -522,7 +526,7 @@ def _locked_merge_participants(
 
     locked = {
         participant.id: participant
-        for participant in Participant.objects.select_for_update()
+        for participant in Participant.objects.select_for_update(of=("self",))
         .select_related("tracker", "linked_user")
         .filter(id__in=(source.id, target.id))
     }
@@ -574,7 +578,9 @@ def _snapshot_merge_transactions(
     )
     transactions = {
         row.id: row
-        for row in Transaction.objects.select_for_update().filter(id__in=transaction_ids)
+        for row in Transaction.objects.select_for_update(of=("self",)).filter(
+            id__in=transaction_ids
+        )
     }
     for record in transactions.values():
         snapshot_transaction(record, editor=actor, reason="participant_merge")
@@ -587,7 +593,7 @@ def _merge_payment_rows(
     target: Participant,
     now: datetime,
 ) -> None:
-    for row in SplitPayment.objects.select_for_update().filter(
+    for row in SplitPayment.objects.select_for_update(of=("self",)).filter(
         participant=source,
         deleted_at__isnull=True,
     ):
@@ -610,7 +616,7 @@ def _merge_payment_rows(
 
 
 def _convert_active_equal_shares_to_exact(transaction_id: UUID) -> None:
-    for share in SplitShare.objects.select_for_update().filter(
+    for share in SplitShare.objects.select_for_update(of=("self",)).filter(
         transaction_id=transaction_id,
         deleted_at__isnull=True,
     ):
@@ -633,7 +639,7 @@ def _merge_share_rows(
     target: Participant,
     now: datetime,
 ) -> None:
-    for row in SplitShare.objects.select_for_update().filter(
+    for row in SplitShare.objects.select_for_update(of=("self",)).filter(
         participant=source,
         deleted_at__isnull=True,
     ):
@@ -681,7 +687,7 @@ def _merge_settlement_rows(
     from apps.ledger.services.transactions import tombstone_transaction  # noqa: PLC0415
 
     for settlement in (
-        Settlement.objects.select_for_update()
+        Settlement.objects.select_for_update(of=("self",))
         .select_related("transaction")
         .filter(Q(from_participant=source) | Q(to_participant=source), deleted_at__isnull=True)
     ):

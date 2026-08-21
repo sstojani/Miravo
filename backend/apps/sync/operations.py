@@ -350,7 +350,7 @@ def _apply_tracker(operation: dict[str, Any], actor: User, request: Any) -> Trac
             **values,
         )
 
-    tracker = Tracker.objects.select_for_update().get(id=entity_id)
+    tracker = Tracker.objects.select_for_update(of=("self",)).get(id=entity_id)
     minimum_role = (
         TrackerMembership.Role.OWNER if command == "delete" else TrackerMembership.Role.ADMIN
     )
@@ -438,7 +438,9 @@ def _apply_account(operation: dict[str, Any], actor: User, request: Any) -> Acco
         _audit(actor=actor, instance=account, action="account.created", request=request)
         return account
 
-    account = Account.objects.select_related("tracker").select_for_update().get(id=entity_id)
+    account = (
+        Account.objects.select_related("tracker").select_for_update(of=("self",)).get(id=entity_id)
+    )
     require_tracker_role(actor, account.tracker, TrackerMembership.Role.EDITOR)
     _require_version(
         instance=account,
@@ -493,7 +495,9 @@ def _apply_category(operation: dict[str, Any], actor: User, request: Any) -> Cat
         return category
 
     category = (
-        Category.objects.select_related("tracker", "parent").select_for_update().get(id=entity_id)
+        Category.objects.select_related("tracker", "parent")
+        .select_for_update(of=("self",))
+        .get(id=entity_id)
     )
     if category.tracker is None:
         raise serializers.ValidationError({"entity_id": "Global categories are read only."})
@@ -549,7 +553,7 @@ def _apply_tag(operation: dict[str, Any], actor: User, request: Any) -> Tag:
         _audit(actor=actor, instance=tag, action="tag.created", request=request)
         return tag
 
-    tag = Tag.objects.select_related("tracker").select_for_update().get(id=entity_id)
+    tag = Tag.objects.select_related("tracker").select_for_update(of=("self",)).get(id=entity_id)
     require_tracker_role(actor, tag.tracker, TrackerMembership.Role.EDITOR)
     _require_version(
         instance=tag,
@@ -606,7 +610,7 @@ def _apply_participant(operation: dict[str, Any], actor: User, request: Any) -> 
 
     participant = (
         Participant.objects.select_related("tracker", "linked_user")
-        .select_for_update()
+        .select_for_update(of=("self",))
         .get(id=entity_id)
     )
     minimum_role = (
@@ -680,7 +684,11 @@ def _apply_transaction(operation: dict[str, Any], actor: User, request: Any) -> 
             request=request,
         )
 
-    record = Transaction.objects.select_related("tracker").select_for_update().get(id=entity_id)
+    record = (
+        Transaction.objects.select_related("tracker")
+        .select_for_update(of=("self",))
+        .get(id=entity_id)
+    )
     require_tracker_role(actor, record.tracker, TrackerMembership.Role.EDITOR)
     _require_version(
         instance=record,
@@ -737,7 +745,7 @@ def _apply_settlement(operation: dict[str, Any], actor: User, request: Any) -> S
             "to_participant",
             "transaction",
         )
-        .select_for_update()
+        .select_for_update(of=("self",))
         .get(id=entity_id)
     )
     require_tracker_role(actor, settlement.tracker, TrackerMembership.Role.EDITOR)
@@ -790,7 +798,9 @@ def _apply_budget(operation: dict[str, Any], actor: User, request: Any) -> Budge
         _audit(actor=actor, instance=budget, action="budget.created", request=request)
         return budget
 
-    budget = Budget.objects.select_related("tracker").select_for_update().get(id=entity_id)
+    budget = (
+        Budget.objects.select_related("tracker").select_for_update(of=("self",)).get(id=entity_id)
+    )
     require_tracker_role(actor, budget.tracker, TrackerMembership.Role.EDITOR)
     _require_version(
         instance=budget,
@@ -950,7 +960,7 @@ def _skip_recurring_occurrence(rule: RecurringRule, actor: User, request: Any) -
     if rule.state == RecurringRule.State.ENDED:
         raise serializers.ValidationError({"state": "An ended rule has no next occurrence."})
     now = timezone.now()
-    occurrence, created = RecurringOccurrence.objects.select_for_update().get_or_create(
+    occurrence, created = RecurringOccurrence.objects.select_for_update(of=("self",)).get_or_create(
         rule=rule,
         due_on=rule.next_due_on,
         defaults={
@@ -985,7 +995,7 @@ def _apply_recurring_rule(operation: dict[str, Any], actor: User, request: Any) 
         return _create_recurring_rule(entity_id, payload, actor, request)
     rule = (
         RecurringRule.objects.select_related("tracker", "account", "category")
-        .select_for_update()
+        .select_for_update(of=("self",))
         .get(id=entity_id)
     )
     require_tracker_role(actor, rule.tracker, TrackerMembership.Role.EDITOR)
@@ -1171,7 +1181,7 @@ def _apply_installment_plan(  # noqa: PLR0911
         return _create_installment_plan(entity_id, payload, actor, request)
     plan = (
         InstallmentPlan.objects.select_related("tracker", "account", "category")
-        .select_for_update()
+        .select_for_update(of=("self",))
         .get(id=entity_id)
     )
     require_tracker_role(actor, plan.tracker, TrackerMembership.Role.EDITOR)

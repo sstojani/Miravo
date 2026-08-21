@@ -11,7 +11,7 @@ Miravo is the final product name; Project Ledger remains the internal code/modul
 - Architecture, trust boundaries, sync semantics, test categories, deployment separation, and stop conditions are documented.
 - Current official documentation still supports the core Wallet-Shortcut/API bridge and warns that Tailscale CLI syntax is version-dependent.
 - `uv.lock`, initial migrations, and the committed OpenAPI schema are reproducible and current.
-- `make check` passes: 96 tests, 82.26% coverage, Ruff, strict mypy over 108 source files, Django checks, and OpenAPI validation/freshness.
+- `make check` passes locally: 96 tests, 83.69% coverage, Ruff, strict mypy over 108 source files, Django checks, and OpenAPI validation/freshness.
 - Fresh-database migration checks, Django deployment checks with synthetic secrets, Bandit, `pip-audit`, YAML parsing, localization parity, whitespace checks, and a targeted secret scan pass locally.
 - Owner/admin/editor/viewer APIs, invitation lifecycle, derived balances, exact allocations, transfers/refunds/voids, cross-currency snapshots, revision conflicts, tombstones, category history/merge, and archive/restore flows are locally acceptance-tested.
 - Shortcut credentials store only a prefix/HMAC digest under an independent pepper, expose the raw value once, support tracker/scopes/expiry/revoke, and enforce current membership. Narrow capture is payment-credential rejecting, explicit-conversion only, throttled by client/token/user, duplicate-safe across token rotation, and locally covered by 10 focused API tests. Single/batch JSON samples and an honest manual setup guide are checked in.
@@ -39,6 +39,7 @@ Miravo is the final product name; Project Ledger remains the internal code/modul
 - PostgreSQL/Redis/Celery/ASGI behavior under Docker.
 - Swift/Xcode project generation, simulator build/tests, device archive, IPA packaging, signer, and physical-device behavior.
 - GitHub Actions execution. The owner supplied `https://github.com/sstojani/Miravo.git`; the local `origin` and current `agent/milestone-9-private-receipts` branch exist, and a user-local GitHub CLI is installed at `../tools/gh`. After the owner added `workflow` scope to the one-time PAT, pushes succeeded without storing credentials. Remote `main` and `agent/milestone-9-private-receipts` contain the native export checkpoint `6b9574a823999b92cb9bb0a1a1697d07233fbd9a`. GitHub Actions status still needs inspection through an authenticated API/CLI session.
+- Hosted PostgreSQL and Trivy re-run results after the `select_for_update(of=("self",))`, `msgpack`, and setuptools fixes.
 - Ubuntu deployment, real Funnel hostname, backup restore, and external collaboration.
 - Native Shortcut credential/default-management compilation/runtime plus Wallet trigger and offline queue-file behavior on the current physical iPhone.
 - Native budget Swift 6 type/concurrency checking, SwiftData behavior, calculator tests, and Plans UI interaction on a simulator/device.

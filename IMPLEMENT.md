@@ -977,3 +977,31 @@ Create a clean local receipt checkpoint after one final regression/secret scan. 
 - Python dependency audit is **verified locally** after the lock update.
 - The GitHub container audit failure was diagnosed as a bad action tag. Hosted re-run status remains external until the next push completes.
 - The next exact action is to commit and push this audit follow-up, then inspect public workflow metadata again.
+
+## 2026-08-21 — Hosted PostgreSQL and container audit fix
+
+### Material work
+
+- Public job summaries for `8eb4caceae35a48abc253012b7a658b44276129d` showed Python audit succeeding, while Backend CI failed at pytest and Dependency audit failed in Trivy execution.
+- Downloaded the authenticated logs for the failing runs into `/tmp/miravo-actions-logs/latest` for diagnosis only. No credential was stored.
+- Backend CI failure was PostgreSQL-specific: `FOR UPDATE cannot be applied to the nullable side of an outer join`. The local SQLite gate had not exposed it.
+- Changed backend lock queries to use `select_for_update(of=("self",))`, so PostgreSQL locks the intended base rows without attempting to lock nullable joined tables.
+- Trivy failure was a real image finding after the action tag fix: app image contained `msgpack 1.1.2` and global `setuptools 70.3.0`. Added `msgpack>=1.2.1,<2` to runtime dependencies and upgraded global setuptools in the Docker image to `>=78.1.1,<81`.
+
+### Commands and outcomes
+
+- `UV_CACHE_DIR=/tmp/miravo-uv-cache uv lock && UV_CACHE_DIR=/tmp/miravo-uv-cache uv sync --all-groups --frozen`: **passed locally**.
+- `UV_CACHE_DIR=/tmp/miravo-uv-cache PROJECT_LEDGER_ENV=test PROJECT_LEDGER_DATABASE_URL=sqlite:///:memory: make check`: **passed locally** — 96 tests, 83.69% coverage, Ruff format/lint, Django checks, strict mypy over 108 source files, OpenAPI validation, and byte-current schema.
+- `UV_CACHE_DIR=/tmp/miravo-uv-cache uv lock --check`: **passed locally**.
+- `UV_CACHE_DIR=/tmp/miravo-uv-cache uv run pip-audit --cache-dir /tmp/miravo-pip-audit-cache`: **passed locally** with no known vulnerabilities.
+- `UV_CACHE_DIR=/tmp/miravo-uv-cache uv run bandit -q -r backend/apps backend/config`: **passed locally**.
+- `./ios/check-localizations.sh`: **passed locally** — 783 literal UI keys.
+- `python3 -m py_compile ios/check-project-contract.py && python3 ios/check-project-contract.py`: **passed locally**.
+- `git diff --check`: **passed locally**.
+- `rg -n 'select_for_update\(\)' backend/apps`: **no matches**.
+
+### Verification boundary and next exact action
+
+- SQLite/local backend behavior and source checks are **verified locally**.
+- The PostgreSQL-specific fix and container-image vulnerability fix are **designed from hosted logs** but require a new GitHub Actions run to verify on hosted PostgreSQL and Trivy.
+- The next exact action is to commit and push this fix, then poll GitHub Actions again.

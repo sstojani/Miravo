@@ -53,8 +53,8 @@ def merge_category(
         raise serializers.ValidationError(
             {"target_category_id": "Categories must use the same tracker and kind."}
         )
-    source = Category.objects.select_for_update().get(id=source.id)
-    target = Category.objects.select_for_update().get(
+    source = Category.objects.select_for_update(of=("self",)).get(id=source.id)
+    target = Category.objects.select_for_update(of=("self",)).get(
         id=target.id, deleted_at__isnull=True, archived_at__isnull=True
     )
     if source.children.filter(deleted_at__isnull=True).exists():
@@ -64,7 +64,9 @@ def merge_category(
     snapshot_category(source, editor=actor, reason="merge")
     allocations = list(source.allocations.select_related("transaction").order_by("transaction_id"))
     for allocation in allocations:
-        record = Transaction.objects.select_for_update().get(id=allocation.transaction_id)
+        record = Transaction.objects.select_for_update(of=("self",)).get(
+            id=allocation.transaction_id
+        )
         snapshot_transaction(record, editor=actor, reason="category_merge")
         existing = record.allocations.filter(category=target).first()
         if existing:
@@ -83,11 +85,15 @@ def merge_category(
         record.version += 1
         record.last_editor = actor
         record.save(update_fields=("version", "last_editor", "updated_at"))
-    for affected_tracker in Tracker.objects.select_for_update().filter(default_category=source):
+    for affected_tracker in Tracker.objects.select_for_update(of=("self",)).filter(
+        default_category=source
+    ):
         affected_tracker.default_category = target
         affected_tracker.version += 1
         affected_tracker.save(update_fields=("default_category", "version", "updated_at"))
-    for merchant in Merchant.objects.select_for_update().filter(default_category=source):
+    for merchant in Merchant.objects.select_for_update(of=("self",)).filter(
+        default_category=source
+    ):
         merchant.default_category = target
         merchant.version += 1
         merchant.save(update_fields=("default_category", "version", "updated_at"))

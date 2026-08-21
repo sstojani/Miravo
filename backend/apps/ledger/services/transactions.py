@@ -557,7 +557,7 @@ def replace_financial_transaction(
     request: Any | None = None,
     allow_linked_settlement: bool = False,
 ) -> Transaction:
-    locked = Transaction.objects.select_for_update().get(id=record.id)
+    locked = Transaction.objects.select_for_update(of=("self",)).get(id=record.id)
     if locked.version != base_version:
         raise VersionConflict()
     if locked.deleted_at:
@@ -637,7 +637,7 @@ def tombstone_transaction(
     allow_linked_settlement: bool = False,
 ) -> Transaction:
     require_tracker_role(actor, record.tracker, TrackerMembership.Role.EDITOR)
-    locked = Transaction.objects.select_for_update().get(id=record.id)
+    locked = Transaction.objects.select_for_update(of=("self",)).get(id=record.id)
     if locked.version != base_version:
         raise VersionConflict()
     _protect_linked_settlement_transaction(
@@ -653,7 +653,7 @@ def tombstone_transaction(
         locked.save(update_fields=("deleted_at", "version", "last_editor", "updated_at"))
         from apps.attachments.models import Attachment  # noqa: PLC0415
 
-        for attachment in Attachment.objects.select_for_update().filter(
+        for attachment in Attachment.objects.select_for_update(of=("self",)).filter(
             transaction=locked,
             deleted_at__isnull=True,
         ):
@@ -699,7 +699,7 @@ def restore_transaction(
     allow_linked_settlement: bool = False,
 ) -> Transaction:
     require_tracker_role(actor, record.tracker, TrackerMembership.Role.EDITOR)
-    locked = Transaction.objects.select_for_update().get(id=record.id)
+    locked = Transaction.objects.select_for_update(of=("self",)).get(id=record.id)
     if locked.version != base_version:
         raise VersionConflict()
     _protect_linked_settlement_transaction(
@@ -714,7 +714,7 @@ def restore_transaction(
         locked.save(update_fields=("deleted_at", "version", "last_editor", "updated_at"))
         from apps.attachments.models import Attachment  # noqa: PLC0415
 
-        for attachment in Attachment.objects.select_for_update().filter(
+        for attachment in Attachment.objects.select_for_update(of=("self",)).filter(
             transaction=locked,
             deleted_with_transaction=True,
         ):
@@ -760,7 +760,7 @@ def void_transaction(
     allow_linked_settlement: bool = False,
 ) -> Transaction:
     require_tracker_role(actor, record.tracker, TrackerMembership.Role.EDITOR)
-    locked = Transaction.objects.select_for_update().get(id=record.id)
+    locked = Transaction.objects.select_for_update(of=("self",)).get(id=record.id)
     if locked.version != base_version:
         raise VersionConflict()
     _protect_linked_settlement_transaction(
