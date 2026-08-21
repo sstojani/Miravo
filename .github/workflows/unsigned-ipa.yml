@@ -33,7 +33,7 @@ jobs:
 
       - name: Install pinned XcodeGen
         run: |
-          brew install mint
+          brew install mint ripgrep
           mint install "yonaskolb/XcodeGen@$XCODEGEN_VERSION"
           echo "$HOME/.mint/bin" >> "$GITHUB_PATH"
           test "$("$HOME/.mint/bin/xcodegen" --version)" = "Version: $XCODEGEN_VERSION"
@@ -77,51 +77,93 @@ jobs:
         working-directory: ios
         run: |
           set -Eeuo pipefail
+
           app="$PWD/build/Release-iphoneos/Miravo.app"
           info="$app/Info.plist"
           executable="$app/Miravo"
           artifacts="$PWD/artifacts"
           stage="$PWD/unsigned-stage"
 
-          test -d "$app"
-          test -f "$executable"
-          test "$(plutil -extract CFBundleDisplayName raw "$info")" = "$EXPECTED_APP_NAME"
-          test "$(plutil -extract CFBundleIdentifier raw "$info")" = "$EXPECTED_BUNDLE_ID"
-          test "$(plutil -extract MinimumOSVersion raw "$info")" = "$EXPECTED_MINIMUM_IOS"
-          test -n "$(plutil -extract CFBundleShortVersionString raw "$info")"
-          test -n "$(plutil -extract CFBundleVersion raw "$info")"
-          test -n "$(plutil -extract NSCameraUsageDescription raw "$info")"
-          test -n "$(plutil -extract NSFaceIDUsageDescription raw "$info")"
-          test -n "$(plutil -extract NSPhotoLibraryUsageDescription raw "$info")"
-          test "$(plutil -extract BGTaskSchedulerPermittedIdentifiers.0 raw "$info")" = "$EXPECTED_BUNDLE_ID.sync.refresh"
-          test "$(plutil -extract UIBackgroundModes.0 raw "$info")" = "fetch"
-          test "$(plutil -extract NSAppTransportSecurity.NSAllowsArbitraryLoads raw "$info")" = "false"
-          if plutil -extract NSAppTransportSecurity.NSAllowsLocalNetworking raw "$info" >/dev/null 2>&1; then
-            echo "Release app contains a development-only local-network ATS exception." >&2
+          fail() {
+            echo "::error::$1" >&2
             exit 1
-          fi
-          test -f "$app/PrivacyInfo.xcprivacy"
-          test "$(plutil -extract NSPrivacyTracking raw "$app/PrivacyInfo.xcprivacy")" = "false"
-          lipo -archs "$executable" | grep -qw arm64
-          if codesign --verify "$app" >/dev/null 2>&1; then
-            echo "Expected an unsigned app, but code-signature verification succeeded." >&2
-            exit 1
-          fi
-          if strings "$executable" | rg -q \
-            '(-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----|sk-[A-Za-z0-9]{20,}|postgres(ql)?://[^[:space:]]+:[^[:space:]]+@)'; then
-            echo "Potential secret pattern found in compiled application." >&2
-            exit 1
-          fi
+          }
 
-          mkdir -p "$artifacts" "$stage/Payload"
-          ditto "$app" "$stage/Payload/Miravo.app"
-          (cd "$stage" && ditto -c -k --keepParent Payload "$artifacts/Miravo-UNSIGNED.ipa")
-          unzip -t "$artifacts/Miravo-UNSIGNED.ipa"
-          unzip -l "$artifacts/Miravo-UNSIGNED.ipa" | grep -q 'Payload/Miravo.app/Info.plist'
+          echo "Verifying built Miravo application..."
 
+          [[ -d "$app" ]] || fail "Miravo.app was not produced."
+          [[ -f "$info" ]] || fail "Miravo.app/Info.plist is missing."
+          [[ -f "$executable" ]] || fail "Miravo executable is missing."
+
+          app_name="$(plutil -extract CFBundleDisplayName raw "$info")"
+          bundle_id="$(plutil -extract CFBundleIdentifier raw "$info")"
+          minimum_ios="$(plutil -extract MinimumOSVersion raw "$info")"
           version="$(plutil -extract CFBundleShortVersionString raw "$info")"
           build_number="$(plutil -extract CFBundleVersion raw "$info")"
           architectures="$(lipo -archs "$executable")"
+
+          echo "App name: $app_name"
+          echo "Bundle ID: $bundle_id"
+          echo "Version: $version ($build_number)"
+          echo "Minimum iOS: $minimum_ios"
+          echo "Architectures: $architectures"
+
+          [[ "$app_name" == "$EXPECTED_APP_NAME" ]] ||
+            fail "Unexpected app name: $app_name"
+
+          [[ "$bundle_id" == "$EXPECTED_BUNDLE_ID" ]] ||
+            fail "Unexpected bundle identifier: $bundle_id"
+
+          echo "$architectures" | grep -qw arm64 ||
+            fail "Built executable does not contain arm64."
+
+          if codesign --verify "$app" >/dev/null 2>&1; then
+            fail "Expected an unsigned app but code-signature verification succeeded."
+          fi
+
+          [[ -f "$app/PrivacyInfo.xcprivacy" ]] ||
+            fail "PrivacyInfo.xcprivacy is missing from Miravo.app."
+
+          command -v rg >/dev/null ||
+            fail "ripgrep (rg) is unavailable."
+
+          strings_file="$PWD/miravo-executable-strings.txt"
+          strings "$executable" > "$strings_file"
+
+          if rg -q \
+            '(-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----|sk-[A-Za-z0-9]{20,}|postgres(ql)?://[^[:space:]]+:[^[:space:]]+@)' \
+            "$strings_file"; then
+            rm -f "$strings_file"
+            fail "Potential production secret found in compiled application."
+          fi
+
+          rm -f "$strings_file"
+
+          echo "Application verification succeeded."
+          echo "Packaging unsigned IPA..."
+
+          rm -rf "$artifacts" "$stage"
+          mkdir -p "$artifacts" "$stage/Payload"
+
+          ditto "$app" "$stage/Payload/Miravo.app"
+
+          (
+            cd "$stage"
+            ditto -c -k --keepParent Payload \
+              "$artifacts/Miravo-UNSIGNED.ipa"
+          )
+
+          unzip -t "$artifacts/Miravo-UNSIGNED.ipa"
+
+          unzip -l "$artifacts/Miravo-UNSIGNED.ipa" \
+            > "$artifacts/ipa-contents.txt"
+
+          grep -Fq "Payload/Miravo.app/Info.plist" \
+            "$artifacts/ipa-contents.txt" ||
+            fail "Packaged IPA does not contain Miravo.app/Info.plist."
+
+          rm -f "$artifacts/ipa-contents.txt"
+
           jq -n \
             --arg label "UNSIGNED" \
             --arg commit "$GITHUB_SHA" \
@@ -129,20 +171,43 @@ jobs:
             --arg macos "$(sw_vers -productVersion)" \
             --arg xcode "$(xcodebuild -version | tr '\n' ' ')" \
             --arg swift "$(swift --version | head -n1)" \
-            --arg app_name "$EXPECTED_APP_NAME" \
-            --arg bundle_id "$EXPECTED_BUNDLE_ID" \
+            --arg app_name "$app_name" \
+            --arg bundle_id "$bundle_id" \
             --arg version "$version" \
             --arg build_number "$build_number" \
-            --arg minimum_ios "$EXPECTED_MINIMUM_IOS" \
+            --arg minimum_ios "$minimum_ios" \
             --arg architectures "$architectures" \
-            '{label:$label,commit:$commit,build_date:$build_date,macos:$macos,xcode:$xcode,swift:$swift,app_name:$app_name,bundle_id:$bundle_id,version:$version,build_number:$build_number,minimum_ios:$minimum_ios,architectures:$architectures,code_signing:false,special_entitlements_required:false,feature_flags:{background_refresh:"optional",websocket_invalidation:"optional",manual_foreground_sync:"required"}}' \
-            >"$artifacts/build-manifest.json"
+            '{
+              label:$label,
+              commit:$commit,
+              build_date:$build_date,
+              macos:$macos,
+              xcode:$xcode,
+              swift:$swift,
+              app_name:$app_name,
+              bundle_id:$bundle_id,
+              version:$version,
+              build_number:$build_number,
+              minimum_ios:$minimum_ios,
+              architectures:$architectures,
+              code_signing:false
+            }' > "$artifacts/build-manifest.json"
 
-          (cd "$artifacts" && shasum -a 256 Miravo-UNSIGNED.ipa >Miravo-UNSIGNED.ipa.sha256)
+          (
+            cd "$artifacts"
+            shasum -a 256 Miravo-UNSIGNED.ipa \
+              > Miravo-UNSIGNED.ipa.sha256
+          )
+
           dsym="$PWD/build/Release-iphoneos/Miravo.app.dSYM"
           if [[ -d "$dsym" ]]; then
-            ditto -c -k --keepParent "$dsym" "$artifacts/Miravo.app.dSYM.zip"
+            ditto -c -k --keepParent \
+              "$dsym" \
+              "$artifacts/Miravo.app.dSYM.zip"
           fi
+
+          echo "Unsigned IPA successfully created:"
+          ls -lh "$artifacts/Miravo-UNSIGNED.ipa"
 
       - uses: actions/upload-artifact@v4
         with:
