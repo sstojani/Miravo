@@ -22,6 +22,7 @@ final class SessionController: ObservableObject {
     @Published private(set) var phase: SessionPhase = .loading
     @Published private(set) var scopeKey: String?
     @Published private(set) var isWorking = false
+    @Published private(set) var isUnlocking = false
     @Published var errorMessage: String?
     @Published var requestID: String?
     @Published var logoutWarning: String?
@@ -218,7 +219,11 @@ final class SessionController: ObservableObject {
     }
 
     func unlock() async {
-        guard phase == .locked else { return }
+        guard phase == .locked, !isUnlocking else { return }
+
+        isUnlocking = true
+        defer { isUnlocking = false }
+
         if await AppLockController.unlock() {
             phase = .authenticated
             errorMessage = nil

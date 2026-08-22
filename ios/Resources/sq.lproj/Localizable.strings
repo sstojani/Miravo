@@ -816,3 +816,12 @@
 "Not connected" = "I palidhur";
 "This local profile is already linked to a different server account." = "Ky profil lokal është lidhur tashmë me një llogari tjetër serveri.";
 "This phone disconnected locally, but the server session could not be revoked while offline." = "Ky iPhone u shkëput lokalisht, por sesioni në server nuk mund të çaktivizohej pa lidhje interneti.";
+
+"Notifications" = "Njoftimet";
+"Local notifications" = "Njoftime lokale";
+"Scheduled plan reminders" = "Kujtesa të planifikuara për planet";
+"Local notifications include budget threshold alerts and reminders for recurring and installment plans." = "Njoftimet lokale përfshijnë sinjalizime për pragjet e buxhetit dhe kujtesa për planet periodike dhe këstet.";
+"Budget threshold reached" = "U arrit pragu i buxhetit";
+"A budget crossed one of your spending thresholds. Open Miravo to review it." = "Një buxhet kaloi një nga pragjet e shpenzimeve. Hap Miravo për ta kontrolluar.";
+"Some budget alerts could not be delivered. Try again." = "Disa njoftime të buxhetit nuk mund të dërgoheshin. Provo përsëri.";
+"When local notifications are enabled, crossing these thresholds can alert you. Budget totals remain correct even if notifications are off." = "Kur njoftimet lokale janë aktive, kalimi i këtyre pragjeve mund të të njoftojë. Totali i buxhetit mbetet i saktë edhe kur njoftimet janë të çaktivizuara.";

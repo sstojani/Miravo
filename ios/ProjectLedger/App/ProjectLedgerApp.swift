@@ -1,5 +1,6 @@
 import SwiftData
 import SwiftUI
+@preconcurrency import UserNotifications
 
 @main
 @MainActor
@@ -8,6 +9,7 @@ struct ProjectLedgerApp: App {
     @StateObject private var recurringReminderController: RecurringReminderController
     @StateObject private var sessionController: SessionController
     @StateObject private var syncController: SyncController
+    private let notificationDelegate: LocalNotificationPresentationDelegate
     private let store: LocalStoreBootstrap
 
     init() {
@@ -19,12 +21,15 @@ struct ProjectLedgerApp: App {
         )
         let sessionController = SessionController()
         let syncController = SyncController(modelContainer: store.container)
+        let notificationDelegate = LocalNotificationPresentationDelegate()
+        self.notificationDelegate = notificationDelegate
         self.store = store
         _recurringReminderController = StateObject(
             wrappedValue: recurringReminderController
         )
         _sessionController = StateObject(wrappedValue: sessionController)
         _syncController = StateObject(wrappedValue: syncController)
+        UNUserNotificationCenter.current().delegate = notificationDelegate
         _ = BackgroundSyncScheduler.register(
             syncController: syncController,
             sessionController: sessionController
@@ -39,12 +44,24 @@ struct ProjectLedgerApp: App {
                 .environmentObject(syncController)
                 .onChange(of: scenePhase) { _, newPhase in
                     if newPhase == .active {
-                        guard sessionController.hasServerConnection else {
-                            return
-                        }
-
                         Task {
-                            await syncController.synchronize(session: sessionController)
+                            if sessionController.phase == .locked {
+                                await sessionController.unlock()
+                            }
+
+                            if let scopeKey = sessionController.scopeKey {
+                                await recurringReminderController.refresh(
+                                    scopeKey: scopeKey
+                                )
+                            }
+
+                            guard sessionController.hasServerConnection else {
+                                return
+                            }
+
+                            await syncController.synchronize(
+                                session: sessionController
+                            )
                             await syncController.startForegroundTriggers(
                                 session: sessionController
                             )

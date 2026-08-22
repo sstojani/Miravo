@@ -137,6 +137,11 @@ struct RecurringReminderControllerTests {
             for: LocalRecurringRule.self,
             LocalInstallmentPlan.self,
             LocalInstallmentScheduleItem.self,
+            LocalBudget.self,
+            LocalBudgetCategory.self,
+            LocalBudgetThreshold.self,
+            LedgerTransaction.self,
+            LocalCategoryAllocation.self,
             configurations: configuration
         )
     }
@@ -195,10 +200,17 @@ private final class FakeRecurringNotificationScheduler: RecurringNotificationSch
         let body: String
     }
 
+    struct PostedRecord {
+        let identifier: String
+        let title: String
+        let body: String
+    }
+
     var state: RecurringReminderAuthorizationState
     var pending = Set<String>()
     var requestCount = 0
     var scheduled: [ScheduledRecord] = []
+    var posted: [PostedRecord] = []
 
     init(state: RecurringReminderAuthorizationState) {
         self.state = state
@@ -225,6 +237,20 @@ private final class FakeRecurringNotificationScheduler: RecurringNotificationSch
     ) async throws {
         pending.insert(plan.identifier)
         scheduled.append(ScheduledRecord(plan: plan, title: title, body: body))
+    }
+
+    func post(
+        identifier: String,
+        title: String,
+        body: String
+    ) async throws {
+        posted.append(
+            PostedRecord(
+                identifier: identifier,
+                title: title,
+                body: body
+            )
+        )
     }
 
     func removePending(identifiers: [String]) {
