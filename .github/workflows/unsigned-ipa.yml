@@ -95,18 +95,27 @@ jobs:
           [[ -f "$info" ]] || fail "Miravo.app/Info.plist is missing."
           [[ -f "$executable" ]] || fail "Miravo executable is missing."
 
+          if [[ ! -f "$app/Assets.car" ]] &&              ! find "$app" -maxdepth 1 -name 'AppIcon*.png' -print -quit | grep -q .; then
+            fail "Compiled app icon assets are missing from Miravo.app."
+          fi
+
           app_name="$(plutil -extract CFBundleDisplayName raw "$info")"
           bundle_id="$(plutil -extract CFBundleIdentifier raw "$info")"
           minimum_ios="$(plutil -extract MinimumOSVersion raw "$info")"
           version="$(plutil -extract CFBundleShortVersionString raw "$info")"
           build_number="$(plutil -extract CFBundleVersion raw "$info")"
           architectures="$(lipo -archs "$executable")"
+          icon_name="$(plutil -extract CFBundleIconName raw "$info" 2>/dev/null || true)"
 
           echo "App name: $app_name"
           echo "Bundle ID: $bundle_id"
           echo "Version: $version ($build_number)"
           echo "Minimum iOS: $minimum_ios"
           echo "Architectures: $architectures"
+          echo "App icon: $icon_name"
+
+          [[ "$icon_name" == "AppIcon" ]] ||
+            fail "Built app does not declare AppIcon as its primary icon."
 
           [[ "$app_name" == "$EXPECTED_APP_NAME" ]] ||
             fail "Unexpected app name: $app_name"
