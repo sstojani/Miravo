@@ -39,7 +39,6 @@ targets:
         excludes:
           - Info.plist
           - Info.Debug.plist
-    resources:
       - path: Resources
     settings:
       base:
