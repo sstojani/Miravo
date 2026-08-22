@@ -32,18 +32,25 @@ final class ProjectLedgerUITests: XCTestCase {
         XCTAssertTrue(amountExists)
         amount.tap()
         amount.typeText("12.50")
+
+        let amountDone = app.buttons["Done"].firstMatch
+        XCTAssertTrue(amountDone.waitForExistence(timeout: 3))
+        amountDone.tap()
+
         let merchant = app.textFields["Merchant or payee"]
+        XCTAssertTrue(merchant.waitForExistence(timeout: 3))
+        expectation(
+            for: NSPredicate(format: "hittable == true"),
+            evaluatedWith: merchant
+        )
+        waitForExpectations(timeout: 3)
+
         merchant.tap()
         merchant.typeText("Offline UI test")
 
-        let returnKey = app.keyboards.buttons.matching(
-            NSPredicate(format: "label ==[c] 'return'")
-        ).firstMatch
-        if returnKey.waitForExistence(timeout: 2) {
-            returnKey.tap()
-        }
-
-        app.swipeUp()
+        let merchantDone = app.buttons["Done"].firstMatch
+        XCTAssertTrue(merchantDone.waitForExistence(timeout: 3))
+        merchantDone.tap()
 
         let save = app.buttons["Save on this iPhone"]
         expectation(for: NSPredicate(format: "enabled == true"), evaluatedWith: save)
