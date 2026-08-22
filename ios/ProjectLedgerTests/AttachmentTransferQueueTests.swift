@@ -130,9 +130,11 @@ struct AttachmentTransferQueueTests {
             scopeKey: fixture.scopeKey,
             attachmentID: request.attachmentID
         )
-        let macroSafeExpectation3: Bool = try await queue.readyBatch(scopeKey: fixture.scopeKey).count == 1
-        #expect(macroSafeExpectation3)
-        #expect(transfer.state == .pending)
+        let readyAfterRetry = try await queue.readyBatch(
+            scopeKey: fixture.scopeKey
+        )
+        #expect(readyAfterRetry.count == 1)
+        #expect(readyAfterRetry.first?.state == .pending)
 
         await #expect(throws: AttachmentTransferQueueError.invalidStateTransition) {
             try await queue.retry(

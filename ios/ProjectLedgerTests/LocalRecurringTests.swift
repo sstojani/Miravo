@@ -110,9 +110,7 @@ struct LocalRecurringTests {
             "create", "pause", "resume", "skip_next", "skip_next", "end", "delete",
         ])
 
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        let decoder = mutationPayloadDecoder()
         let payload = try decoder.decode(
             RecurringRuleMutationPayload.self,
             from: try #require(mutations.first).payloadJSON

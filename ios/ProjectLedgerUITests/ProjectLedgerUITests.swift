@@ -41,9 +41,9 @@ final class ProjectLedgerUITests: XCTestCase {
         expectation(for: NSPredicate(format: "enabled == true"), evaluatedWith: save)
         waitForExpectations(timeout: 5)
         save.tap()
-        let savedAlertExists = app.alerts["Saved on this iPhone"].waitForExistence(timeout: 5)
-        XCTAssertTrue(savedAlertExists)
-        app.alerts.buttons["OK"].tap()
+        let savedConfirmationExists = app.staticTexts["Saved on this iPhone"]
+            .waitForExistence(timeout: 5)
+        XCTAssertTrue(savedConfirmationExists)
 
         app.tabBars.buttons["Transactions"].tap()
         let transactionExists = app.staticTexts["Offline UI test"].waitForExistence(timeout: 5)

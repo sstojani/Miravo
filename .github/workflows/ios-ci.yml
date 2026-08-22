@@ -71,7 +71,6 @@ jobs:
             -destination "$SIMULATOR_DESTINATION" \
             -derivedDataPath DerivedData \
             -resultBundlePath DerivedData/ProjectLedgerTests.xcresult \
-            CODE_SIGNING_ALLOWED=NO \
             test | xcbeautify
 
       - uses: actions/upload-artifact@v4

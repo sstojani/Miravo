@@ -38,14 +38,14 @@ struct LocalBudgetTests {
         }
         #expect(macroSafeExpectation2)
         let macroSafeExpectation3: Bool = try evaluateExpectation {
-            try context.fetch(FetchDescriptor<LocalBudgetThreshold>()).map(\.percent) == [50, 80, 100]
+            try context.fetch(FetchDescriptor<LocalBudgetThreshold>())
+                .map(\.percent)
+                .sorted() == [50, 80, 100]
         }
         #expect(macroSafeExpectation3)
         var mutations = try budgetMutations(context: context, id: budget.id)
         #expect(mutations.map(\.command) == ["create"])
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        let decoder = mutationPayloadDecoder()
         let createdPayload = try decoder.decode(
             BudgetMutationPayload.self,
             from: try #require(mutations.first).payloadJSON

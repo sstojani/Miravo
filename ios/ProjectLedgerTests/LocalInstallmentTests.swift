@@ -212,9 +212,7 @@ struct LocalInstallmentTests {
             }
             .sorted { $0.localSequence < $1.localSequence }
         #expect(paymentMutations.count == 2)
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        let decoder = mutationPayloadDecoder()
         let payload = try decoder.decode(
             InstallmentPlanMutationPayload.self,
             from: try #require(paymentMutations.first).payloadJSON

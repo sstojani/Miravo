@@ -132,9 +132,7 @@ struct LocalLedgerRepositoryTests {
             context.fetch(FetchDescriptor<OutboxMutation>())
                 .first { $0.entityID == transaction.id }
         )
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        let decoder = mutationPayloadDecoder()
         let payload = try decoder.decode(TransactionMutationPayload.self, from: mutation.payloadJSON)
         let rawPayload = try #require(
             JSONSerialization.jsonObject(with: mutation.payloadJSON) as? [String: Any]
@@ -430,9 +428,7 @@ struct LocalLedgerRepositoryTests {
             context.fetch(FetchDescriptor<OutboxMutation>())
                 .first { $0.entityID == transaction.id }
         )
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        let decoder = mutationPayloadDecoder()
         let payload = try decoder.decode(TransactionMutationPayload.self, from: mutation.payloadJSON)
 
         #expect(payload.tagIDs == [tag.id])
@@ -555,9 +551,7 @@ struct LocalLedgerRepositoryTests {
                 .filter { $0.entityID == everyday.id }
                 .max { $0.localSequence < $1.localSequence }
         )
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        let decoder = mutationPayloadDecoder()
         let payload = try decoder.decode(
             TrackerMutationPayload.self,
             from: latestEveryday.payloadJSON
