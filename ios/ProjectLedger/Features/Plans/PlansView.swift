@@ -18,6 +18,7 @@ struct PlansView: View {
     let scopeKey: String
 
     @Environment(\.modelContext) private var modelContext
+    @EnvironmentObject private var reminders: RecurringReminderController
     @EnvironmentObject private var session: SessionController
     @EnvironmentObject private var sync: SyncController
     @Query private var trackers: [LocalTracker]
@@ -407,7 +408,10 @@ struct PlansView: View {
     }
 
     private func triggerSync() {
-        Task { await sync.synchronize(session: session) }
+        Task {
+            await reminders.refresh(scopeKey: scopeKey)
+            await sync.synchronize(session: session)
+        }
     }
 }
 
@@ -420,6 +424,7 @@ private struct BudgetEditorView: View {
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @EnvironmentObject private var reminders: RecurringReminderController
     @EnvironmentObject private var session: SessionController
     @EnvironmentObject private var sync: SyncController
     @State private var name: String
@@ -569,7 +574,9 @@ private struct BudgetEditorView: View {
                 } header: {
                     Text("Alerts")
                 } footer: {
-                    Text("These thresholds mark progress locally. Notifications are not required for correct totals.")
+                    Text(
+                        "When local notifications are enabled, crossing these thresholds can alert you. Budget totals remain correct even if notifications are off."
+                    )
                 }
             }
             .navigationTitle(budget == nil ? "New budget" : "Edit budget")
@@ -638,7 +645,10 @@ private struct BudgetEditorView: View {
                 )
             }
             dismiss()
-            Task { await sync.synchronize(session: session) }
+            Task {
+                await reminders.refresh(scopeKey: scopeKey)
+                await sync.synchronize(session: session)
+            }
         } catch let error as MoneyError {
             switch error {
             case .tooManyFractionDigits:

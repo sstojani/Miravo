@@ -19,12 +19,25 @@ enum RecurringReminderAuthorizationState: Equatable, Sendable {
     }
 }
 
+final class LocalNotificationPresentationDelegate:
+    NSObject,
+    UNUserNotificationCenterDelegate
+{
+    func userNotificationCenter(
+        _: UNUserNotificationCenter,
+        willPresent _: UNNotification
+    ) async -> UNNotificationPresentationOptions {
+        [.banner, .sound]
+    }
+}
+
 @MainActor
 protocol RecurringNotificationScheduling: AnyObject {
     func authorizationState() async -> RecurringReminderAuthorizationState
     func requestAuthorization() async throws -> Bool
     func pendingIdentifiers() async -> [String]
     func schedule(_ plan: RecurringReminderPlan, title: String, body: String) async throws
+    func post(identifier: String, title: String, body: String) async throws
     func removePending(identifiers: [String])
 }
 
@@ -56,6 +69,25 @@ final class SystemRecurringNotificationScheduler: RecurringNotificationSchedulin
 
     func pendingIdentifiers() async -> [String] {
         await center.pendingNotificationRequests().map(\.identifier)
+    }
+
+    func post(
+        identifier: String,
+        title: String,
+        body: String
+    ) async throws {
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
+        content.sound = .default
+
+        try await center.add(
+            UNNotificationRequest(
+                identifier: identifier,
+                content: content,
+                trigger: nil
+            )
+        )
     }
 
     func schedule(
@@ -350,6 +382,155 @@ final class RecurringReminderController: ObservableObject {
             scheduledCount = 0
             message = String(localized: "Plan reminders could not read local schedules.")
         }
+
+        guard isCurrent(generation, scopeKey: scopeKey) else { return }
+        await notifyBudgetThresholds(
+            scopeKey: scopeKey,
+            generation: generation
+        )
+    }
+
+    private func notifyBudgetThresholds(
+        scopeKey: String,
+        generation: UInt64
+    ) async {
+        do {
+            let budgetDescriptor = FetchDescriptor<LocalBudget>(
+                predicate: #Predicate {
+                    $0.scopeKey == scopeKey &&
+                        $0.deletedAt == nil &&
+                        $0.archivedAt == nil
+                }
+            )
+            let categoryDescriptor = FetchDescriptor<LocalBudgetCategory>(
+                predicate: #Predicate { $0.scopeKey == scopeKey }
+            )
+            let thresholdDescriptor = FetchDescriptor<LocalBudgetThreshold>(
+                predicate: #Predicate { $0.scopeKey == scopeKey }
+            )
+            let transactionDescriptor = FetchDescriptor<LedgerTransaction>(
+                predicate: #Predicate {
+                    $0.scopeKey == scopeKey &&
+                        $0.deletedAt == nil
+                }
+            )
+            let allocationDescriptor =
+                FetchDescriptor<LocalCategoryAllocation>(
+                    predicate: #Predicate { $0.scopeKey == scopeKey }
+                )
+
+            let budgets = try modelContainer.mainContext.fetch(
+                budgetDescriptor
+            )
+            let categoryLinks = try modelContainer.mainContext.fetch(
+                categoryDescriptor
+            )
+            let thresholds = try modelContainer.mainContext.fetch(
+                thresholdDescriptor
+            )
+            let transactions = try modelContainer.mainContext.fetch(
+                transactionDescriptor
+            )
+            let allocations = try modelContainer.mainContext.fetch(
+                allocationDescriptor
+            )
+
+            for budget in budgets {
+                guard isCurrent(generation, scopeKey: scopeKey) else {
+                    return
+                }
+
+                guard let progress = try? LocalBudgetCalculator.calculate(
+                    budget: budget,
+                    categoryLinks: categoryLinks.filter {
+                        $0.budgetID == budget.id
+                    },
+                    thresholds: thresholds.filter {
+                        $0.budgetID == budget.id
+                    },
+                    transactions: transactions,
+                    allocations: allocations
+                ),
+                progress.isActive,
+                let threshold = progress.crossedThresholdPercent
+                else {
+                    continue
+                }
+
+                let identifier = budgetThresholdIdentifier(
+                    scopeKey: scopeKey,
+                    budgetID: budget.id,
+                    periodStart: progress.periodStart,
+                    thresholdPercent: threshold
+                )
+
+                guard !preferences.hasSentBudgetThresholdNotification(
+                    identifier: identifier
+                ) else {
+                    continue
+                }
+
+                do {
+                    try await scheduler.post(
+                        identifier: identifier,
+                        title: String(
+                            localized: "Budget threshold reached"
+                        ),
+                        body: String(
+                            localized:
+                                "A budget crossed one of your spending thresholds. Open Miravo to review it."
+                        )
+                    )
+
+                    preferences.recordBudgetThresholdNotification(
+                        identifier: identifier
+                    )
+                } catch {
+                    guard isCurrent(
+                        generation,
+                        scopeKey: scopeKey
+                    ) else {
+                        return
+                    }
+
+                    message = String(
+                        localized:
+                            "Some budget alerts could not be delivered. Try again."
+                    )
+                }
+            }
+        } catch {
+            guard isCurrent(generation, scopeKey: scopeKey) else {
+                return
+            }
+
+            if message == nil {
+                message = String(
+                    localized:
+                        "Some budget alerts could not be delivered. Try again."
+                )
+            }
+        }
+    }
+
+    private func budgetThresholdIdentifier(
+        scopeKey: String,
+        budgetID: UUID,
+        periodStart: Date,
+        thresholdPercent: Int
+    ) -> String {
+        let source = [
+            scopeKey,
+            "budget",
+            budgetID.uuidString.lowercased(),
+            String(Int64(periodStart.timeIntervalSince1970)),
+            String(thresholdPercent),
+        ].joined(separator: ":")
+
+        return "projectledger.budget." +
+            RecurringReminderPlanner.scopeDigest(scopeKey) +
+            "." +
+            RecurringReminderPlanner.scopeDigest(source)
     }
 
     private func isCurrent(_ generation: UInt64, scopeKey: String) -> Bool {

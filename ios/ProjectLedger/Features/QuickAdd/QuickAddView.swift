@@ -2,9 +2,18 @@ import SwiftData
 import SwiftUI
 
 struct QuickAddView: View {
+    private enum FocusedField: Hashable {
+        case amount
+        case destinationAmount
+        case baseAmount
+        case merchant
+        case note
+    }
+
     let scopeKey: String
 
     @Environment(\.modelContext) private var modelContext
+    @EnvironmentObject private var reminders: RecurringReminderController
     @EnvironmentObject private var session: SessionController
     @EnvironmentObject private var sync: SyncController
     @Query private var rawTrackers: [LocalTracker]
@@ -26,6 +35,7 @@ struct QuickAddView: View {
     @State private var errorMessage: String?
     @State private var undoCandidate: LedgerTransaction?
     @State private var undoExpiryTask: Task<Void, Never>?
+    @FocusState private var focusedField: FocusedField?
 
     init(scopeKey: String) {
         self.scopeKey = scopeKey
@@ -151,6 +161,7 @@ struct QuickAddView: View {
 
                 TextField("Amount", text: $amount)
                     .keyboardType(.decimalPad)
+                    .focused($focusedField, equals: .amount)
                     .font(.system(.largeTitle, design: .rounded, weight: .bold))
                     .multilineTextAlignment(.center)
                     .accessibilityLabel("Transaction amount")
@@ -177,6 +188,7 @@ struct QuickAddView: View {
                         HStack {
                             TextField("Destination amount", text: $destinationAmount)
                                 .keyboardType(.decimalPad)
+                                .focused($focusedField, equals: .destinationAmount)
                             Text(destination.currencyCode)
                                 .foregroundStyle(.secondary)
                                 .accessibilityLabel("Destination currency")
@@ -194,6 +206,7 @@ struct QuickAddView: View {
                     HStack {
                         TextField("Amount in base currency", text: $baseAmount)
                             .keyboardType(.decimalPad)
+                            .focused($focusedField, equals: .baseAmount)
                         Text(tracker.baseCurrencyCode)
                             .foregroundStyle(.secondary)
                             .accessibilityLabel("Base currency")
@@ -204,8 +217,10 @@ struct QuickAddView: View {
             Section("Optional details") {
                 TextField("Merchant or payee", text: $merchant)
                     .textContentType(.organizationName)
+                    .focused($focusedField, equals: .merchant)
                 TextField("Note", text: $note, axis: .vertical)
                     .lineLimit(2 ... 5)
+                    .focused($focusedField, equals: .note)
                 DatePicker("Date", selection: $occurredAt)
             }
 
@@ -226,16 +241,21 @@ struct QuickAddView: View {
                 }
             }
 
-            Section {
-                Button("Save on this iPhone") { save() }
-                    .buttonStyle(.borderedProminent)
-                    .frame(maxWidth: .infinity)
-                    .disabled(!canSave)
-            } footer: {
-                Text("Saving never waits for the network. Synchronization is attempted separately.")
-            }
         }
         .navigationTitle("Quick add")
+        .scrollDismissesKeyboard(.interactively)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            focusedField = nil
+        }
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Done") {
+                    focusedField = nil
+                }
+            }
+        }
         .onAppear(perform: configureDefaults)
         .onChange(of: trackers.count) { _, _ in configureDefaults() }
         .onChange(of: trackerID) { _, _ in configureChildDefaults() }
@@ -244,18 +264,66 @@ struct QuickAddView: View {
             configureCategoryDefault()
             configureDestinationDefault()
         }
-        .safeAreaInset(edge: .bottom) {
-            if undoCandidate != nil {
-                HStack(spacing: 12) {
-                    Label("Saved on this iPhone", systemImage: "checkmark.circle.fill")
-                    Spacer()
-                    Button("Undo") { undoLastSave() }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            VStack(spacing: 8) {
+                if undoCandidate != nil {
+                    HStack(spacing: 12) {
+                        Label(
+                            "Saved on this iPhone",
+                            systemImage: "checkmark.circle.fill"
+                        )
                         .fontWeight(.semibold)
+                        Spacer()
+                        Button("Undo") { undoLastSave() }
+                            .fontWeight(.semibold)
+                    }
+                    .frame(minHeight: 54)
+                    .accessibilityElement(children: .contain)
+                } else {
+                    Button {
+                        focusedField = nil
+                        save()
+                    } label: {
+                        HStack(spacing: 10) {
+                            Image(systemName: "checkmark.circle.fill")
+                            Text("Save on this iPhone")
+                                .fontWeight(.semibold)
+                            Spacer()
+                            Image(systemName: "arrow.right")
+                                .font(.subheadline.weight(.semibold))
+                        }
+                        .padding(.horizontal, 18)
+                        .frame(maxWidth: .infinity, minHeight: 54)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.white)
+                    .background(
+                        LedgerTheme.accent,
+                        in: RoundedRectangle(
+                            cornerRadius: LedgerTheme.cornerRadius,
+                            style: .continuous
+                        )
+                    )
+                    .opacity(canSave ? 1 : 0.42)
+                    .shadow(
+                        color: canSave
+                            ? LedgerTheme.accent.opacity(0.28) : .clear,
+                        radius: 12,
+                        y: 6
+                    )
+                    .disabled(!canSave)
+
+                    Text(
+                        "Saving never waits for the network. Synchronization is attempted separately."
+                    )
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
                 }
-                .padding()
-                .background(.regularMaterial)
-                .accessibilityElement(children: .contain)
             }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .background(.ultraThinMaterial)
         }
         .onDisappear { undoExpiryTask?.cancel() }
     }
@@ -353,7 +421,10 @@ struct QuickAddView: View {
             selectedTagIDs.removeAll()
             errorMessage = nil
             presentUndo(for: transaction)
-            Task { await sync.synchronize(session: session) }
+            Task {
+                await reminders.refresh(scopeKey: scopeKey)
+                await sync.synchronize(session: session)
+            }
         } catch MoneyError.tooManyFractionDigits {
             errorMessage = String(localized: "Use no more fraction digits than this currency supports.")
         } catch MoneyError.conversionRequired {

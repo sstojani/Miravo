@@ -816,3 +816,12 @@
 "Not connected" = "Not connected";
 "This local profile is already linked to a different server account." = "This local profile is already linked to a different server account.";
 "This phone disconnected locally, but the server session could not be revoked while offline." = "This phone disconnected locally, but the server session could not be revoked while offline.";
+
+"Notifications" = "Notifications";
+"Local notifications" = "Local notifications";
+"Scheduled plan reminders" = "Scheduled plan reminders";
+"Local notifications include budget threshold alerts and reminders for recurring and installment plans." = "Local notifications include budget threshold alerts and reminders for recurring and installment plans.";
+"Budget threshold reached" = "Budget threshold reached";
+"A budget crossed one of your spending thresholds. Open Miravo to review it." = "A budget crossed one of your spending thresholds. Open Miravo to review it.";
+"Some budget alerts could not be delivered. Try again." = "Some budget alerts could not be delivered. Try again.";
+"When local notifications are enabled, crossing these thresholds can alert you. Budget totals remain correct even if notifications are off." = "When local notifications are enabled, crossing these thresholds can alert you. Budget totals remain correct even if notifications are off.";

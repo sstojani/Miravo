@@ -6,6 +6,8 @@ final class AppPreferences {
 
     private enum Key {
         static let appLockEnabled = "privacy.appLockEnabled"
+        static let budgetThresholdNotification =
+            "planning.budgetThresholdNotification."
         static let completedOnboarding = "onboarding.completed"
         static let currentScopeKey = "session.currentScopeKey"
         static let deviceID = "device.identifier"
@@ -105,6 +107,19 @@ final class AppPreferences {
         )
     }
 
+    func hasSentBudgetThresholdNotification(identifier: String) -> Bool {
+        defaults.bool(
+            forKey: Key.budgetThresholdNotification + identifier
+        )
+    }
+
+    func recordBudgetThresholdNotification(identifier: String) {
+        defaults.set(
+            true,
+            forKey: Key.budgetThresholdNotification + identifier
+        )
+    }
+
     var deviceID: String {
         if let existing = defaults.string(forKey: Key.deviceID), !existing.isEmpty {
             return existing
@@ -164,6 +179,7 @@ final class AppPreferences {
             defaults.removeObject(forKey: key)
         }
         for key in defaults.dictionaryRepresentation().keys where
+            key.hasPrefix(Key.budgetThresholdNotification) ||
             key.hasPrefix(Key.recurringReminderLeadHours) ||
             key.hasPrefix(Key.recurringRemindersEnabled) {
             defaults.removeObject(forKey: key)

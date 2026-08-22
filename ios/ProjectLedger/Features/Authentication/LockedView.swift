@@ -16,11 +16,23 @@ struct LockedView: View {
             Text("Use Face ID or your device passcode to view local financial data.")
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
-            Button("Unlock") {
+            Button {
                 Task { await session.unlock() }
+            } label: {
+                HStack(spacing: 8) {
+                    if session.isUnlocking {
+                        ProgressView()
+                            .controlSize(.small)
+                    } else {
+                        Image(systemName: "faceid")
+                    }
+                    Text("Unlock")
+                }
+                .frame(minWidth: 140)
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
+            .disabled(session.isUnlocking)
             if let message = session.errorMessage {
                 Text(message)
                     .font(.footnote)
@@ -28,5 +40,8 @@ struct LockedView: View {
             }
         }
         .padding(32)
+        .task {
+            await session.unlock()
+        }
     }
 }
