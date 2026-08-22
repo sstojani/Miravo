@@ -1,15 +1,8 @@
 import SwiftData
 import SwiftUI
+import UIKit
 
 struct QuickAddView: View {
-    private enum FocusedField: Hashable {
-        case amount
-        case destinationAmount
-        case baseAmount
-        case merchant
-        case note
-    }
-
     let scopeKey: String
 
     @Environment(\.modelContext) private var modelContext
@@ -35,7 +28,6 @@ struct QuickAddView: View {
     @State private var errorMessage: String?
     @State private var undoCandidate: LedgerTransaction?
     @State private var undoExpiryTask: Task<Void, Never>?
-    @FocusState private var focusedField: FocusedField?
 
     init(scopeKey: String) {
         self.scopeKey = scopeKey
@@ -161,7 +153,6 @@ struct QuickAddView: View {
 
                 TextField("Amount", text: $amount)
                     .keyboardType(.decimalPad)
-                    .focused($focusedField, equals: .amount)
                     .font(.system(.largeTitle, design: .rounded, weight: .bold))
                     .multilineTextAlignment(.center)
                     .accessibilityLabel("Transaction amount")
@@ -188,7 +179,6 @@ struct QuickAddView: View {
                         HStack {
                             TextField("Destination amount", text: $destinationAmount)
                                 .keyboardType(.decimalPad)
-                                .focused($focusedField, equals: .destinationAmount)
                             Text(destination.currencyCode)
                                 .foregroundStyle(.secondary)
                                 .accessibilityLabel("Destination currency")
@@ -206,7 +196,6 @@ struct QuickAddView: View {
                     HStack {
                         TextField("Amount in base currency", text: $baseAmount)
                             .keyboardType(.decimalPad)
-                            .focused($focusedField, equals: .baseAmount)
                         Text(tracker.baseCurrencyCode)
                             .foregroundStyle(.secondary)
                             .accessibilityLabel("Base currency")
@@ -217,10 +206,8 @@ struct QuickAddView: View {
             Section("Optional details") {
                 TextField("Merchant or payee", text: $merchant)
                     .textContentType(.organizationName)
-                    .focused($focusedField, equals: .merchant)
                 TextField("Note", text: $note, axis: .vertical)
                     .lineLimit(2 ... 5)
-                    .focused($focusedField, equals: .note)
                 DatePicker("Date", selection: $occurredAt)
             }
 
@@ -248,7 +235,7 @@ struct QuickAddView: View {
             ToolbarItemGroup(placement: .keyboard) {
                 Spacer()
                 Button("Done") {
-                    focusedField = nil
+                    dismissKeyboard()
                 }
             }
         }
@@ -277,7 +264,7 @@ struct QuickAddView: View {
                     .accessibilityElement(children: .contain)
                 } else {
                     Button {
-                        focusedField = nil
+                        dismissKeyboard()
                         save()
                     } label: {
                         HStack(spacing: 10) {
@@ -322,6 +309,15 @@ struct QuickAddView: View {
             .background(.ultraThinMaterial)
         }
         .onDisappear { undoExpiryTask?.cancel() }
+    }
+
+    private func dismissKeyboard() {
+        UIApplication.shared.sendAction(
+            #selector(UIResponder.resignFirstResponder),
+            to: nil,
+            from: nil,
+            for: nil
+        )
     }
 
     private var canSave: Bool {
