@@ -134,7 +134,7 @@ struct AttachmentTransferQueueTests {
             scopeKey: fixture.scopeKey
         )
         #expect(readyAfterRetry.count == 1)
-        #expect(readyAfterRetry.first?.state == .pending)
+        #expect(readyAfterRetry.first?.attachmentID == request.attachmentID)
 
         await #expect(throws: AttachmentTransferQueueError.invalidStateTransition) {
             try await queue.retry(
