@@ -155,9 +155,15 @@ struct LocalSplittingRepositoryTests {
         #expect(debts.first?.amountMinor == 200)
 
         try repository.setSettlementDeleted(settlement, deleted: true)
-        #expect(try repository.simplifiedDebts(tracker: tracker).first?.amountMinor == 500)
+        let macroSafeExpectation1: Bool = try evaluateExpectation {
+            try repository.simplifiedDebts(tracker: tracker).first?.amountMinor == 500
+        }
+        #expect(macroSafeExpectation1)
         try repository.setSettlementDeleted(settlement, deleted: false)
-        #expect(try repository.simplifiedDebts(tracker: tracker).first?.amountMinor == 200)
+        let macroSafeExpectation2: Bool = try evaluateExpectation {
+            try repository.simplifiedDebts(tracker: tracker).first?.amountMinor == 200
+        }
+        #expect(macroSafeExpectation2)
 
         let finalMoney = try Money(minorUnits: 200, currencyCode: "ALL", exponent: 2)
         let linked = try repository.createSettlement(
@@ -175,12 +181,16 @@ struct LocalSplittingRepositoryTests {
             }
         )
         #expect(linkedTransaction.kind == .settlement)
-        #expect(try repository.simplifiedDebts(tracker: tracker).isEmpty)
-        #expect(
-            context.fetch(FetchDescriptor<OutboxMutation>())
-                .filter { $0.entityID == linkedTransactionID }
-                .isEmpty
+        let macroSafeExpectation3: Bool = try evaluateExpectation {
+            try repository.simplifiedDebts(tracker: tracker).isEmpty
+        }
+        #expect(macroSafeExpectation3)
+        let linkedTransactionMutations = try context.fetch(
+            FetchDescriptor<OutboxMutation>()
         )
+        .filter { $0.entityID == linkedTransactionID }
+
+        #expect(linkedTransactionMutations.isEmpty)
         #expect(throws: LocalLedgerError.invalidReference) {
             try repository.setTransactionDeleted(linkedTransaction, deleted: true)
         }

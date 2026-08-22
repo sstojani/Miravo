@@ -3104,9 +3104,7 @@ struct LocalLedgerRepository {
     }
 
     private func queuedInstallmentPaymentExists(id: UUID, scopeKey: String) throws -> Bool {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        let decoder = localMutationPayloadDecoder()
         for mutation in try context.fetch(
             FetchDescriptor<OutboxMutation>(
                 predicate: #Predicate {

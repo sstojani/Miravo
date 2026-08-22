@@ -19,8 +19,10 @@ struct KeychainSessionTokenStoreTests {
 
         try await store.delete(scopeKey: scope)
         try await store.save(tokens, scopeKey: scope)
-        #expect(try await store.load(scopeKey: scope) == tokens)
+        let macroSafeExpectation1: Bool = try await store.load(scopeKey: scope) == tokens
+        #expect(macroSafeExpectation1)
         try await store.delete(scopeKey: scope)
-        #expect(try await store.load(scopeKey: scope) == nil)
+        let macroSafeExpectation2: Bool = try await store.load(scopeKey: scope) == nil
+        #expect(macroSafeExpectation2)
     }
 }

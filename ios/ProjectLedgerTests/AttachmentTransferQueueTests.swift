@@ -115,19 +115,26 @@ struct AttachmentTransferQueueTests {
             attachmentID: request.attachmentID
         )
 
-        #expect(try await queue.readyBatch(scopeKey: fixture.scopeKey).isEmpty)
+        let macroSafeExpectation1: Bool = try await queue.readyBatch(scopeKey: fixture.scopeKey).isEmpty
+        #expect(macroSafeExpectation1)
         let transfer = try #require(
             fixture.container.mainContext.fetch(FetchDescriptor<AttachmentTransfer>()).first
         )
         #expect(transfer.state == .cancelled)
-        #expect(try fixture.container.mainContext.fetch(FetchDescriptor<LocalAttachment>()).count == 1)
+        let macroSafeExpectation2: Bool = try evaluateExpectation {
+            try fixture.container.mainContext.fetch(FetchDescriptor<LocalAttachment>()).count == 1
+        }
+        #expect(macroSafeExpectation2)
 
         try await queue.retry(
             scopeKey: fixture.scopeKey,
             attachmentID: request.attachmentID
         )
-        #expect(try await queue.readyBatch(scopeKey: fixture.scopeKey).count == 1)
-        #expect(transfer.state == .pending)
+        let readyAfterRetry = try await queue.readyBatch(
+            scopeKey: fixture.scopeKey
+        )
+        #expect(readyAfterRetry.count == 1)
+        #expect(readyAfterRetry.first?.attachmentID == request.attachmentID)
 
         await #expect(throws: AttachmentTransferQueueError.invalidStateTransition) {
             try await queue.retry(

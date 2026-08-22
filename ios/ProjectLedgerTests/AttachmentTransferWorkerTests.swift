@@ -95,7 +95,8 @@ struct AttachmentTransferWorkerTests {
         #expect(transfer.state == .pending)
         #expect(transfer.nextAttemptAt != nil)
         #expect(transfer.lastSafeErrorCode == "server_unavailable")
-        #expect(try await queue.readyBatch(scopeKey: fixture.scopeKey).isEmpty)
+        let macroSafeExpectation1: Bool = try await queue.readyBatch(scopeKey: fixture.scopeKey).isEmpty
+        #expect(macroSafeExpectation1)
     }
 
     @Test func changedLocalFileFailsBeforeAnyNetworkRequest() async throws {
@@ -294,7 +295,10 @@ private actor ScriptedAttachmentTransport: AttachmentTransport {
         uploadCount += 1
         let request = try #require(reservation)
         #expect(id == request.id)
-        #expect((try? Data(contentsOf: fileURL))?.isEmpty == false)
+        let macroSafeExpectation2: Bool = evaluateExpectation {
+            (try? Data(contentsOf: fileURL))?.isEmpty == false
+        }
+        #expect(macroSafeExpectation2)
         return snapshot(request: request, uploadState: "ready", version: 2)
     }
 

@@ -39,6 +39,10 @@ struct ProjectLedgerApp: App {
                 .environmentObject(syncController)
                 .onChange(of: scenePhase) { _, newPhase in
                     if newPhase == .active {
+                        guard sessionController.hasServerConnection else {
+                            return
+                        }
+
                         Task {
                             await syncController.synchronize(session: sessionController)
                             await syncController.startForegroundTriggers(
@@ -46,7 +50,9 @@ struct ProjectLedgerApp: App {
                             )
                         }
                     } else {
-                        syncController.scheduleBackgroundRefresh()
+                        if sessionController.hasServerConnection {
+                            syncController.scheduleBackgroundRefresh()
+                        }
                         Task { await syncController.stopForegroundTriggers() }
                         sessionController.lockIfNeeded()
                     }

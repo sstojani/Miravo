@@ -1,10 +1,17 @@
 import SwiftUI
 
 struct LoginView: View {
+    let allowsDismiss: Bool
+
+    @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var session: SessionController
     @State private var serverURL = ""
     @State private var email = ""
     @State private var password = ""
+
+    init(allowsDismiss: Bool = false) {
+        self.allowsDismiss = allowsDismiss
+    }
 
     var body: some View {
         NavigationStack {
@@ -17,7 +24,7 @@ struct LoginView: View {
                             .accessibilityHidden(true)
                         Text("Connect to your server")
                             .font(.largeTitle.bold())
-                        Text("The server is required for initial sign in. Your synchronized data remains available when it is later offline.")
+                        Text("Financial records stay on this iPhone and synchronize only with the self-hosted server you choose.")
                             .foregroundStyle(.secondary)
                     }
 
@@ -89,6 +96,11 @@ struct LoginView: View {
                             session.openOffline()
                         }
                         .frame(maxWidth: .infinity)
+                    } else if !allowsDismiss {
+                        Button("Continue without server") {
+                            session.completeOnboarding()
+                        }
+                        .frame(maxWidth: .infinity)
                     }
 
                     Text("Public registration is disabled. Ask the server owner for an invitation or bootstrap the first owner from the server console.")
@@ -101,6 +113,15 @@ struct LoginView: View {
             }
             .navigationTitle("Miravo")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                if allowsDismiss {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") {
+                            dismiss()
+                        }
+                    }
+                }
+            }
             .onAppear {
                 if serverURL.isEmpty { serverURL = session.preferences.serverURLString }
                 if email.isEmpty { email = session.preferences.lastEmail }
@@ -110,8 +131,18 @@ struct LoginView: View {
 
     private func submit() {
         Task {
-            await session.signIn(serverURL: serverURL, email: email, password: password)
-            if session.phase == .authenticated { password = "" }
+            await session.signIn(
+                serverURL: serverURL,
+                email: email,
+                password: password
+            )
+
+            if session.hasServerConnection {
+                password = ""
+                if allowsDismiss {
+                    dismiss()
+                }
+            }
         }
     }
 }

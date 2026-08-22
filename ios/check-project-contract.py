@@ -410,7 +410,7 @@ def main() -> int:
     duplicate_scan = local_writer.split(
         "private func queuedInstallmentPaymentExists", maxsplit=1
     )[1].split("private func validatedBudgetValues", maxsplit=1)[0]
-    if ".convertFromSnakeCase" not in duplicate_scan:
+    if "localMutationPayloadDecoder()" not in duplicate_scan:
         fail("Queued installment idempotency checks must decode the persisted snake_case payload.")
 
     installment_calculator = (

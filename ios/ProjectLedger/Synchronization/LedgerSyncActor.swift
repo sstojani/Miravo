@@ -3321,9 +3321,7 @@ actor LedgerSyncActor {
         else {
             return nil
         }
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        let decoder = localMutationPayloadDecoder()
         return try? decoder.decode(
             InstallmentPlanMutationPayload.self,
             from: mutation.payloadJSON
@@ -3336,9 +3334,7 @@ actor LedgerSyncActor {
         guard mutation.entityType == LocalMutationEntity.settlement.rawValue else {
             return nil
         }
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        let decoder = localMutationPayloadDecoder()
         return try? decoder.decode(SettlementMutationPayload.self, from: mutation.payloadJSON)
     }
 

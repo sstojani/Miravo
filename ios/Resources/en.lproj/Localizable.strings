@@ -811,3 +811,8 @@
 "Server sign-in is required to create and download exports." = "Server sign-in is required to create and download exports.";
 "Size" = "Size";
 "The downloaded export could not be verified." = "The downloaded export could not be verified.";
+"Continue without server" = "Continue without server";
+"Disconnect server" = "Disconnect server";
+"Not connected" = "Not connected";
+"This local profile is already linked to a different server account." = "This local profile is already linked to a different server account.";
+"This phone disconnected locally, but the server session could not be revoked while offline." = "This phone disconnected locally, but the server session could not be revoked while offline.";
