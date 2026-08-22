@@ -244,10 +244,6 @@ struct QuickAddView: View {
         }
         .navigationTitle("Quick add")
         .scrollDismissesKeyboard(.interactively)
-        .contentShape(Rectangle())
-        .onTapGesture {
-            focusedField = nil
-        }
         .toolbar {
             ToolbarItemGroup(placement: .keyboard) {
                 Spacer()
