@@ -363,7 +363,6 @@ func localMutationPayloadDecoder() -> JSONDecoder {
 
         let converted = components.enumerated().map {
             index, component -> String in
-
             let value = String(component)
 
             if index == 0 {
