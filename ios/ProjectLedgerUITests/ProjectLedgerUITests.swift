@@ -35,6 +35,14 @@ final class ProjectLedgerUITests: XCTestCase {
         let merchant = app.textFields["Merchant or payee"]
         merchant.tap()
         merchant.typeText("Offline UI test")
+
+        let returnKey = app.keyboards.buttons.matching(
+            NSPredicate(format: "label ==[c] 'return'")
+        ).firstMatch
+        if returnKey.waitForExistence(timeout: 2) {
+            returnKey.tap()
+        }
+
         app.swipeUp()
 
         let save = app.buttons["Save on this iPhone"]
