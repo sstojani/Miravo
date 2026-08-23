@@ -607,14 +607,59 @@ actor LedgerSyncActor {
         }
     }
 
+    private func pullApplyPriority(entityType: String) -> Int {
+        switch entityType {
+        case "tracker": return 0
+        case "tracker_membership": return 1
+        case "participant": return 2
+        case "account": return 3
+        case "category": return 4
+        case "tag": return 5
+        case "budget": return 6
+        case "recurring_rule": return 7
+        case "installment_plan": return 8
+        case "installment_schedule_item": return 9
+        case "transaction": return 10
+        case "attachment": return 11
+        case "settlement": return 12
+        case "recurring_occurrence": return 13
+        case "installment_payment": return 14
+        case "merchant": return 15
+        default: return 100
+        }
+    }
+
     private func applyPullPageTransaction(
         _ response: SyncPullResponse,
         scopeKey: String
     ) throws {
-        let decoded = try response.changes.map { change in
-            (change, try decodeRemoteChange(change))
+        let decoded = try response.changes.enumerated().map { index, change in
+            (
+                index: index,
+                change: change,
+                remote: try decodeRemoteChange(change)
+            )
         }
-        for (change, remote) in decoded {
+
+        let ordered = decoded.sorted { lhs, rhs in
+            let lhsPriority = pullApplyPriority(
+                entityType: lhs.change.entityType
+            )
+            let rhsPriority = pullApplyPriority(
+                entityType: rhs.change.entityType
+            )
+
+            if lhsPriority != rhsPriority {
+                return lhsPriority < rhsPriority
+            }
+
+            // Keep original server order between changes of the same type.
+            return lhs.index < rhs.index
+        }
+
+        for item in ordered {
+            let change = item.change
+            let remote = item.remote
             if try hasBlockingInstallmentParentMutation(
                 remote: remote,
                 scopeKey: scopeKey
