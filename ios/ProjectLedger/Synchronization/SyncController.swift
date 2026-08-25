@@ -156,6 +156,10 @@ final class SyncController: ObservableObject {
         diagnostics = (try? await engine.diagnostics(scopeKey: scopeKey)) ?? diagnostics
     }
 
+    func hasAvailableTrackers(scopeKey: String) async -> Bool {
+        (try? await engine.hasAvailableTrackers(scopeKey: scopeKey)) ?? false
+    }
+
     func retryFailed(scopeKey: String, session: SessionController) async {
         do {
             try await engine.retryFailed(scopeKey: scopeKey)

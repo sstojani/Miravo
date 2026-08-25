@@ -6,7 +6,6 @@ struct LoginView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var session: SessionController
     @State private var serverURL = ""
-    @State private var showsServerOverride = false
     @State private var email = ""
     @State private var password = ""
 
@@ -17,35 +16,28 @@ struct LoginView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 22) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Image(systemName: "lock.iphone")
-                            .font(.largeTitle)
+                VStack(spacing: 24) {
+                    VStack(spacing: 14) {
+                        Image(systemName: "lock.shield.fill")
+                            .font(.system(size: 44, weight: .semibold))
                             .foregroundStyle(LedgerTheme.accent)
+                            .frame(width: 88, height: 88)
+                            .background(LedgerTheme.accent.opacity(0.12), in: Circle())
                             .accessibilityHidden(true)
-                        Text("Sign in to Miravo")
-                            .font(.largeTitle.bold())
-                        Text("Use your email and password to sync with your Miravo server. Offline entry still works without a connection.")
-                            .foregroundStyle(.secondary)
+                        VStack(spacing: 8) {
+                            Text("Sign in to Miravo")
+                                .font(.largeTitle.bold())
+                                .multilineTextAlignment(.center)
+                            Text("Use your email and password to restore and sync your ledger.")
+                                .font(.body)
+                                .foregroundStyle(.secondary)
+                                .multilineTextAlignment(.center)
+                        }
                     }
 
                     VStack(spacing: 14) {
                         if session.defaultServerURLString.isEmpty {
                             serverURLField
-                        } else {
-                            LabeledContent(
-                                "Server",
-                                value: serverHostDescription(
-                                    effectiveServerURL
-                                )
-                            )
-                            DisclosureGroup(
-                                "Use a different server",
-                                isExpanded: $showsServerOverride
-                            ) {
-                                serverURLField
-                                    .padding(.top, 8)
-                            }
                         }
                         TextField("Email", text: $email)
                             .textContentType(.username)
@@ -53,13 +45,13 @@ struct LoginView: View {
                             .keyboardType(.emailAddress)
                             .autocorrectionDisabled()
                             .submitLabel(.next)
+                            .miravoAuthField()
                         SecureField("Password", text: $password)
                             .textContentType(.password)
                             .submitLabel(.go)
                             .onSubmit { submit() }
+                            .miravoAuthField()
                     }
-                    .textFieldStyle(.roundedBorder)
-                    .ledgerCard()
 
                     if let message = session.errorMessage {
                         VStack(alignment: .leading, spacing: 4) {
@@ -102,6 +94,7 @@ struct LoginView: View {
                     .buttonStyle(.borderedProminent)
                     .controlSize(.large)
                     .disabled(effectiveServerURL.isEmpty || email.isEmpty || password.isEmpty || session.isWorking)
+                    .padding(.top, 4)
 
                     if session.canOpenOffline {
                         Button("Open previously synchronized data offline") {
@@ -114,10 +107,6 @@ struct LoginView: View {
                         }
                         .frame(maxWidth: .infinity)
                     }
-
-                    Text("Public registration is disabled. Ask the server owner for an invitation or bootstrap the first owner from the server console.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
                 }
                 .padding()
                 .frame(maxWidth: 620)
@@ -156,6 +145,7 @@ struct LoginView: View {
             .keyboardType(.URL)
             .autocorrectionDisabled()
             .submitLabel(.next)
+            .miravoAuthField()
     }
 
     private func submit() {
@@ -174,8 +164,14 @@ struct LoginView: View {
             }
         }
     }
+}
 
-    private func serverHostDescription(_ value: String) -> String {
-        URL(string: value)?.host ?? value
+private extension View {
+    func miravoAuthField() -> some View {
+        self
+            .textFieldStyle(.plain)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 8))
     }
 }

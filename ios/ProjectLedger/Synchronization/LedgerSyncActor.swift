@@ -164,6 +164,17 @@ actor LedgerSyncActor {
         )
     }
 
+    func hasAvailableTrackers(scopeKey: String) throws -> Bool {
+        let descriptor = FetchDescriptor<LocalTracker>(
+            predicate: #Predicate<LocalTracker> { $0.scopeKey == scopeKey }
+        )
+        return try modelContext.fetch(descriptor).contains {
+            $0.deletedAt == nil &&
+                $0.archivedAt == nil &&
+                $0.accessRevokedAt == nil
+        }
+    }
+
     func retryFailed(scopeKey: String) throws {
         for mutation in try fetchOutbox(scopeKey: scopeKey) where mutation.state == .failed {
             mutation.stateRaw = LocalSyncState.pending.rawValue

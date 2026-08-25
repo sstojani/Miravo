@@ -26,6 +26,8 @@
 "Connect to your server" = "Lidhu me serverin tënd";
 "Connected" = "I lidhur";
 "Continue" = "Vazhdo";
+"Continue as a guest?" = "Të vazhdosh si mysafir?";
+"Continue as guest" = "Vazhdo si mysafir";
 "Could not save" = "Nuk u ruajt";
 "Could not update transaction" = "Transaksioni nuk u përditësua";
 "Credit" = "Kredi";
@@ -41,6 +43,7 @@
 "Edit transaction" = "Ndrysho transaksionin";
 "Email" = "Email-i";
 "Enter a complete server URL." = "Vendos adresën e plotë të serverit.";
+"Enter a complete HTTPS server URL." = "Vendos një adresë të plotë HTTPS të serverit.";
 "Enter a nonempty name." = "Vendos një emër.";
 "Enter a valid positive amount." = "Vendos një shumë pozitive të vlefshme.";
 "Enter valid account details." = "Vendos të dhëna të vlefshme të llogarisë.";
@@ -67,6 +70,7 @@
 "Local data" = "Të dhënat lokale";
 "Local data ready" = "Të dhënat lokale janë gati";
 "Local data needs attention" = "Të dhënat lokale kërkojnë vëmendje";
+"Leave this blank to use the server bundled with this build." = "Lëre bosh për të përdorur serverin e përfshirë në këtë build.";
 "Local scope" = "Fusha lokale";
 "Local summary" = "Përmbledhje lokale";
 "Locally available records" = "Regjistrimet lokale";
@@ -113,6 +117,7 @@
 "Rename category" = "Riemërto kategorinë";
 "Rename tracker" = "Riemërto gjurmuesin";
 "Request ID format" = "ID-ja e kërkesës: %@";
+"Restore cloud data after reinstalling and keep every device in sync." = "Rikthe të dhënat nga cloud pas riinstalimit dhe mbaj çdo pajisje të sinkronizuar.";
 "Restore" = "Rikthe";
 "Save" = "Ruaj";
 "Save on this iPhone" = "Ruaj në këtë iPhone";
@@ -120,10 +125,14 @@
 "Saving never waits for the network. Synchronization is attempted separately." = "Ruajtja nuk pret kurrë rrjetin. Sinkronizimi provohet veçmas.";
 "Savings" = "Kursime";
 "Server" = "Serveri";
+"Server address" = "Adresa e serverit";
 "Server URL" = "Adresa e serverit";
 "Sign in to Miravo" = "Hyr në Miravo";
+"Sign in or continue as a guest" = "Hyr ose vazhdo si mysafir";
+"Use your email and password to restore and sync your ledger." = "Përdor email-in dhe fjalëkalimin për të rikthyer dhe sinkronizuar regjistrin.";
 "Use your email and password to sync with your Miravo server. Offline entry still works without a connection." = "Përdor emailin dhe fjalëkalimin për t'u sinkronizuar me serverin tënd Miravo. Regjistrimi offline vazhdon të punojë pa lidhje.";
 "Use a different server" = "Përdor një server tjetër";
+"Use bundled server" = "Përdor serverin e përfshirë";
 "%@ was spent at %@." = "%@ u shpenzuan te %@.";
 "a merchant" = "një tregtar";
 "Shortcut expense added" = "Shpenzim nga Shortcut u shtua";
@@ -144,8 +153,10 @@
 "Synchronization" = "Sinkronizimi";
 "Synchronization can happen later without blocking this entry." = "Sinkronizimi mund të kryhet më vonë pa e bllokuar këtë regjistrim.";
 "Syncing" = "Duke u sinkronizuar";
+"Swipe to continue" = "Rrëshqit për të vazhduar";
 "The app is still locked." = "Aplikacioni është ende i bllokuar.";
 "The email or password is incorrect." = "Email-i ose fjalëkalimi është i pasaktë.";
+"Guest data is stored only on this iPhone. If you delete Miravo or lose this device, that local data cannot be restored from the server." = "Të dhënat e mysafirit ruhen vetëm në këtë iPhone. Nëse fshin Miravo ose humbet këtë pajisje, ato të dhëna lokale nuk mund të rikthehen nga serveri.";
 "The local change could not be saved." = "Ndryshimi lokal nuk mund të ruhej.";
 "The request could not be completed." = "Kërkesa nuk mund të përfundonte.";
 "The secure connection could not be completed." = "Lidhja e sigurt nuk mund të përfundonte.";
@@ -153,6 +164,7 @@
 "The server is unreachable. Check your connection and server URL." = "Serveri nuk arrihet. Kontrollo lidhjen dhe adresën e serverit.";
 "The server redirected to an unexpected address." = "Serveri të ridrejtoi te një adresë e papritur.";
 "The server response was unexpectedly large." = "Përgjigjja e serverit ishte papritur shumë e madhe.";
+"Your phone keeps working offline, then catches up when the server is reachable." = "Telefoni vazhdon të punojë offline dhe pastaj sinkronizohet kur serveri është i arritshëm.";
 "The server returned an invalid response." = "Serveri ktheu një përgjigje të pavlefshme.";
 "This month" = "Këtë muaj";
 "This phone signed out locally, but the server session could not be revoked while offline. Revoke it from Device sessions after reconnecting." = "Ky telefon doli lokalisht, por sesioni në server nuk mund të shfuqizohej pa lidhje. Shfuqizoje te Sesionet e pajisjeve pasi të rilidhesh.";

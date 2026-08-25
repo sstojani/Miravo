@@ -2,7 +2,7 @@
 
 Last updated: 2026-08-25. A checked item is complete; its verification tier is recorded in `IMPLEMENT.md`. Items are not checked merely because scaffolding exists.
 
-Current focus: **Milestone 9/10 — native sync/login polish and hosted/device verification**. Miravo is the final product name and `https://github.com/sstojani/Miravo.git` is populated. Local `main` has been fast-forwarded to remote `main` at `3a52c59`, including the iOS experience/notification, Quick Add focus, and sync dependency-order fixes. The app now bundles the provided HTTPS server origin in `MIRAVO_DEFAULT_SERVER_URL` so normal login can be email/password-only; manual server entry remains a fallback/debug path. Shortcut-created expenses now produce explicit local Miravo notifications after successful sync when iOS notification permission is already authorized. Xcode execution, physical Shortcut delivery, Docker/Linux file-mode behavior, unsigned IPA, and device validation remain external until Actions and user-side signing/device checks pass.
+Current focus: **Milestone 9/10 — native restore/login polish and hosted/device verification**. Miravo is the final product name and `https://github.com/sstojani/Miravo.git` is populated. Local `main` has been fast-forwarded to remote `main` at `3a52c59`, including the iOS experience/notification, Quick Add focus, and sync dependency-order fixes. The app now bundles the provided HTTPS server origin in `MIRAVO_DEFAULT_SERVER_URL` so normal login can be email/password-only; server override lives in Settings for local profiles and remains a fallback/debug path. Native first-bootstrap provisioning is guarded so a nonempty server restore is not masked by an empty starter tracker, and Overview/Plans prefer trackers with restored activity/plans. Onboarding is swipe-first with a fourth sign-in slide and an explicit guest-mode local-only warning. Shortcut-created expenses now produce explicit local Miravo notifications after successful sync when iOS notification permission is already authorized. Xcode execution, physical Shortcut delivery, Docker/Linux file-mode behavior, unsigned IPA, and device validation remain external until Actions and user-side signing/device checks pass.
 
 ## Milestone 0 — Discovery and durable project plan
 
@@ -43,7 +43,7 @@ Acceptance: a clean clone starts the development stack, creates an owner, authen
 
 - [x] XcodeGen SwiftUI/iOS 18 project, design tokens, navigation, privacy manifest, localization resources, and CI source.
 - [x] SwiftData domain/outbox/cursor models and repository/use-case boundaries.
-- [x] Onboarding, bundled/default server URL fallback, login, Keychain session storage, optional local Face ID/passcode gate.
+- [x] Onboarding, bundled/default server URL fallback, email/password login, explicit local-only guest warning, Keychain session storage, optional local Face ID/passcode gate.
 - [x] Offline tracker/account/category and transaction create/edit/delete/reopen flows.
 - [ ] Compile and pass the authored unit/integration/UI tests on GitHub macOS.
 
