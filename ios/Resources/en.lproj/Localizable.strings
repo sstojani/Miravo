@@ -833,6 +833,7 @@
 "Continue without server" = "Continue without server";
 "Disconnect server" = "Disconnect server";
 "Not connected" = "Not connected";
+"Guest data could not be prepared for server sync. Open Miravo offline and try again." = "Guest data could not be prepared for server sync. Open Miravo offline and try again.";
 "This local profile is already linked to a different server account." = "This local profile is already linked to a different server account.";
 "This phone disconnected locally, but the server session could not be revoked while offline." = "This phone disconnected locally, but the server session could not be revoked while offline.";
 

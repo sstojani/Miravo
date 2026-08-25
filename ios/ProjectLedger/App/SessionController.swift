@@ -17,6 +17,11 @@ struct SyncAuthenticationContext: Sendable {
     let tokenStore: KeychainSessionTokenStore
 }
 
+struct PendingGuestProfileAdoption: Equatable {
+    let sourceScopeKey: String
+    let targetScopeKey: String
+}
+
 @MainActor
 final class SessionController: ObservableObject {
     @Published private(set) var phase: SessionPhase = .loading
@@ -26,6 +31,7 @@ final class SessionController: ObservableObject {
     @Published var errorMessage: String?
     @Published var requestID: String?
     @Published var logoutWarning: String?
+    @Published private var pendingGuestProfileAdoption: PendingGuestProfileAdoption?
 
     let preferences: AppPreferences
     private let tokenStore: KeychainSessionTokenStore
@@ -179,7 +185,8 @@ final class SessionController: ObservableObject {
             )
 
             let existingScope = scopeKey ?? preferences.currentScopeKey
-            let activeScopeKey: String
+            let activeScopeKey = remoteIdentityKey
+            let pendingAdoption: PendingGuestProfileAdoption?
 
             if let existingScope,
                SessionScope.isLocal(existingScope) {
@@ -194,9 +201,12 @@ final class SessionController: ObservableObject {
                     return
                 }
 
-                activeScopeKey = existingScope
+                pendingAdoption = PendingGuestProfileAdoption(
+                    sourceScopeKey: existingScope,
+                    targetScopeKey: remoteIdentityKey
+                )
             } else {
-                activeScopeKey = remoteIdentityKey
+                pendingAdoption = nil
             }
 
             try await tokenStore.save(tokens, scopeKey: activeScopeKey)
@@ -208,6 +218,7 @@ final class SessionController: ObservableObject {
                 remoteIdentityKey: remoteIdentityKey
             )
 
+            pendingGuestProfileAdoption = pendingAdoption
             scopeKey = activeScopeKey
             phase = .authenticated
         } catch let error as APIClientError {
@@ -220,6 +231,23 @@ final class SessionController: ObservableObject {
         } catch {
             errorMessage = String(localized: "Sign in could not be completed securely.")
         }
+    }
+
+    func pendingGuestAdoption(for scopeKey: String) -> PendingGuestProfileAdoption? {
+        guard pendingGuestProfileAdoption?.targetScopeKey == scopeKey else { return nil }
+        return pendingGuestProfileAdoption
+    }
+
+    func clearPendingGuestAdoption(_ adoption: PendingGuestProfileAdoption) {
+        guard pendingGuestProfileAdoption == adoption else { return }
+        pendingGuestProfileAdoption = nil
+    }
+
+    func reportGuestAdoptionFailure() {
+        errorMessage = String(
+            localized: "Guest data could not be prepared for server sync. Open Miravo offline and try again."
+        )
+        requestID = nil
     }
 
     func openOffline() {

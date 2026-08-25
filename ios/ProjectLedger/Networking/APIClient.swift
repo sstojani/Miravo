@@ -480,12 +480,38 @@ actor APIClient: SyncTransport {
     }
 
     func listExportJobs(accessToken: String) async throws -> [ExportJobSummary] {
-        try await send(
-            [ExportJobSummary].self,
-            path: "api/v1/export-jobs/",
-            method: "GET",
-            accessToken: accessToken,
-            maximumResponseBytes: 4_194_304
+        var cursor: String?
+        var jobs = [ExportJobSummary]()
+        for _ in 0 ..< 20 {
+            var queryItems = [URLQueryItem]()
+            if let cursor {
+                queryItems.append(URLQueryItem(name: "cursor", value: cursor))
+            }
+            let page = try await send(
+                ExportJobPage.self,
+                path: "api/v1/export-jobs/",
+                method: "GET",
+                accessToken: accessToken,
+                queryItems: queryItems,
+                maximumResponseBytes: 4_194_304
+            )
+            jobs.append(contentsOf: page.results)
+            guard let next = page.next else { return jobs }
+            cursor = Self.cursorValue(from: next)
+            guard cursor != nil else {
+                throw APIClientError(
+                    code: "invalid_response",
+                    message: String(localized: "The server returned an invalid response."),
+                    requestID: nil,
+                    statusCode: nil
+                )
+            }
+        }
+        throw APIClientError(
+            code: "response_too_large",
+            message: String(localized: "The server response was unexpectedly large."),
+            requestID: nil,
+            statusCode: nil
         )
     }
 
@@ -754,6 +780,13 @@ actor APIClient: SyncTransport {
             requestID: response.value(forHTTPHeaderField: "X-Request-ID"),
             statusCode: response.statusCode
         )
+    }
+
+    private static func cursorValue(from nextURL: String) -> String? {
+        URLComponents(string: nextURL)?
+            .queryItems?
+            .first { $0.name == "cursor" }?
+            .value
     }
 }
 

@@ -104,30 +104,30 @@ struct OnboardingView: View {
     }
 
     private var signInCard: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 13) {
             if session.defaultServerURLString.isEmpty {
-                TextField("Server URL", text: $serverURL)
-                    .textContentType(.URL)
-                    .textInputAutocapitalization(.never)
-                    .keyboardType(.URL)
-                    .autocorrectionDisabled()
-                    .submitLabel(.next)
-                    .miravoOnboardingAuthField()
+                MiravoAuthTextField(
+                    title: "Server URL",
+                    systemImage: "network",
+                    text: $serverURL,
+                    contentType: .URL,
+                    keyboardType: .URL
+                )
             }
 
-            TextField("Email", text: $email)
-                .textContentType(.username)
-                .textInputAutocapitalization(.never)
-                .keyboardType(.emailAddress)
-                .autocorrectionDisabled()
-                .submitLabel(.next)
-                .miravoOnboardingAuthField()
+            MiravoAuthTextField(
+                title: "Email",
+                systemImage: "envelope.fill",
+                text: $email,
+                contentType: .username,
+                keyboardType: .emailAddress
+            )
 
-            SecureField("Password", text: $password)
-                .textContentType(.password)
-                .submitLabel(.go)
-                .onSubmit { submit() }
-                .miravoOnboardingAuthField()
+            MiravoAuthSecureField(
+                title: "Password",
+                text: $password,
+                onSubmit: submit
+            )
 
             if let message = session.errorMessage {
                 Label(message, systemImage: "exclamationmark.triangle.fill")
@@ -137,30 +137,25 @@ struct OnboardingView: View {
                     .accessibilityElement(children: .combine)
             }
 
-            Button(action: submit) {
-                HStack {
-                    if session.isWorking {
-                        ProgressView()
-                    }
-                    Text(session.isWorking ? "Signing in…" : "Sign in")
-                }
-                .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            .disabled(effectiveServerURL.isEmpty || email.isEmpty || password.isEmpty || session.isWorking)
+            MiravoPrimaryAuthButton(
+                title: "Sign in",
+                loadingTitle: "Signing in…",
+                isLoading: session.isWorking,
+                isDisabled: effectiveServerURL.isEmpty ||
+                    email.isEmpty ||
+                    password.isEmpty ||
+                    session.isWorking,
+                action: submit
+            )
 
-            Button("Continue as guest") {
-                showingGuestWarning = true
-            }
-            .buttonStyle(.plain)
-            .font(.body.weight(.semibold))
-            .foregroundStyle(LedgerTheme.accent)
+            MiravoSecondaryAuthButton(
+                title: "Continue as guest",
+                action: { showingGuestWarning = true }
+            )
             .padding(.top, 2)
-            .frame(maxWidth: .infinity)
         }
-        .padding(.top, 6)
-        .frame(maxWidth: 420)
+        .padding(.top, 8)
+        .frame(maxWidth: 430)
     }
 
     private func submit() {
@@ -182,18 +177,4 @@ private struct OnboardingPage {
     let title: String
     let detail: String
     let symbol: String
-}
-
-private extension View {
-    func miravoOnboardingAuthField() -> some View {
-        self
-            .textFieldStyle(.plain)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 14)
-            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8))
-            .overlay {
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(.white.opacity(0.08), lineWidth: 1)
-            }
-    }
 }

@@ -107,6 +107,12 @@ struct DownloadedExport: Equatable, Identifiable, Sendable {
     let data: Data
 }
 
+struct ExportJobPage: Decodable, Equatable, Sendable {
+    let next: String?
+    let previous: String?
+    let results: [ExportJobSummary]
+}
+
 protocol ExportTransport: Sendable {
     func listExportJobs(accessToken: String) async throws -> [ExportJobSummary]
     func createExportJob(

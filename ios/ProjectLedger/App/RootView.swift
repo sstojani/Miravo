@@ -47,9 +47,22 @@ struct RootView: View {
                 if let scopeKey = session.scopeKey {
                     MainTabView(scopeKey: scopeKey)
                         .task(id: scopeKey) {
+                            let repository = LocalLedgerRepository(context: modelContext)
+                            if let adoption = session.pendingGuestAdoption(for: scopeKey) {
+                                do {
+                                    _ = try repository.adoptGuestProfileForAuthentication(
+                                        sourceScopeKey: adoption.sourceScopeKey,
+                                        targetScopeKey: adoption.targetScopeKey
+                                    )
+                                    session.clearPendingGuestAdoption(adoption)
+                                } catch {
+                                    session.reportGuestAdoptionFailure()
+                                    return
+                                }
+                            }
+
                             if !session.hasServerConnection {
-                                try? LocalLedgerRepository(context: modelContext)
-                                    .bootstrapDefaults(scopeKey: scopeKey)
+                                _ = try? repository.bootstrapDefaults(scopeKey: scopeKey)
                                 return
                             }
 
@@ -62,8 +75,7 @@ struct RootView: View {
                                 needsInitialProvisioning &&
                                 !sync.diagnostics.bootstrapRequired &&
                                 !hasTrackers {
-                                try? LocalLedgerRepository(context: modelContext)
-                                    .bootstrapDefaults(scopeKey: scopeKey)
+                                _ = try? repository.bootstrapDefaults(scopeKey: scopeKey)
                                 await sync.synchronize(session: session)
                             }
 

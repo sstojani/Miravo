@@ -833,6 +833,7 @@
 "Continue without server" = "Vazhdo pa server";
 "Disconnect server" = "Shkëput serverin";
 "Not connected" = "I palidhur";
+"Guest data could not be prepared for server sync. Open Miravo offline and try again." = "Të dhënat e mysafirit nuk u përgatitën për sinkronizim me serverin. Hape Miravo pa internet dhe provo përsëri.";
 "This local profile is already linked to a different server account." = "Ky profil lokal është lidhur tashmë me një llogari tjetër serveri.";
 "This phone disconnected locally, but the server session could not be revoked while offline." = "Ky iPhone u shkëput lokalisht, por sesioni në server nuk mund të çaktivizohej pa lidhje interneti.";
 
