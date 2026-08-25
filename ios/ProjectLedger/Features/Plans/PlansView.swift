@@ -27,6 +27,8 @@ struct PlansView: View {
     @Query private var budgetThresholds: [LocalBudgetThreshold]
     @Query private var categories: [LocalCategory]
     @Query private var transactions: [LedgerTransaction]
+    @Query private var recurringRules: [LocalRecurringRule]
+    @Query private var installmentPlans: [LocalInstallmentPlan]
     @Query private var allocations: [LocalCategoryAllocation]
     @State private var selectedTrackerID: UUID?
     @State private var sheet: BudgetSheet?
@@ -64,6 +66,14 @@ struct PlansView: View {
             filter: #Predicate { $0.scopeKey == scopeKey && $0.deletedAt == nil },
             sort: \LedgerTransaction.occurredAt
         )
+        _recurringRules = Query(
+            filter: #Predicate { $0.scopeKey == scopeKey && $0.deletedAt == nil },
+            sort: \LocalRecurringRule.nextDueAt
+        )
+        _installmentPlans = Query(
+            filter: #Predicate { $0.scopeKey == scopeKey && $0.deletedAt == nil },
+            sort: \LocalInstallmentPlan.createdAt
+        )
         _allocations = Query(filter: #Predicate { $0.scopeKey == scopeKey })
     }
 
@@ -72,7 +82,23 @@ struct PlansView: View {
     }
 
     private var selectedTracker: LocalTracker? {
-        activeTrackers.first { $0.id == selectedTrackerID } ?? activeTrackers.first
+        activeTrackers.first { $0.id == selectedTrackerID } ?? preferredTracker
+    }
+
+    private var preferredTracker: LocalTracker? {
+        activeTrackers.first { tracker in
+            budgets.contains {
+                $0.trackerID == tracker.id && (includeArchived || $0.archivedAt == nil)
+            }
+        } ?? activeTrackers.first { tracker in
+            recurringRules.contains {
+                $0.trackerID == tracker.id && $0.archivedAt == nil
+            }
+        } ?? activeTrackers.first { tracker in
+            installmentPlans.contains {
+                $0.trackerID == tracker.id && $0.archivedAt == nil
+            }
+        } ?? activeTrackers.first
     }
 
     private var visibleBudgets: [LocalBudget] {
@@ -200,10 +226,10 @@ struct PlansView: View {
             Text("The deletion is saved as a recoverable sync tombstone. Existing transactions are not changed.")
         }
         .onAppear {
-            if selectedTrackerID == nil { selectedTrackerID = activeTrackers.first?.id }
+            if selectedTrackerID == nil { selectedTrackerID = preferredTracker?.id }
         }
         .onChange(of: trackers.map(\.id)) { _, _ in
-            if selectedTracker == nil { selectedTrackerID = activeTrackers.first?.id }
+            if selectedTracker == nil { selectedTrackerID = preferredTracker?.id }
         }
     }
 

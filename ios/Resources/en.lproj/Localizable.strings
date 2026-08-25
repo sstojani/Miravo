@@ -26,6 +26,8 @@
 "Connect to your server" = "Connect to your server";
 "Connected" = "Connected";
 "Continue" = "Continue";
+"Continue as a guest?" = "Continue as a guest?";
+"Continue as guest" = "Continue as guest";
 "Could not save" = "Could not save";
 "Could not update transaction" = "Could not update transaction";
 "Credit" = "Credit";
@@ -41,6 +43,7 @@
 "Edit transaction" = "Edit transaction";
 "Email" = "Email";
 "Enter a complete server URL." = "Enter a complete server URL.";
+"Enter a complete HTTPS server URL." = "Enter a complete HTTPS server URL.";
 "Enter a nonempty name." = "Enter a nonempty name.";
 "Enter a valid positive amount." = "Enter a valid positive amount.";
 "Enter valid account details." = "Enter valid account details.";
@@ -67,6 +70,7 @@
 "Local data" = "Local data";
 "Local data ready" = "Local data ready";
 "Local data needs attention" = "Local data needs attention";
+"Leave this blank to use the server bundled with this build." = "Leave this blank to use the server bundled with this build.";
 "Local scope" = "Local scope";
 "Local summary" = "Local summary";
 "Locally available records" = "Locally available records";
@@ -113,6 +117,7 @@
 "Rename category" = "Rename category";
 "Rename tracker" = "Rename tracker";
 "Request ID format" = "Request ID: %@";
+"Restore cloud data after reinstalling and keep every device in sync." = "Restore cloud data after reinstalling and keep every device in sync.";
 "Restore" = "Restore";
 "Save" = "Save";
 "Save on this iPhone" = "Save on this iPhone";
@@ -120,10 +125,14 @@
 "Saving never waits for the network. Synchronization is attempted separately." = "Saving never waits for the network. Synchronization is attempted separately.";
 "Savings" = "Savings";
 "Server" = "Server";
+"Server address" = "Server address";
 "Server URL" = "Server URL";
 "Sign in to Miravo" = "Sign in to Miravo";
+"Sign in or continue as a guest" = "Sign in or continue as a guest";
+"Use your email and password to restore and sync your ledger." = "Use your email and password to restore and sync your ledger.";
 "Use your email and password to sync with your Miravo server. Offline entry still works without a connection." = "Use your email and password to sync with your Miravo server. Offline entry still works without a connection.";
 "Use a different server" = "Use a different server";
+"Use bundled server" = "Use bundled server";
 "%@ was spent at %@." = "%@ was spent at %@.";
 "a merchant" = "a merchant";
 "Shortcut expense added" = "Shortcut expense added";
@@ -144,8 +153,10 @@
 "Synchronization" = "Synchronization";
 "Synchronization can happen later without blocking this entry." = "Synchronization can happen later without blocking this entry.";
 "Syncing" = "Syncing";
+"Swipe to continue" = "Swipe to continue";
 "The app is still locked." = "The app is still locked.";
 "The email or password is incorrect." = "The email or password is incorrect.";
+"Guest data is stored only on this iPhone. If you delete Miravo or lose this device, that local data cannot be restored from the server." = "Guest data is stored only on this iPhone. If you delete Miravo or lose this device, that local data cannot be restored from the server.";
 "The local change could not be saved." = "The local change could not be saved.";
 "The request could not be completed." = "The request could not be completed.";
 "The secure connection could not be completed." = "The secure connection could not be completed.";
@@ -153,6 +164,7 @@
 "The server is unreachable. Check your connection and server URL." = "The server is unreachable. Check your connection and server URL.";
 "The server redirected to an unexpected address." = "The server redirected to an unexpected address.";
 "The server response was unexpectedly large." = "The server response was unexpectedly large.";
+"Your phone keeps working offline, then catches up when the server is reachable." = "Your phone keeps working offline, then catches up when the server is reachable.";
 "The server returned an invalid response." = "The server returned an invalid response.";
 "This month" = "This month";
 "This phone signed out locally, but the server session could not be revoked while offline. Revoke it from Device sessions after reconnecting." = "This phone signed out locally, but the server session could not be revoked while offline. Revoke it from Device sessions after reconnecting.";

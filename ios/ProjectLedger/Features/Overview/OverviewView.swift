@@ -53,8 +53,16 @@ struct OverviewView: View {
         rawOutbox.filter { $0.stateRaw == "pending" }
     }
 
+    private var selectedTracker: LocalTracker? {
+        trackers.first { tracker in
+            transactions.contains { $0.trackerID == tracker.id }
+        } ?? trackers.first { tracker in
+            accounts.contains { $0.trackerID == tracker.id }
+        } ?? trackers.first
+    }
+
     private var monthTransactions: [LedgerTransaction] {
-        guard let trackerID = trackers.first?.id,
+        guard let trackerID = selectedTracker?.id,
               let interval = Calendar.current.dateInterval(of: .month, for: .now)
         else {
             return []
@@ -65,12 +73,12 @@ struct OverviewView: View {
     }
 
     private var trackerAccounts: [LocalAccount] {
-        guard let trackerID = trackers.first?.id else { return [] }
+        guard let trackerID = selectedTracker?.id else { return [] }
         return accounts.filter { $0.trackerID == trackerID }
     }
 
     private var trackerTransactions: [LedgerTransaction] {
-        guard let trackerID = trackers.first?.id else { return [] }
+        guard let trackerID = selectedTracker?.id else { return [] }
         return transactions.filter { $0.trackerID == trackerID }
     }
 
@@ -112,7 +120,7 @@ struct OverviewView: View {
                         Text("This month")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
-                        Text(trackers.first?.name ?? String(localized: "No available tracker"))
+                        Text(selectedTracker?.name ?? String(localized: "No available tracker"))
                             .font(.title.bold())
                     }
                     Spacer()

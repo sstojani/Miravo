@@ -1245,3 +1245,27 @@ Create a clean local receipt checkpoint after one final regression/secret scan. 
 - Added `create_app_user`, a Django management command for creating normal non-admin Miravo accounts while public self-registration remains disabled by default.
 - The command can run interactively or from one-time `PROJECT_LEDGER_CREATE_USER_EMAIL`, `PROJECT_LEDGER_CREATE_USER_PASSWORD`, and optional `PROJECT_LEDGER_CREATE_USER_DISPLAY_NAME` values. It validates passwords, refuses duplicate emails, creates an active non-staff/non-superuser account, records a safe audit event, and clears the one-time environment values from the process.
 - Added `make create-user` plus README and Ubuntu runbook instructions for creating test accounts on the deployed server without placing passwords in source or command-line arguments.
+
+## 2026-08-25 — Reinstall restore and onboarding/login polish
+
+### Material work
+
+- Guarded the authenticated first-bootstrap path so Miravo creates the local Everyday/Cash/General starter set only after synchronization succeeds, bootstrap is no longer required, and the restored scope still has no available tracker. This prevents a nonempty cloud restore from being masked by an empty starter tracker.
+- Updated Overview and Plans tracker selection to prefer trackers that already have restored transactions, budgets, recurring rules, or installment plans before falling back to the first tracker.
+- Simplified the main sign-in UI so bundled-server builds show only email/password, while unconfigured/debug builds retain manual server URL entry as a fallback. Added a Settings-only server address editor for local profiles so the override is no longer part of the ordinary sign-in screen.
+- Reworked onboarding into four swipe-first pages. The final page contains the sign-in form, and Continue as guest now opens an explicit warning that local-only data cannot be restored from the server after deleting the app or losing the device.
+- Added source-contract coverage for the guarded server-first provisioning path and updated English/Albanian localization, plan, decisions, test matrix, and user guide documentation.
+
+### Commands and outcomes
+
+- `python ios\check-localization-coverage.py`: **passed locally on Windows**; 805 literal UI keys covered with English/Albanian parity.
+- `python ios\check-project-contract.py`: **passed locally on Windows**; transport/privacy/planning/collaboration/analytics/export contracts plus guarded server-first provisioning source contract verified.
+- `git diff --check`: **passed locally on Windows**; Git reported expected CRLF working-copy warnings only.
+- `Invoke-WebRequest -UseBasicParsing https://laptop-1.tail029be8.ts.net:8443/api/v1/health/ready`: **passed live read-only**; returned HTTP 200.
+- Read-only SSH inspection of the live host: deployed checkout is `c56de71` on `fix/ios-sync-dependency-order`; bootstrap order includes budgets, recurring rules, installment plans, installment schedule items, recurring occurrences, and installment payments.
+- Read-only Django shell aggregate/bootstrap-count inspection: the database has planning data, and one active user's bootstrap payload includes trackers, accounts/categories, budgets, recurring rules, installment plans, schedule items, transactions, attachment metadata, recurring occurrences, and installment payments. No transaction details, amounts, notes, tokens, or credentials were printed.
+
+### Verification boundary
+
+- Native SwiftUI layout, onboarding animation smoothness, Swift 6 type checking, SwiftData runtime behavior, simulator tests, and physical reinstall restore remain **unverified until GitHub macOS/device execution**.
+- The live server was not mutated. It is still one commit behind this PR's app-side changes, so the restore/UI fix still requires GitHub macOS build and owner-signed device verification.

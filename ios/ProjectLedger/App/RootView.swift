@@ -55,10 +55,13 @@ struct RootView: View {
 
                             await sync.refreshDiagnostics(scopeKey: scopeKey)
                             let needsInitialProvisioning = sync.diagnostics.bootstrapRequired
-                            await sync.synchronize(session: session)
+                            let synchronized = await sync.synchronize(session: session)
+                            let hasTrackers = await sync.hasAvailableTrackers(scopeKey: scopeKey)
 
-                            if needsInitialProvisioning &&
-                                !sync.diagnostics.bootstrapRequired {
+                            if synchronized &&
+                                needsInitialProvisioning &&
+                                !sync.diagnostics.bootstrapRequired &&
+                                !hasTrackers {
                                 try? LocalLedgerRepository(context: modelContext)
                                     .bootstrapDefaults(scopeKey: scopeKey)
                                 await sync.synchronize(session: session)

@@ -14,6 +14,7 @@ struct SettingsView: View {
     @Query private var conflicts: [SyncConflict]
     @Query private var attachmentTransfers: [AttachmentTransfer]
     @State private var signingOut = false
+    @State private var showingServerAddress = false
     @State private var showingServerSetup = false
 
     init(scopeKey: String) {
@@ -54,6 +55,9 @@ struct SettingsView: View {
         .navigationTitle("Settings")
         .sheet(isPresented: $showingServerSetup) {
             LoginView(allowsDismiss: true)
+        }
+        .sheet(isPresented: $showingServerAddress) {
+            ServerAddressSettingsView()
         }
         .task {
             await sync.refreshDiagnostics(scopeKey: scopeKey)
@@ -183,6 +187,12 @@ struct SettingsView: View {
                         systemImage: "externaldrive.connected.to.line.below"
                     )
                 }
+
+                Button {
+                    showingServerAddress = true
+                } label: {
+                    Label("Server address", systemImage: "link")
+                }
             }
         } header: {
             Text("Synchronization")
@@ -268,9 +278,9 @@ struct SettingsView: View {
         Section("Advanced") {
             LabeledContent("Server") {
                 Text(
-                    session.hasServerConnection
-                        ? session.configuredServerURL
-                        : String(localized: "Not connected")
+                    session.configuredServerURL.isEmpty
+                        ? String(localized: "Not connected")
+                        : session.configuredServerURL
                 )
                 .multilineTextAlignment(.trailing)
                 .textSelection(.enabled)
@@ -329,5 +339,69 @@ struct SettingsView: View {
 
     private var failedAttachmentCount: Int {
         attachmentTransfers.filter { $0.state == .failed }.count
+    }
+}
+
+private struct ServerAddressSettingsView: View {
+    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var session: SessionController
+    @State private var serverURL = ""
+    @State private var safeError: String?
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextField("Server URL", text: $serverURL)
+                        .textContentType(.URL)
+                        .textInputAutocapitalization(.never)
+                        .keyboardType(.URL)
+                        .autocorrectionDisabled()
+
+                    if !session.defaultServerURLString.isEmpty {
+                        Button("Use bundled server") {
+                            serverURL = ""
+                            safeError = nil
+                        }
+                    }
+                } footer: {
+                    Text("Leave this blank to use the server bundled with this build.")
+                }
+
+                if let safeError {
+                    Section {
+                        Label(safeError, systemImage: "exclamationmark.triangle.fill")
+                            .foregroundStyle(LedgerTheme.negative)
+                    }
+                }
+            }
+            .navigationTitle("Server address")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") { save() }
+                }
+            }
+            .onAppear {
+                if serverURL.isEmpty {
+                    serverURL = session.preferences.serverURLString
+                }
+            }
+        }
+    }
+
+    private func save() {
+        let clean = serverURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        let candidate = clean.isEmpty ? session.defaultServerURLString : clean
+        do {
+            _ = try ServerURLPolicy.validated(candidate)
+            session.preferences.serverURLString = clean
+            dismiss()
+        } catch {
+            safeError = String(localized: "Enter a complete HTTPS server URL.")
+        }
     }
 }

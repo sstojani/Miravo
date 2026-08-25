@@ -253,6 +253,33 @@ def main() -> int:
     application = (IOS_ROOT / "ProjectLedger/App/ProjectLedgerApp.swift").read_text(
         encoding="utf-8"
     )
+    root_view = (IOS_ROOT / "ProjectLedger/App/RootView.swift").read_text(
+        encoding="utf-8"
+    )
+    for fragment in (
+        "let synchronized = await sync.synchronize(session: session)",
+        "let hasTrackers = await sync.hasAvailableTrackers(scopeKey: scopeKey)",
+        "synchronized &&",
+        "!hasTrackers",
+    ):
+        if fragment not in root_view:
+            fail(f"Server-first native provisioning contract drift: {fragment}")
+    sync_controller = (
+        IOS_ROOT / "ProjectLedger/Synchronization/SyncController.swift"
+    ).read_text(encoding="utf-8")
+    if "func hasAvailableTrackers(scopeKey: String) async -> Bool" not in sync_controller:
+        fail("Server-first provisioning must query tracker availability through the sync actor.")
+    sync_actor_source = (
+        IOS_ROOT / "ProjectLedger/Synchronization/LedgerSyncActor.swift"
+    ).read_text(encoding="utf-8")
+    for fragment in (
+        "func hasAvailableTrackers(scopeKey: String) throws -> Bool",
+        "$0.archivedAt == nil",
+        "$0.accessRevokedAt == nil",
+    ):
+        if fragment not in sync_actor_source:
+            fail(f"Sync actor tracker availability contract drift: {fragment}")
+
     installment_models = (
         "LocalInstallmentPlan.self",
         "LocalInstallmentScheduleItem.self",

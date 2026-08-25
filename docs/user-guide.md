@@ -4,7 +4,9 @@ Miravo remains useful without internet and without a Wallet Shortcut.
 
 ## First use
 
-If the installed build includes the Miravo server URL, sign in with only the invited/owner email and password. Unconfigured or debug builds still expose manual HTTPS server entry as a fallback. The current native foundation keeps the resulting access/refresh credentials in Keychain and scopes cached records to that server/user. Previously opened local data can reopen offline; an expired login will block future synchronization, not local viewing. Face ID/device-passcode UI lock is optional.
+Swipe through the privacy/offline introduction, then sign in on the final page with only the invited/owner email and password when the installed build includes the Miravo server URL. The server address is managed from Settings for local profiles; unconfigured or debug builds still expose manual HTTPS server entry as a fallback. The current native foundation keeps the resulting access/refresh credentials in Keychain and scopes cached records to that server/user. Previously opened local data can reopen offline; an expired login will block future synchronization, not local viewing. Face ID/device-passcode UI lock is optional.
+
+Continue as guest keeps Miravo fully local and requires an explicit warning. Guest data is not uploaded to the server, so deleting Miravo or losing the device removes that local-only history unless it was exported separately.
 
 ## Fast entry
 
@@ -30,7 +32,7 @@ Transfers, settlements, voided records, drafts, and tombstones are excluded from
 
 ## Sync status
 
-Pending means stored locally and durably queued. Foreground synchronization pushes stable operations, pulls bounded pages, and resumes a staged full download when a cursor is too old. Settings shows pending/failed/conflict counts, last success, safe status codes, manual synchronization/retry, and a field-by-field conflict review with “keep server” or “keep mine” decisions. Receipt rows separately show pending upload, uploading, failed, cancelled, private, or quarantined state.
+Pending means stored locally and durably queued. Foreground synchronization pushes stable operations, pulls bounded pages, and resumes a staged full download when a cursor is too old. After reinstall/sign-in, Miravo lets the server bootstrap finish before creating starter local data, and Overview/Plans prefer restored trackers with activity/plans over an empty starter tracker. Settings shows pending/failed/conflict counts, last success, safe status codes, manual synchronization/retry, and a field-by-field conflict review with “keep server” or “keep mine” decisions. Receipt rows separately show pending upload, uploading, failed, cancelled, private, or quarantined state.
 
 ## Budgets
 
@@ -66,7 +68,7 @@ The raw token appears only after creation. Copy it into the Shortcut authorizati
 
 ## Privacy and recovery
 
-Receipts are private, OCR is on-device and reviewable, and no advertising/third-party analytics SDK is used initially. Revoke lost devices/Shortcut tokens promptly. Synchronized records return after reinstall; export pending-only local data before uninstalling an unsynced app.
+Receipts are private, OCR is on-device and reviewable, and no advertising/third-party analytics SDK is used initially. Revoke lost devices/Shortcut tokens promptly. Synchronized records return after reinstall; guest/local-only records do not. Export pending-only local data before uninstalling an unsynced app.
 
 Settings → Exports can ask the server to generate CSV, PDF, or full JSON for a tracker and optional account filter. Download links are authenticated, requester-only, expire automatically, and include a checksum header. The app verifies same-origin delivery, byte count, SHA-256, and content type before handing the file to iOS for saving. Only synchronized server data is included; export pending-only local changes before uninstalling an unsynced app.
 
