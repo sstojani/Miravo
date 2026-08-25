@@ -545,7 +545,7 @@ actor APIClient: SyncTransport {
         }
         var request = URLRequest(url: endpoint(String(downloadURL.dropFirst())))
         request.httpMethod = "GET"
-        request.setValue(job.contentType, forHTTPHeaderField: "Accept")
+        request.setValue("application/octet-stream, */*", forHTTPHeaderField: "Accept")
         request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
         request.setValue(UUID().uuidString.lowercased(), forHTTPHeaderField: "X-Request-ID")
         let (temporaryURL, response) = try await session.download(for: request)

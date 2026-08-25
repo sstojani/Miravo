@@ -8,7 +8,9 @@ from django.core.management.base import CommandError
 from rest_framework.test import APIClient
 
 from apps.audit.models import AuditEvent
-from apps.ledger.models import Category, Tracker, TrackerInvite, TrackerMembership
+from apps.ledger.currency import currency_exponent
+from apps.ledger.models import Account, Category, Tracker, TrackerInvite, TrackerMembership
+from apps.ledger.services.collaboration import create_tracker
 from apps.users.models import User
 
 pytestmark = pytest.mark.django_db
@@ -266,3 +268,30 @@ def test_demo_seed_is_explicit_nonproduction_and_idempotent(user: User) -> None:
     call_command("seed_demo", email=user.email, confirm=True)
     call_command("seed_demo", email=user.email, confirm=True)
     assert Tracker.objects.filter(owner=user, name="Demo Ledger").count() == 1
+
+
+def test_duplicate_starter_cleanup_deletes_only_empty_duplicate_trackers(user: User) -> None:
+    keep = create_tracker(owner=user, name="Everyday", base_currency="ALL")
+    Account.objects.create(
+        tracker=keep,
+        name="Cash",
+        type=Account.Type.CASH,
+        currency="ALL",
+        currency_exponent=currency_exponent("ALL"),
+        opening_balance_minor=0,
+        opening_date=keep.created_at.date(),
+    )
+    empty_duplicate = create_tracker(owner=user, name="Everyday", base_currency="ALL")
+    create_tracker(owner=user, name="Everyday", base_currency="ALL")
+
+    call_command("cleanup_duplicate_starter_trackers", email=user.email)
+    assert Tracker.objects.filter(deleted_at__isnull=True, name="Everyday").count() == 3
+
+    call_command("cleanup_duplicate_starter_trackers", email=user.email, confirm=True)
+
+    keep.refresh_from_db()
+    empty_duplicate.refresh_from_db()
+    assert keep.deleted_at is None
+    assert empty_duplicate.deleted_at is not None
+    assert Tracker.objects.filter(deleted_at__isnull=True, name="Everyday").count() == 1
+    assert AuditEvent.objects.filter(action="tracker.duplicate_starter_deleted").count() == 2
