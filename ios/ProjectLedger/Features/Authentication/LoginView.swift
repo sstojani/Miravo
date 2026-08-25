@@ -15,106 +15,107 @@ struct LoginView: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(spacing: 24) {
-                    VStack(spacing: 14) {
-                        Image(systemName: "lock.shield.fill")
-                            .font(.system(size: 44, weight: .semibold))
-                            .foregroundStyle(LedgerTheme.accent)
-                            .frame(width: 88, height: 88)
-                            .background(LedgerTheme.accent.opacity(0.12), in: Circle())
-                            .accessibilityHidden(true)
-                        VStack(spacing: 8) {
-                            Text("Sign in to Miravo")
-                                .font(.largeTitle.bold())
-                                .multilineTextAlignment(.center)
-                            Text("Use your email and password to restore and sync your ledger.")
-                                .font(.body)
-                                .foregroundStyle(.secondary)
-                                .multilineTextAlignment(.center)
-                        }
-                    }
+            ZStack {
+                LinearGradient(
+                    colors: [LedgerTheme.accent.opacity(0.22), Color.clear],
+                    startPoint: .topLeading,
+                    endPoint: .center
+                )
+                .ignoresSafeArea()
 
-                    VStack(spacing: 14) {
-                        if session.defaultServerURLString.isEmpty {
-                            serverURLField
-                        }
-                        TextField("Email", text: $email)
-                            .textContentType(.username)
-                            .textInputAutocapitalization(.never)
-                            .keyboardType(.emailAddress)
-                            .autocorrectionDisabled()
-                            .submitLabel(.next)
-                            .miravoAuthField()
-                        SecureField("Password", text: $password)
-                            .textContentType(.password)
-                            .submitLabel(.go)
-                            .onSubmit { submit() }
-                            .miravoAuthField()
-                    }
-
-                    if let message = session.errorMessage {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Label(message, systemImage: "exclamationmark.triangle.fill")
-                                .foregroundStyle(LedgerTheme.negative)
-                            if let requestID = session.requestID {
-                                Text(
-                                    String.localizedStringWithFormat(
-                                        String(localized: "Request ID format"),
-                                        requestID
-                                    )
-                                )
-                                    .font(.caption.monospaced())
+                ScrollView {
+                    VStack(spacing: 26) {
+                        VStack(spacing: 14) {
+                            Image(systemName: "person.crop.circle.badge.checkmark")
+                                .font(.system(size: 48, weight: .semibold))
+                                .foregroundStyle(LedgerTheme.accent)
+                                .frame(width: 96, height: 96)
+                                .background(LedgerTheme.accent.opacity(0.13), in: Circle())
+                                .accessibilityHidden(true)
+                            VStack(spacing: 8) {
+                                Text("Sign in to Miravo")
+                                    .font(.largeTitle.bold())
+                                    .multilineTextAlignment(.center)
+                                Text("Use your email and password to restore and sync your ledger.")
+                                    .font(.body)
                                     .foregroundStyle(.secondary)
+                                    .multilineTextAlignment(.center)
                             }
                         }
-                        .accessibilityElement(children: .combine)
-                    }
 
-                    if let warning = session.logoutWarning {
-                        Label(warning, systemImage: "exclamationmark.circle")
-                            .font(.footnote)
-                            .foregroundStyle(LedgerTheme.warning)
+                        VStack(spacing: 14) {
+                            if session.defaultServerURLString.isEmpty {
+                                serverURLField
+                            }
+                            MiravoAuthTextField(
+                                title: "Email",
+                                systemImage: "envelope.fill",
+                                text: $email,
+                                contentType: .username,
+                                keyboardType: .emailAddress
+                            )
+                            MiravoAuthSecureField(
+                                title: "Password",
+                                text: $password,
+                                onSubmit: submit
+                            )
+                        }
+
+                        if let message = session.errorMessage {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Label(message, systemImage: "exclamationmark.triangle.fill")
+                                    .foregroundStyle(LedgerTheme.negative)
+                                if let requestID = session.requestID {
+                                    Text(
+                                        String.localizedStringWithFormat(
+                                            String(localized: "Request ID format"),
+                                            requestID
+                                        )
+                                    )
+                                        .font(.caption.monospaced())
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
                             .accessibilityElement(children: .combine)
-                    }
+                        }
 
-                    Button(action: submit) {
-                        HStack {
-                            if session.isWorking {
-                                ProgressView()
-                            }
-                            if session.isWorking {
-                                Text("Signing in…")
-                            } else {
-                                Text("Sign in")
-                            }
+                        if let warning = session.logoutWarning {
+                            Label(warning, systemImage: "exclamationmark.circle")
+                                .font(.footnote)
+                                .foregroundStyle(LedgerTheme.warning)
+                                .accessibilityElement(children: .combine)
                         }
-                        .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
-                    .disabled(effectiveServerURL.isEmpty || email.isEmpty || password.isEmpty || session.isWorking)
-                    .padding(.top, 4)
 
-                    if session.canOpenOffline {
-                        Button("Open previously synchronized data offline") {
-                            session.openOffline()
+                        VStack(spacing: 12) {
+                            MiravoPrimaryAuthButton(
+                                title: "Sign in",
+                                loadingTitle: "Signing in…",
+                                isLoading: session.isWorking,
+                                isDisabled: effectiveServerURL.isEmpty ||
+                                    email.isEmpty ||
+                                    password.isEmpty ||
+                                    session.isWorking,
+                                action: submit
+                            )
+
+                            if session.canOpenOffline {
+                                MiravoSecondaryAuthButton(
+                                    title: "Open previously synchronized data offline",
+                                    action: session.openOffline
+                                )
+                            } else if !allowsDismiss {
+                                MiravoSecondaryAuthButton(
+                                    title: "Continue without server",
+                                    action: session.completeOnboarding
+                                )
+                            }
                         }
-                        .font(.body.weight(.semibold))
-                        .foregroundStyle(LedgerTheme.accent)
-                        .frame(maxWidth: .infinity)
-                    } else if !allowsDismiss {
-                        Button("Continue without server") {
-                            session.completeOnboarding()
-                        }
-                        .font(.body.weight(.semibold))
-                        .foregroundStyle(LedgerTheme.accent)
-                        .frame(maxWidth: .infinity)
                     }
+                    .padding()
+                    .frame(maxWidth: 440)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 28)
                 }
-                .padding()
-                .frame(maxWidth: 620)
-                .frame(maxWidth: .infinity)
             }
             .navigationTitle("Miravo")
             .navigationBarTitleDisplayMode(.inline)
@@ -143,13 +144,13 @@ struct LoginView: View {
     }
 
     private var serverURLField: some View {
-        TextField("Server URL", text: $serverURL)
-            .textContentType(.URL)
-            .textInputAutocapitalization(.never)
-            .keyboardType(.URL)
-            .autocorrectionDisabled()
-            .submitLabel(.next)
-            .miravoAuthField()
+        MiravoAuthTextField(
+            title: "Server URL",
+            systemImage: "network",
+            text: $serverURL,
+            contentType: .URL,
+            keyboardType: .URL
+        )
     }
 
     private func submit() {
@@ -167,19 +168,5 @@ struct LoginView: View {
                 }
             }
         }
-    }
-}
-
-private extension View {
-    func miravoAuthField() -> some View {
-        self
-            .textFieldStyle(.plain)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 14)
-            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8))
-            .overlay {
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(.white.opacity(0.08), lineWidth: 1)
-            }
     }
 }

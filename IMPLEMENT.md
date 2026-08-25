@@ -1290,3 +1290,27 @@ Create a clean local receipt checkpoint after one final regression/secret scan. 
 ### Verification boundary
 
 - Swift type checking, SwiftData runtime behavior, iOS notification prompting, the Plans restored-data selection behavior, Collaboration entry behavior, Shortcut defaults sheet interaction, and real-device UI smoothness remain **unverified until GitHub macOS/device execution**.
+
+## 2026-08-25 — Guest sign-in adoption, export listing, and auth UI follow-up
+
+### Material work
+
+- Changed guest-to-login behavior so successful email/password sign-in uses the authenticated server/user scope rather than keeping a `local|...` guest scope active.
+- Added a one-time guest profile adoption step before the first authenticated sync. The exact untouched guest starter profile is deleted locally so it cannot upload duplicate Everyday/Cash/General rows; guest profiles with real local content are moved into the authenticated scope and pending outbox operations are resequenced without changing their payloads or operation IDs.
+- Added SwiftData regression tests for both guest-adoption cases: untouched guest bootstrap discard and guest expense migration into the authenticated scope.
+- Fixed native export listing to decode DRF cursor pagination from `/api/v1/export-jobs/` and follow bounded pages. The exported CSV/PDF/JSON document now advertises writable content types to the iOS file exporter.
+- Replaced the remaining standalone/onboarding sign-in field stack with shared icon-led material auth controls and full-width primary/secondary actions.
+- Updated durable plan/status, decision log, test matrix, and English/Albanian localization.
+
+### Commands and outcomes
+
+- `python ios\check-localization-coverage.py`: **passed locally on Windows**; 794 literal UI keys covered with English/Albanian parity.
+- `python ios\check-project-contract.py`: **passed locally on Windows**.
+- `git diff --check`: **passed locally on Windows**; Git reported expected CRLF working-copy warnings only.
+- `uv run pytest backend\tests\test_exports.py -q`: **passed locally on Windows**; 3 tests passed with the pre-existing staticfiles warning.
+
+### Verification boundary
+
+- Backend export behavior is **verified locally on Windows**.
+- Guest adoption SwiftData behavior is **authored in native tests but not executed** because this Windows environment cannot run Xcode or iOS simulator tests.
+- Swift type checking, FileExporter runtime behavior, sign-in layout on device, guest-to-login migration on the physical iPhone, and any cleanup of already duplicated cloud rows remain **unverified until GitHub macOS/device execution and an explicit data-repair step**.

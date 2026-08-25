@@ -25,6 +25,65 @@ struct LocalLedgerRepositoryTests {
         #expect(outbox.map(\.localSequence).sorted() == [1, 2, 3, 4])
     }
 
+    @Test func untouchedGuestBootstrapIsDiscardedWhenSigningIn() throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let repository = LocalLedgerRepository(context: context)
+        let guestScope = "local|guest-device"
+
+        _ = try repository.bootstrapDefaults(scopeKey: guestScope)
+        let result = try repository.adoptGuestProfileForAuthentication(
+            sourceScopeKey: guestScope,
+            targetScopeKey: scope
+        )
+
+        #expect(result == .discardedDisposableProfile)
+        #expect(try context.fetch(FetchDescriptor<LocalTracker>()).isEmpty)
+        #expect(try context.fetch(FetchDescriptor<LocalAccount>()).isEmpty)
+        #expect(try context.fetch(FetchDescriptor<LocalCategory>()).isEmpty)
+        #expect(try context.fetch(FetchDescriptor<OutboxMutation>()).isEmpty)
+    }
+
+    @Test func guestExpenseMovesToAuthenticatedScopeBeforeSync() throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let repository = LocalLedgerRepository(context: context)
+        let guestScope = "local|guest-device"
+        let tracker = try repository.bootstrapDefaults(scopeKey: guestScope)
+        let account = try #require(context.fetch(FetchDescriptor<LocalAccount>()).first)
+        let category = try #require(context.fetch(FetchDescriptor<LocalCategory>()).first)
+
+        let transaction = try repository.createTransaction(
+            scopeKey: guestScope,
+            tracker: tracker,
+            account: account,
+            category: category,
+            kind: .expense,
+            money: Money(minorUnits: 950, currencyCode: "ALL", exponent: 2),
+            merchant: "Guest coffee"
+        )
+
+        let result = try repository.adoptGuestProfileForAuthentication(
+            sourceScopeKey: guestScope,
+            targetScopeKey: scope
+        )
+
+        #expect(result == .migratedLocalProfile)
+        #expect(try context.fetch(FetchDescriptor<LocalTracker>()).map(\.scopeKey) == [scope])
+        #expect(try context.fetch(FetchDescriptor<LocalAccount>()).map(\.scopeKey) == [scope])
+        #expect(try context.fetch(FetchDescriptor<LedgerTransaction>()).map(\.scopeKey) == [scope])
+        #expect(try context.fetch(FetchDescriptor<LocalAccountMovement>()).map(\.scopeKey) == [scope])
+        #expect(try context.fetch(FetchDescriptor<LocalCategoryAllocation>()).map(\.scopeKey) == [scope])
+        #expect(try context.fetch(FetchDescriptor<LedgerTransaction>()).first?.id == transaction.id)
+        let mutations = try context.fetch(FetchDescriptor<OutboxMutation>())
+            .sorted { $0.localSequence < $1.localSequence }
+        #expect(mutations.count == 5)
+        #expect(mutations.allSatisfy { $0.scopeKey == scope })
+        #expect(mutations.map(\.localSequence) == [1, 2, 3, 4, 5])
+        #expect(try context.fetch(FetchDescriptor<SyncCursor>()).map(\.scopeKey) == [scope])
+        #expect(try #require(context.fetch(FetchDescriptor<SyncCursor>()).first).nextOutboxSequence == 6)
+    }
+
     @Test func createEditDeleteAndRestoreEachAppendDurableMutation() throws {
         let container = try makeContainer()
         let context = container.mainContext

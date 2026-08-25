@@ -267,6 +267,7 @@ private struct ExportJobRow: View {
 
 struct ExportFileDocument: FileDocument {
     static var readableContentTypes: [UTType] { [.data] }
+    static var writableContentTypes: [UTType] { [.commaSeparatedText, .pdf, .json, .data] }
 
     let filename: String
     let contentType: UTType
