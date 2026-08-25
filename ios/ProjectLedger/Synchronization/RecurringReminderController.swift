@@ -274,6 +274,14 @@ final class RecurringReminderController: ObservableObject {
 
         guard isEnabled else {
             await removePending(scopeKey: scopeKey)
+            await notifyBudgetThresholds(
+                scopeKey: scopeKey,
+                generation: generation
+            )
+            await notifyShortcutExpenses(
+                scopeKey: scopeKey,
+                generation: generation
+            )
             return
         }
         guard authorizationState == .authorized else {
@@ -388,12 +396,18 @@ final class RecurringReminderController: ObservableObject {
             scopeKey: scopeKey,
             generation: generation
         )
+        await notifyShortcutExpenses(
+            scopeKey: scopeKey,
+            generation: generation
+        )
     }
 
     private func notifyBudgetThresholds(
         scopeKey: String,
         generation: UInt64
     ) async {
+        guard authorizationState == .authorized else { return }
+
         do {
             let budgetDescriptor = FetchDescriptor<LocalBudget>(
                 predicate: #Predicate {
@@ -513,6 +527,89 @@ final class RecurringReminderController: ObservableObject {
         }
     }
 
+    private func notifyShortcutExpenses(
+        scopeKey: String,
+        generation: UInt64
+    ) async {
+        guard authorizationState == .authorized else { return }
+
+        let now = Date.now
+        let previousScan = preferences.shortcutExpenseNotificationScanAt(
+            scopeKey: scopeKey
+        ) ?? now.addingTimeInterval(-300)
+
+        do {
+            let descriptor = FetchDescriptor<LedgerTransaction>(
+                predicate: #Predicate {
+                    $0.scopeKey == scopeKey &&
+                        $0.deletedAt == nil &&
+                        $0.sourceRaw == "shortcut" &&
+                        $0.kindRaw == "expense" &&
+                        $0.statusRaw == "posted" &&
+                        $0.capturedAt > previousScan
+                },
+                sortBy: [SortDescriptor(\LedgerTransaction.capturedAt)]
+            )
+            let transactions = try modelContainer.mainContext.fetch(descriptor)
+
+            for transaction in transactions {
+                guard isCurrent(generation, scopeKey: scopeKey) else { return }
+                let identifier = shortcutExpenseIdentifier(
+                    scopeKey: scopeKey,
+                    transactionID: transaction.id
+                )
+                guard !preferences.hasSentShortcutExpenseNotification(
+                    identifier: identifier
+                ) else {
+                    continue
+                }
+
+                let amount = transaction.money?.formatted(locale: .current) ??
+                    "\(transaction.amountMinor) \(transaction.currencyCode)"
+                let place = transaction.merchant
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                let body = String.localizedStringWithFormat(
+                    String(localized: "%@ was spent at %@."),
+                    amount,
+                    place.isEmpty ? String(localized: "a merchant") : place
+                )
+
+                do {
+                    try await scheduler.post(
+                        identifier: identifier,
+                        title: String(localized: "Shortcut expense added"),
+                        body: body
+                    )
+                    preferences.recordShortcutExpenseNotification(
+                        identifier: identifier
+                    )
+                } catch {
+                    guard isCurrent(generation, scopeKey: scopeKey) else {
+                        return
+                    }
+                    message = String(
+                        localized:
+                            "Some Shortcut expense alerts could not be delivered. Try again."
+                    )
+                }
+            }
+
+            preferences.setShortcutExpenseNotificationScanAt(
+                now,
+                scopeKey: scopeKey
+            )
+        } catch {
+            guard isCurrent(generation, scopeKey: scopeKey) else { return }
+
+            if message == nil {
+                message = String(
+                    localized:
+                        "Some Shortcut expense alerts could not be delivered. Try again."
+                )
+            }
+        }
+    }
+
     private func budgetThresholdIdentifier(
         scopeKey: String,
         budgetID: UUID,
@@ -528,6 +625,22 @@ final class RecurringReminderController: ObservableObject {
         ].joined(separator: ":")
 
         return "projectledger.budget." +
+            RecurringReminderPlanner.scopeDigest(scopeKey) +
+            "." +
+            RecurringReminderPlanner.scopeDigest(source)
+    }
+
+    private func shortcutExpenseIdentifier(
+        scopeKey: String,
+        transactionID: UUID
+    ) -> String {
+        let source = [
+            scopeKey,
+            "shortcut",
+            transactionID.uuidString.lowercased(),
+        ].joined(separator: ":")
+
+        return "projectledger.shortcut." +
             RecurringReminderPlanner.scopeDigest(scopeKey) +
             "." +
             RecurringReminderPlanner.scopeDigest(source)

@@ -26,3 +26,33 @@ def test_bootstrap_owner_uses_one_time_environment(monkeypatch: pytest.MonkeyPat
 def test_noninteractive_bootstrap_requires_environment() -> None:
     with pytest.raises(CommandError, match="required"):
         call_command("bootstrap_owner", no_input=True)
+
+
+@pytest.mark.django_db
+def test_create_app_user_uses_environment_for_normal_user(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("PROJECT_LEDGER_CREATE_USER_EMAIL", "TEST@EXAMPLE.TEST")
+    monkeypatch.setenv("PROJECT_LEDGER_CREATE_USER_PASSWORD", "Strong-Test-Password-9274!")
+    monkeypatch.setenv("PROJECT_LEDGER_CREATE_USER_DISPLAY_NAME", "Test User")
+
+    call_command("create_app_user", no_input=True)
+
+    user = User.objects.get()
+    assert user.email == "test@example.test"
+    assert user.is_active
+    assert not user.is_staff
+    assert not user.is_superuser
+    assert user.check_password("Strong-Test-Password-9274!")
+    assert user.profile.display_name == "Test User"
+
+    monkeypatch.setenv("PROJECT_LEDGER_CREATE_USER_EMAIL", "test@example.test")
+    monkeypatch.setenv("PROJECT_LEDGER_CREATE_USER_PASSWORD", "Strong-Test-Password-9274!")
+    with pytest.raises(CommandError, match="already exists"):
+        call_command("create_app_user", no_input=True)
+
+
+@pytest.mark.django_db
+def test_noninteractive_create_app_user_requires_environment() -> None:
+    with pytest.raises(CommandError, match="required"):
+        call_command("create_app_user", no_input=True)

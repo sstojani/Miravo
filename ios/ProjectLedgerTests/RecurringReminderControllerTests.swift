@@ -131,6 +131,53 @@ struct RecurringReminderControllerTests {
         #expect(!scheduled.body.contains("120000"))
     }
 
+    @Test func shortcutExpenseNotificationIncludesAmountAndMerchantOnce() async throws {
+        let container = try makeContainer()
+        let now = Date.now
+        let transactionID = UUID(
+            uuidString: "61000000-0000-0000-0000-000000000005"
+        )!
+        let transaction = LedgerTransaction(
+            id: transactionID,
+            scopeKey: scope,
+            trackerID: UUID(),
+            accountID: UUID(),
+            kind: .expense,
+            money: try Money(minorUnits: 500, currencyCode: "ALL", exponent: 2),
+            source: .shortcut,
+            merchant: "Corner market",
+            occurredAt: now,
+            syncState: .synced,
+            createdAt: now
+        )
+        transaction.capturedAt = now
+        container.mainContext.insert(transaction)
+        try container.mainContext.save()
+        let fixture = try makePreferences()
+        defer { fixture.defaults.removePersistentDomain(forName: fixture.suite) }
+        fixture.preferences.setShortcutExpenseNotificationScanAt(
+            now.addingTimeInterval(-60),
+            scopeKey: scope
+        )
+        let scheduler = FakeRecurringNotificationScheduler(state: .authorized)
+        let controller = RecurringReminderController(
+            modelContainer: container,
+            preferences: fixture.preferences,
+            scheduler: scheduler
+        )
+
+        await controller.configure(scopeKey: scope)
+        await controller.refresh(scopeKey: scope)
+
+        #expect(scheduler.posted.count == 1)
+        let posted = try #require(scheduler.posted.first)
+        #expect(posted.title == "Shortcut expense added")
+        #expect(posted.body.contains("Corner market"))
+        #expect(posted.body.contains("ALL"))
+        #expect(!posted.identifier.contains(scope))
+        #expect(!posted.identifier.contains(transactionID.uuidString))
+    }
+
     private func makeContainer() throws -> ModelContainer {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
         return try ModelContainer(

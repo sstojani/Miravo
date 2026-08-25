@@ -7,7 +7,7 @@ export UV_LINK_MODE ?= copy
 COMPOSE ?= docker compose
 BACKEND_DIR := backend
 
-.PHONY: help bootstrap format format-check lint typecheck test schema schema-check check run migrations makemigrations bootstrap-owner dev-up dev-down docker-check
+.PHONY: help bootstrap format format-check lint typecheck test schema schema-check check run migrations makemigrations bootstrap-owner create-user dev-up dev-down docker-check
 
 help:
 	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z_-]+:.*## / {printf "%-22s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -52,6 +52,9 @@ makemigrations: ## Generate migrations for changed models
 
 bootstrap-owner: ## Create the first owner interactively or from one-time env values
 	cd $(BACKEND_DIR) && ../.venv/bin/python manage.py bootstrap_owner
+
+create-user: ## Create a normal non-admin app user interactively or from env values
+	cd $(BACKEND_DIR) && ../.venv/bin/python manage.py create_app_user
 
 dev-up: ## Start the development Compose stack
 	$(COMPOSE) -f infra/compose.yml -f infra/compose.dev.yml up --build -d

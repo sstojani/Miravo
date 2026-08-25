@@ -18,6 +18,7 @@ settings:
     GENERATE_INFOPLIST_FILE: false
     IPHONEOS_DEPLOYMENT_TARGET: "18.0"
     MARKETING_VERSION: 0.1.0
+    MIRAVO_DEFAULT_SERVER_URL: "https://laptop-1.tail029be8.ts.net:8443"
     PRODUCT_BUNDLE_IDENTIFIER: com.example.projectledger
     SWIFT_STRICT_CONCURRENCY: complete
     SWIFT_VERSION: "6.0"

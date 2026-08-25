@@ -1213,3 +1213,35 @@ Create a clean local receipt checkpoint after one final regression/secret scan. 
 
 - Backend CI and dependency/container audits are **verified on GitHub Actions** at commit `738c98f7cd2383fb5a1c88db630645398fffa24b`.
 - The UI-test concurrency fix is **locally source-checked** but requires the next hosted macOS run for compiler/test verification. The next exact action is to commit, push, and inspect iOS CI again.
+
+## 2026-08-25 — Latest main pull, automatic server URL, and Shortcut expense alerts
+
+### Material work
+
+- Fast-forwarded local `main` from `c50e994` to GitHub `origin/main` at `3a52c59`, bringing in the merged iOS experience/notification, Quick Add focus, and sync dependency-order fixes.
+- Added `MIRAVO_DEFAULT_SERVER_URL` to the XcodeGen settings and `MiravoDefaultServerURL` to both Debug and Release plists. The native session/login flow now uses that bundled HTTPS origin automatically when present, so ordinary login can be email/password-only. Manual server URL entry remains available for unconfigured/debug builds and fallback recovery. The provided Miravo server origin is now bundled as `https://laptop-1.tail029be8.ts.net:8443`.
+- Added post-sync Shortcut expense notifications to the existing local-notification controller. When iOS notification permission is already authorized, a newly synchronized `source=shortcut`, posted expense can produce one Miravo notification containing the formatted amount and merchant/place. Notification identifiers and preference scan keys remain scope-hashed, and duplicate transaction alerts are suppressed.
+- Updated the iOS source contract to keep generic plan/budget reminder paths free of private preview content while explicitly allowing the dedicated Shortcut capture-alert block to read amount/currency/merchant for the owner-requested confirmation.
+- Updated plan/status, decisions, test matrix, user guide, and Shortcut setup documentation to record the build-time server URL requirement and the platform limit that Miravo can only notify after it learns about a Shortcut-created transaction through sync.
+
+### Commands and outcomes
+
+- `git fetch origin --prune`: **passed**.
+- `git checkout main && git merge --ff-only origin/main`: **passed**, local `main` is at `3a52c59`.
+- `python ios/check-localization-coverage.py` using bundled Python: **passed locally on Windows** — 797 literal UI keys.
+- `python -m py_compile ios/check-project-contract.py`: **passed locally on Windows**.
+- `python ios/check-project-contract.py` using bundled Python: **passed locally on Windows**.
+- `git diff --check`: **passed locally on Windows**; Git emitted CRLF conversion warnings only.
+- `uv run pytest backend/tests -q`: **95 passed, 1 failed on Windows**. The failing assertion is the pre-existing Unix private-file mode check in `backend/tests/test_attachments.py` (`0o600` expected, Windows reported `0o666`). No backend code was changed in this slice; Linux/GitHub remains the meaningful verifier for that permission assertion.
+
+### Verification boundary and next exact action
+
+- Native source/localization/privacy-contract behavior is **verified locally on Windows** where possible.
+- Swift type checking, SwiftData runtime behavior, local notification delivery, bundled URL behavior in the generated app, Shortcut trigger execution, and device behavior remain **unverified** until macOS/Xcode and the signed iPhone build run.
+- The release build now carries the provided HTTPS API origin through `MIRAVO_DEFAULT_SERVER_URL`; real-device login/sync still needs verification against the live host.
+
+## 2026-08-25 — Admin-created test app users
+
+- Added `create_app_user`, a Django management command for creating normal non-admin Miravo accounts while public self-registration remains disabled by default.
+- The command can run interactively or from one-time `PROJECT_LEDGER_CREATE_USER_EMAIL`, `PROJECT_LEDGER_CREATE_USER_PASSWORD`, and optional `PROJECT_LEDGER_CREATE_USER_DISPLAY_NAME` values. It validates passwords, refuses duplicate emails, creates an active non-staff/non-superuser account, records a safe audit event, and clears the one-time environment values from the process.
+- Added `make create-user` plus README and Ubuntu runbook instructions for creating test accounts on the deployed server without placing passwords in source or command-line arguments.

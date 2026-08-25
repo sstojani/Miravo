@@ -34,6 +34,11 @@ make bootstrap-owner
 curl http://127.0.0.1:8080/api/v1/health/ready
 ```
 
+Create additional non-admin test users with `make create-user` or
+`python backend/manage.py create_app_user`. The command can run interactively, or from
+one-time `PROJECT_LEDGER_CREATE_USER_EMAIL`, `PROJECT_LEDGER_CREATE_USER_PASSWORD`,
+and optional `PROJECT_LEDGER_CREATE_USER_DISPLAY_NAME` environment values.
+
 The sample environment values are intentionally unsafe for production. Follow `infra/RUNBOOK.md` before any server use.
 
 ## Verification vocabulary

@@ -121,6 +121,13 @@
 "Savings" = "Kursime";
 "Server" = "Serveri";
 "Server URL" = "Adresa e serverit";
+"Sign in to Miravo" = "Hyr në Miravo";
+"Use your email and password to sync with your Miravo server. Offline entry still works without a connection." = "Përdor emailin dhe fjalëkalimin për t'u sinkronizuar me serverin tënd Miravo. Regjistrimi offline vazhdon të punojë pa lidhje.";
+"Use a different server" = "Përdor një server tjetër";
+"%@ was spent at %@." = "%@ u shpenzuan te %@.";
+"a merchant" = "një tregtar";
+"Shortcut expense added" = "Shpenzim nga Shortcut u shtua";
+"Some Shortcut expense alerts could not be delivered. Try again." = "Disa njoftime për shpenzimet nga Shortcut nuk mund të dërgoheshin. Provo përsëri.";
 "Session notice" = "Njoftim për sesionin";
 "Settings" = "Cilësimet";
 "Settlement" = "Shlyerje";

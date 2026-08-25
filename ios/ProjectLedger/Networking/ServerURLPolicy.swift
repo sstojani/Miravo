@@ -46,6 +46,25 @@ enum ServerURLPolicy {
     }
 }
 
+enum BundledServerConfiguration {
+    private static let defaultServerURLKey = "MiravoDefaultServerURL"
+
+    static var defaultServerURLString: String {
+        guard let raw = Bundle.main.object(
+            forInfoDictionaryKey: defaultServerURLKey
+        ) as? String else {
+            return ""
+        }
+        let value = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty, !value.contains("$(") else { return "" }
+        return value
+    }
+
+    static var hasDefaultServerURL: Bool {
+        !defaultServerURLString.isEmpty
+    }
+}
+
 enum SessionScope {
     static func key(serverURL: URL, userID: UUID) -> String {
         "\(serverURL.absoluteString)|\(userID.uuidString.lowercased())"
