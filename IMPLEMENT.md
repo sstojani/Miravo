@@ -1314,3 +1314,22 @@ Create a clean local receipt checkpoint after one final regression/secret scan. 
 - Backend export behavior is **verified locally on Windows**.
 - Guest adoption SwiftData behavior is **authored in native tests but not executed** because this Windows environment cannot run Xcode or iOS simulator tests.
 - Swift type checking, FileExporter runtime behavior, sign-in layout on device, guest-to-login migration on the physical iPhone, and any cleanup of already duplicated cloud rows remain **unverified until GitHub macOS/device execution and an explicit data-repair step**.
+
+## 2026-08-25 — Export Accept header and duplicate starter cleanup
+
+### Material work
+
+- Changed native export downloads to request `application/octet-stream, */*` instead of the specific job media type. DRF's global JSON-only renderer can reject a narrow `text/csv` Accept header before the download action returns its `FileResponse`; the client still verifies the final response content type, byte count, and checksum before presenting the document.
+- Added a backend `cleanup_duplicate_starter_trackers` command for accounts affected by the old guest/sign-in duplication behavior. It is dry-run by default, groups duplicate active owner trackers by email/name/currency, keeps the tracker with real material records, and only deletes duplicate trackers that contain no transactions, budgets, recurring rules, installment plans, settlements, or attachments when `--confirm` is supplied.
+- Added regression coverage for the broad export Accept header and for dry-run/confirmed cleanup of empty duplicate starter trackers. Existing cloud rows are not mutated by code changes alone; running the command on the deployed server remains an explicit operator action.
+
+### Commands and outcomes
+
+- `python ios\check-project-contract.py`: **passed locally on Windows**.
+- `python ios\check-localization-coverage.py`: **passed locally on Windows**; 794 literal UI keys covered with English/Albanian parity.
+- `uv run pytest backend\tests\test_exports.py backend\tests\test_tracker_api.py -q`: **passed locally on Windows**; 10 tests passed with the pre-existing staticfiles warning.
+
+### Verification boundary
+
+- Backend export download behavior and cleanup command selection are **verified locally on Windows**.
+- The live server has not been inspected or mutated in this slice. Cleaning the user's existing duplicate cloud rows requires an explicit dry run against the deployed server first, then explicit approval before the confirmed cleanup command is run.

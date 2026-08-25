@@ -234,6 +234,12 @@ def test_export_download_requires_requester_and_unexpired_job(
         format="json",
     )
     assert created.status_code == 201, created.data
+    accepted = owner_client.get(
+        created.data["download_url"],
+        HTTP_ACCEPT="application/octet-stream, */*",
+    )
+    assert accepted.status_code == 200
+    assert accepted["Content-Type"].startswith("text/csv")
     assert viewer_client.get(created.data["download_url"]).status_code == 403
     expired_job = ExportJob.objects.get(id=created.data["id"])
     expired_job.expires_at = timezone.now() - timedelta(seconds=1)
