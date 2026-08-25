@@ -44,6 +44,30 @@ docker compose -f infra/compose.yml run --rm api python manage.py bootstrap_owne
 
 Remove the one-time values immediately. The command refuses to create a second owner/admin.
 
+## Test app users
+
+Create extra login accounts as normal non-admin users. Run interactively so the password
+does not enter shell history:
+
+```bash
+docker compose -f infra/compose.yml run --rm api python manage.py create_app_user
+```
+
+For automation, pass one-time environment values into the API container and remove them
+from the shell immediately after use:
+
+```bash
+export PROJECT_LEDGER_CREATE_USER_EMAIL='miravo-test@example.com'
+export PROJECT_LEDGER_CREATE_USER_DISPLAY_NAME='Miravo Test'
+export PROJECT_LEDGER_CREATE_USER_PASSWORD='replace-with-a-long-random-password'
+docker compose -f infra/compose.yml run --rm \
+  -e PROJECT_LEDGER_CREATE_USER_EMAIL \
+  -e PROJECT_LEDGER_CREATE_USER_DISPLAY_NAME \
+  -e PROJECT_LEDGER_CREATE_USER_PASSWORD \
+  api python manage.py create_app_user --no-input
+unset PROJECT_LEDGER_CREATE_USER_EMAIL PROJECT_LEDGER_CREATE_USER_DISPLAY_NAME PROJECT_LEDGER_CREATE_USER_PASSWORD
+```
+
 ## Operations
 
 ```bash

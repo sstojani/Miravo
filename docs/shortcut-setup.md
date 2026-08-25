@@ -63,6 +63,8 @@ That request uses an ordinary access JWT. Its 201 response is the only response 
 
 If transaction, account, and tracker-base currencies do not match, this minimal automation is insufficient. It must ask the user for explicit account/base minor-unit amounts and the full rate snapshot described in `docs/api.md`, or queue the entry for manual app review. The server never invents a rate.
 
+Miravo can show its own local “Shortcut expense added” notification only after the app synchronizes and sees the new `source=shortcut` expense. This does not replace immediate Shortcut feedback: if the app is not running and no background refresh occurs, the Shortcut should still show its own success/failure result.
+
 ## Safe synthetic test
 
 Before enabling the personal trigger, copy `docs/examples/shortcut-transaction.json`, replace the tracker/account IDs and UUID, and send it with a normal test Shortcut using merchant `PROJECT LEDGER TEST` and `needs_review=true`. Send the identical request twice and confirm the first result is `created`, the second is `duplicate`, and only one transaction exists. Void the test through the app afterward. Never test using a real card credential.

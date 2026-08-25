@@ -18,6 +18,10 @@ final class AppPreferences {
         static let remoteIdentity = "server.remoteIdentity"
         static let serverConnectionEnabled = "server.connectionEnabled"
         static let serverURL = "server.baseURL"
+        static let shortcutExpenseNotification =
+            "shortcut.expenseNotification."
+        static let shortcutExpenseNotificationScanAt =
+            "shortcut.expenseNotificationScanAt."
         static let signedOut = "session.signedOut"
     }
 
@@ -120,6 +124,40 @@ final class AppPreferences {
         )
     }
 
+    func hasSentShortcutExpenseNotification(identifier: String) -> Bool {
+        defaults.bool(
+            forKey: Key.shortcutExpenseNotification + identifier
+        )
+    }
+
+    func recordShortcutExpenseNotification(identifier: String) {
+        defaults.set(
+            true,
+            forKey: Key.shortcutExpenseNotification + identifier
+        )
+    }
+
+    func shortcutExpenseNotificationScanAt(scopeKey: String) -> Date? {
+        let interval = defaults.double(
+            forKey: scopedKey(
+                Key.shortcutExpenseNotificationScanAt,
+                scopeKey: scopeKey
+            )
+        )
+        guard interval > 0 else { return nil }
+        return Date(timeIntervalSince1970: interval)
+    }
+
+    func setShortcutExpenseNotificationScanAt(_ date: Date, scopeKey: String) {
+        defaults.set(
+            date.timeIntervalSince1970,
+            forKey: scopedKey(
+                Key.shortcutExpenseNotificationScanAt,
+                scopeKey: scopeKey
+            )
+        )
+    }
+
     var deviceID: String {
         if let existing = defaults.string(forKey: Key.deviceID), !existing.isEmpty {
             return existing
@@ -181,7 +219,9 @@ final class AppPreferences {
         for key in defaults.dictionaryRepresentation().keys where
             key.hasPrefix(Key.budgetThresholdNotification) ||
             key.hasPrefix(Key.recurringReminderLeadHours) ||
-            key.hasPrefix(Key.recurringRemindersEnabled) {
+            key.hasPrefix(Key.recurringRemindersEnabled) ||
+            key.hasPrefix(Key.shortcutExpenseNotification) ||
+            key.hasPrefix(Key.shortcutExpenseNotificationScanAt) {
             defaults.removeObject(forKey: key)
         }
     }

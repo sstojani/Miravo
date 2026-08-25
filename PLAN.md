@@ -1,8 +1,8 @@
 # Miravo implementation plan
 
-Last updated: 2026-08-21. A checked item is complete; its verification tier is recorded in `IMPLEMENT.md`. Items are not checked merely because scaffolding exists.
+Last updated: 2026-08-25. A checked item is complete; its verification tier is recorded in `IMPLEMENT.md`. Items are not checked merely because scaffolding exists.
 
-Current focus: **Milestone 9/10 — hosted CI hardening for native export checkpoint**. Miravo is the final product name and `https://github.com/sstojani/Miravo.git` is populated. A user-local GitHub CLI is installed at `../tools/gh`; pushes used an ephemeral PAT header and did not store credentials. Remote `main` and `agent/milestone-9-private-receipts` contain the native export source checkpoint plus follow-up CI fixes through `9fb4d2297382a7b06ca2b720b4fd70fc28c92d3e`. Backend CI and dependency/container audits are green on GitHub Actions at that revision; the remaining hosted failure is iOS simulator Swift compilation. The attachment API, isolated storage, sync metadata, native protected-file queue, camera/photo/file capture, metadata-stripped image/PDF preparation, on-device OCR review, authenticated checksum-verified preview/download, deterministic backend analytics API, matching offline native analytics calculator/UI source, backend CSV/PDF/full export jobs, and native export browsing/download source are implemented at the local/source tier. Xcode execution, physical camera/OCR/export testing, unsigned IPA, and device validation remain external until Actions and user-side signing/device checks pass.
+Current focus: **Milestone 9/10 — native sync/login polish and hosted/device verification**. Miravo is the final product name and `https://github.com/sstojani/Miravo.git` is populated. Local `main` has been fast-forwarded to remote `main` at `3a52c59`, including the iOS experience/notification, Quick Add focus, and sync dependency-order fixes. The app now bundles the provided HTTPS server origin in `MIRAVO_DEFAULT_SERVER_URL` so normal login can be email/password-only; manual server entry remains a fallback/debug path. Shortcut-created expenses now produce explicit local Miravo notifications after successful sync when iOS notification permission is already authorized. Xcode execution, physical Shortcut delivery, Docker/Linux file-mode behavior, unsigned IPA, and device validation remain external until Actions and user-side signing/device checks pass.
 
 ## Milestone 0 — Discovery and durable project plan
 
@@ -43,7 +43,7 @@ Acceptance: a clean clone starts the development stack, creates an owner, authen
 
 - [x] XcodeGen SwiftUI/iOS 18 project, design tokens, navigation, privacy manifest, localization resources, and CI source.
 - [x] SwiftData domain/outbox/cursor models and repository/use-case boundaries.
-- [x] Onboarding, server URL, login, Keychain session storage, optional local Face ID/passcode gate.
+- [x] Onboarding, bundled/default server URL fallback, login, Keychain session storage, optional local Face ID/passcode gate.
 - [x] Offline tracker/account/category and transaction create/edit/delete/reopen flows.
 - [ ] Compile and pass the authored unit/integration/UI tests on GitHub macOS.
 
@@ -69,7 +69,7 @@ Current acceptance: an authenticated device can push an ordered offline tracker/
 ## Milestone 6 — Shortcut automation
 
 - [x] Scoped hashed Shortcut credentials, context/category/account/create/batch endpoints, throttles, audit, revoke, replay and mismatch tests (server behavior verified locally; PostgreSQL/Redis/hosted CI pending).
-- [x] App token/default management screen (source, wire-model/controller tests, localization, non-persistence and clipboard contracts implemented; Xcode/runtime verification pending).
+- [x] App token/default management screen and post-sync Shortcut expense notifications (source, wire-model/controller tests, localization, non-persistence and clipboard contracts implemented; Xcode/runtime verification pending).
 - [ ] Verified manual online and queued/offline Shortcut construction guides and sample requests (contract and JSON samples authored; current-iPhone execution pending).
 
 ## Milestone 7 — Budgets, recurring/subscriptions, and installments

@@ -6,6 +6,7 @@ struct LoginView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var session: SessionController
     @State private var serverURL = ""
+    @State private var showsServerOverride = false
     @State private var email = ""
     @State private var password = ""
 
@@ -22,19 +23,30 @@ struct LoginView: View {
                             .font(.largeTitle)
                             .foregroundStyle(LedgerTheme.accent)
                             .accessibilityHidden(true)
-                        Text("Connect to your server")
+                        Text("Sign in to Miravo")
                             .font(.largeTitle.bold())
-                        Text("Financial records stay on this iPhone and synchronize only with the self-hosted server you choose.")
+                        Text("Use your email and password to sync with your Miravo server. Offline entry still works without a connection.")
                             .foregroundStyle(.secondary)
                     }
 
                     VStack(spacing: 14) {
-                        TextField("Server URL", text: $serverURL)
-                            .textContentType(.URL)
-                            .textInputAutocapitalization(.never)
-                            .keyboardType(.URL)
-                            .autocorrectionDisabled()
-                            .submitLabel(.next)
+                        if session.defaultServerURLString.isEmpty {
+                            serverURLField
+                        } else {
+                            LabeledContent(
+                                "Server",
+                                value: serverHostDescription(
+                                    effectiveServerURL
+                                )
+                            )
+                            DisclosureGroup(
+                                "Use a different server",
+                                isExpanded: $showsServerOverride
+                            ) {
+                                serverURLField
+                                    .padding(.top, 8)
+                            }
+                        }
                         TextField("Email", text: $email)
                             .textContentType(.username)
                             .textInputAutocapitalization(.never)
@@ -89,7 +101,7 @@ struct LoginView: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.large)
-                    .disabled(serverURL.isEmpty || email.isEmpty || password.isEmpty || session.isWorking)
+                    .disabled(effectiveServerURL.isEmpty || email.isEmpty || password.isEmpty || session.isWorking)
 
                     if session.canOpenOffline {
                         Button("Open previously synchronized data offline") {
@@ -123,16 +135,33 @@ struct LoginView: View {
                 }
             }
             .onAppear {
-                if serverURL.isEmpty { serverURL = session.preferences.serverURLString }
+                if serverURL.isEmpty {
+                    serverURL = session.preferences.serverURLString
+                }
                 if email.isEmpty { email = session.preferences.lastEmail }
             }
         }
     }
 
+    private var effectiveServerURL: String {
+        let override = serverURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !override.isEmpty else { return session.defaultServerURLString }
+        return override
+    }
+
+    private var serverURLField: some View {
+        TextField("Server URL", text: $serverURL)
+            .textContentType(.URL)
+            .textInputAutocapitalization(.never)
+            .keyboardType(.URL)
+            .autocorrectionDisabled()
+            .submitLabel(.next)
+    }
+
     private func submit() {
         Task {
             await session.signIn(
-                serverURL: serverURL,
+                serverURL: effectiveServerURL,
                 email: email,
                 password: password
             )
@@ -144,5 +173,9 @@ struct LoginView: View {
                 }
             }
         }
+    }
+
+    private func serverHostDescription(_ value: String) -> String {
+        URL(string: value)?.host ?? value
     }
 }

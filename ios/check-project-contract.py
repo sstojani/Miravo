@@ -214,6 +214,18 @@ def main() -> int:
     )
     if not all(fragment in reminder_controller for fragment in required_generic_copy):
         fail("Local reminder notification content must remain generic.")
+    shortcut_alert_block = ""
+    generic_reminder_controller = reminder_controller
+    if "private func notifyShortcutExpenses" in reminder_controller:
+        before_shortcut, after_shortcut = reminder_controller.split(
+            "private func notifyShortcutExpenses", maxsplit=1
+        )
+        shortcut_alert_block = after_shortcut.split(
+            "private func budgetThresholdIdentifier", maxsplit=1
+        )[0]
+        generic_reminder_controller = before_shortcut + after_shortcut.split(
+            "private func budgetThresholdIdentifier", maxsplit=1
+        )[1]
     for forbidden_reference in (
         ".amountMinor",
         ".currencyCode",
@@ -221,8 +233,22 @@ def main() -> int:
         ".note",
         ".subscriptionProvider",
     ):
-        if forbidden_reference in reminder_controller:
+        if forbidden_reference in generic_reminder_controller:
             fail(f"Notification scheduling must not read private preview data: {forbidden_reference}")
+    for required_shortcut_fragment in (
+        "private func notifyShortcutExpenses",
+        'String(localized: "Shortcut expense added")',
+        'String(localized: "%@ was spent at %@.")',
+        "recordShortcutExpenseNotification",
+    ):
+        if required_shortcut_fragment not in reminder_controller:
+            fail(f"Shortcut expense alert contract drift: {required_shortcut_fragment}")
+    for required_shortcut_reference in (".amountMinor", ".currencyCode", ".merchant"):
+        if required_shortcut_reference not in shortcut_alert_block:
+            fail(
+                "Shortcut expense alert must be the only notification path that reads "
+                f"explicit capture content: {required_shortcut_reference}"
+            )
 
     application = (IOS_ROOT / "ProjectLedger/App/ProjectLedgerApp.swift").read_text(
         encoding="utf-8"

@@ -4,7 +4,7 @@ Miravo remains useful without internet and without a Wallet Shortcut.
 
 ## First use
 
-Configure the HTTPS server URL and sign in with the invited/owner account. The current native foundation keeps the resulting access/refresh credentials in Keychain and scopes cached records to that server/user. Previously opened local data can reopen offline; an expired login will block future synchronization, not local viewing. Face ID/device-passcode UI lock is optional.
+If the installed build includes the Miravo server URL, sign in with only the invited/owner email and password. Unconfigured or debug builds still expose manual HTTPS server entry as a fallback. The current native foundation keeps the resulting access/refresh credentials in Keychain and scopes cached records to that server/user. Previously opened local data can reopen offline; an expired login will block future synchronization, not local viewing. Face ID/device-passcode UI lock is optional.
 
 ## Fast entry
 
@@ -62,7 +62,7 @@ When a guest later becomes a registered member, an admin can choose Merge guest 
 
 The app never needs the Shortcut for ordinary entry. When the server is reachable, Settings → Apple Wallet Shortcut can create a credential restricted to one editable tracker, show its account/category defaults, list active/expired/revoked credentials, create a replacement, and revoke an old token. The three fixed permissions can read expense categories/accounts and create expenses; they cannot read transaction history or use the normal app session.
 
-The raw token appears only after creation. Copy it into the Shortcut authorization header, then close the screen; Miravo does not persist it. The clipboard copy is local-only and expires after five minutes, but screenshots, keyboards, or other local software remain risks. During rotation, test the replacement before revoking the old credential. See `docs/shortcut-setup.md` for the versioned online and bounded queue flows. Those physical-iPhone construction steps remain unverified until a signed build and HTTPS server are available.
+The raw token appears only after creation. Copy it into the Shortcut authorization header, then close the screen; Miravo does not persist it. The clipboard copy is local-only and expires after five minutes, but screenshots, keyboards, or other local software remain risks. During rotation, test the replacement before revoking the old credential. After synchronization sees a Shortcut-created posted expense, Miravo can show a local notification with the amount and merchant once for that transaction when iOS notification permission is already allowed. See `docs/shortcut-setup.md` for the versioned online and bounded queue flows. Those physical-iPhone construction steps remain unverified until a signed build and HTTPS server are available.
 
 ## Privacy and recovery
 

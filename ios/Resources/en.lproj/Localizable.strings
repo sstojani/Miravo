@@ -121,6 +121,13 @@
 "Savings" = "Savings";
 "Server" = "Server";
 "Server URL" = "Server URL";
+"Sign in to Miravo" = "Sign in to Miravo";
+"Use your email and password to sync with your Miravo server. Offline entry still works without a connection." = "Use your email and password to sync with your Miravo server. Offline entry still works without a connection.";
+"Use a different server" = "Use a different server";
+"%@ was spent at %@." = "%@ was spent at %@.";
+"a merchant" = "a merchant";
+"Shortcut expense added" = "Shortcut expense added";
+"Some Shortcut expense alerts could not be delivered. Try again." = "Some Shortcut expense alerts could not be delivered. Try again.";
 "Session notice" = "Session notice";
 "Settings" = "Settings";
 "Settlement" = "Settlement";

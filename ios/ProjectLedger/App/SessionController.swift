@@ -59,7 +59,17 @@ final class SessionController: ObservableObject {
             preferences.currentScopeKey != nil
     }
 
-    var configuredServerURL: String { preferences.serverURLString }
+    var configuredServerURL: String { preferredServerURLString }
+
+    var defaultServerURLString: String {
+        BundledServerConfiguration.defaultServerURLString
+    }
+
+    private var preferredServerURLString: String {
+        let saved = preferences.serverURLString
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return saved.isEmpty ? defaultServerURLString : saved
+    }
 
     var hasServerConnection: Bool {
         guard phase == .authenticated,
@@ -74,7 +84,7 @@ final class SessionController: ObservableObject {
         }
 
         return preferences.hasAuthenticatedBefore &&
-            !preferences.serverURLString.isEmpty &&
+            !preferredServerURLString.isEmpty &&
             !SessionScope.isLocal(scopeKey)
     }
 
@@ -87,7 +97,7 @@ final class SessionController: ObservableObject {
         else {
             return nil
         }
-        let baseURL = try ServerURLPolicy.validated(preferences.serverURLString)
+        let baseURL = try ServerURLPolicy.validated(preferredServerURLString)
         return SyncAuthenticationContext(
             scopeKey: scopeKey,
             baseURL: baseURL,
@@ -128,7 +138,12 @@ final class SessionController: ObservableObject {
         defer { isWorking = false }
 
         do {
-            let baseURL = try ServerURLPolicy.validated(serverURL)
+            let requestedServerURL = serverURL.trimmingCharacters(
+                in: .whitespacesAndNewlines
+            )
+            let baseURL = try ServerURLPolicy.validated(
+                requestedServerURL.isEmpty ? preferredServerURLString : requestedServerURL
+            )
             let client = APIClient(baseURL: baseURL)
             let tokens = try await client.login(
                 email: email.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -252,7 +267,7 @@ final class SessionController: ObservableObject {
             savedTokens = nil
         }
 
-        if let baseURL = try? ServerURLPolicy.validated(preferences.serverURLString),
+        if let baseURL = try? ServerURLPolicy.validated(preferredServerURLString),
            let tokens = savedTokens {
             do {
                 try await APIClient(baseURL: baseURL)
@@ -288,7 +303,7 @@ final class SessionController: ObservableObject {
         } catch {
             savedTokens = nil
         }
-        if let baseURL = try? ServerURLPolicy.validated(preferences.serverURLString),
+        if let baseURL = try? ServerURLPolicy.validated(preferredServerURLString),
            let tokens = savedTokens {
             do {
                 try await APIClient(baseURL: baseURL).logout(accessToken: tokens.accessToken)
