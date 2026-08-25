@@ -1269,3 +1269,24 @@ Create a clean local receipt checkpoint after one final regression/secret scan. 
 
 - Native SwiftUI layout, onboarding animation smoothness, Swift 6 type checking, SwiftData runtime behavior, simulator tests, and physical reinstall restore remain **unverified until GitHub macOS/device execution**.
 - The live server was not mutated. It is still one commit behind this PR's app-side changes, so the restore/UI fix still requires GitHub macOS build and owner-signed device verification.
+
+## 2026-08-25 — Plans restore follow-up, notification prompt, and settings polish
+
+### Material work
+
+- Updated Plans tracker selection so a screen opened before sync finishes can move from an empty starter tracker to the restored tracker once budget, recurring-rule, or installment-plan rows arrive. Manual user tracker selection is preserved.
+- Removed the duplicate notification control blocks from Plans and Settings. Miravo now asks iOS for notification permission from the main app flow; when authorization is allowed, local plan reminders and the existing Shortcut/budget alerts can schedule automatically. If the user denies permission, recovery remains through the iPhone Settings app.
+- Added silent synchronization for passive Collaboration invitation loading so opening the Collaboration screen no longer shows the global server-unreachable modal. Collaboration-specific failures remain visible in that page.
+- Replaced the Shortcut screen's deep Local Data navigation for "Edit tracker defaults" with a focused account/category defaults sheet for the selected editable tracker.
+- Lightened the onboarding and sign-in auth fields with material styling and removed the heavy boxed onboarding form background.
+- Updated durable plan/status, documentation, decision log, test matrix, and user guide notes.
+
+### Commands and outcomes
+
+- `python ios\check-localization-coverage.py`: **passed locally on Windows**; 798 literal UI keys covered with English/Albanian parity.
+- `python ios\check-project-contract.py`: **passed locally on Windows**.
+- `git diff --check`: **passed locally on Windows**; Git reported expected CRLF working-copy warnings only.
+
+### Verification boundary
+
+- Swift type checking, SwiftData runtime behavior, iOS notification prompting, the Plans restored-data selection behavior, Collaboration entry behavior, Shortcut defaults sheet interaction, and real-device UI smoothness remain **unverified until GitHub macOS/device execution**.

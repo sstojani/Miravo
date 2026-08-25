@@ -153,12 +153,13 @@ struct OnboardingView: View {
             Button("Continue as guest") {
                 showingGuestWarning = true
             }
-            .buttonStyle(.bordered)
-            .controlSize(.large)
+            .buttonStyle(.plain)
+            .font(.body.weight(.semibold))
+            .foregroundStyle(LedgerTheme.accent)
+            .padding(.top, 2)
             .frame(maxWidth: .infinity)
         }
-        .padding(16)
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 8))
+        .padding(.top, 6)
         .frame(maxWidth: 420)
     }
 
@@ -187,8 +188,12 @@ private extension View {
     func miravoOnboardingAuthField() -> some View {
         self
             .textFieldStyle(.plain)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 12)
-            .background(Color(.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 8))
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8))
+            .overlay {
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(.white.opacity(0.08), lineWidth: 1)
+            }
     }
 }

@@ -1,12 +1,9 @@
 import SwiftData
 import SwiftUI
-import UIKit
 
 struct SettingsView: View {
     let scopeKey: String
 
-    @Environment(\.openURL) private var openURL
-    @EnvironmentObject private var reminders: RecurringReminderController
     @EnvironmentObject private var session: SessionController
     @EnvironmentObject private var sync: SyncController
     @Query private var outbox: [OutboxMutation]
@@ -45,7 +42,6 @@ struct SettingsView: View {
         Form {
             ledgerSection
             privacySection
-            notificationsSection
             synchronizationSection
             advancedSection
             if session.hasServerConnection {
@@ -124,52 +120,6 @@ struct SettingsView: View {
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }
-    }
-
-    private var notificationsSection: some View {
-        Section {
-            Toggle(
-                "Local notifications",
-                isOn: Binding(
-                    get: { reminders.isEnabled },
-                    set: { enabled in
-                        Task {
-                            await reminders.setEnabled(
-                                enabled,
-                                scopeKey: scopeKey
-                            )
-                        }
-                    }
-                )
-            )
-
-            LabeledContent(
-                "Notification permission",
-                value: reminders.authorizationState.displayName
-            )
-
-            LabeledContent(
-                "Scheduled plan reminders",
-                value: reminders.scheduledCount.formatted()
-            )
-
-            if reminders.authorizationState == .denied {
-                Button("Open notification settings") {
-                    if let url = URL(
-                        string: UIApplication.openSettingsURLString
-                    ) {
-                        openURL(url)
-                    }
-                }
-            }
-        } header: {
-            Text("Notifications")
-        } footer: {
-            Text(
-                "Local notifications include budget threshold alerts and reminders for recurring and installment plans."
-            )
-        }
-        .disabled(reminders.isUpdating)
     }
 
     private var synchronizationSection: some View {

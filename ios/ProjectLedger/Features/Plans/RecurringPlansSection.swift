@@ -20,7 +20,6 @@ struct RecurringPlansSection: View {
     let tracker: LocalTracker
 
     @Environment(\.modelContext) private var modelContext
-    @Environment(\.openURL) private var openURL
     @EnvironmentObject private var reminders: RecurringReminderController
     @EnvironmentObject private var session: SessionController
     @EnvironmentObject private var sync: SyncController
@@ -119,8 +118,6 @@ struct RecurringPlansSection: View {
                 }
             }
 
-            reminderSettingsCard
-
         }
         .sheet(item: $sheet) { destination in
             RecurringRuleEditorView(
@@ -147,67 +144,6 @@ struct RecurringPlansSection: View {
         } message: {
             Text("Posted occurrences remain in transaction history. The rule deletion syncs as a tombstone.")
         }
-    }
-
-    private var reminderSettingsCard: some View {
-        VStack(alignment: .leading, spacing: LedgerTheme.smallSpacing) {
-            Toggle(
-                "Local plan reminders",
-                isOn: Binding(
-                    get: { reminders.isEnabled },
-                    set: { enabled in
-                        Task { await reminders.setEnabled(enabled, scopeKey: scopeKey) }
-                    }
-                )
-            )
-            .font(.headline)
-
-            if reminders.isEnabled {
-                Picker(
-                    "Reminder timing",
-                    selection: Binding(
-                        get: { reminders.leadTime },
-                        set: { value in
-                            Task { await reminders.setLeadTime(value, scopeKey: scopeKey) }
-                        }
-                    )
-                ) {
-                    ForEach(RecurringReminderLeadTime.allCases, id: \.self) {
-                        Text($0.displayName).tag($0)
-                    }
-                }
-            }
-
-            LabeledContent(
-                "Notification permission",
-                value: reminders.authorizationState.displayName
-            )
-            LabeledContent(
-                "Scheduled reminders",
-                value: reminders.scheduledCount.formatted()
-            )
-
-            if reminders.authorizationState == .denied {
-                Button("Open notification settings") {
-                    if let url = URL(string: UIApplication.openSettingsURLString) {
-                        openURL(url)
-                    }
-                }
-                .buttonStyle(.bordered)
-            }
-
-            Text("Reminder notifications use generic text and never show an amount, merchant, note, subscription, or installment name.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-            if let message = reminders.message {
-                Label(message, systemImage: "exclamationmark.triangle.fill")
-                    .font(.caption)
-                    .foregroundStyle(LedgerTheme.warning)
-            }
-        }
-        .disabled(reminders.isUpdating)
-        .ledgerCard()
     }
 
     private func ruleCard(_ rule: LocalRecurringRule) -> some View {

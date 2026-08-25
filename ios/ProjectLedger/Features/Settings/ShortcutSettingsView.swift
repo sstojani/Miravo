@@ -9,6 +9,10 @@ private struct ShortcutCreateDraft: Identifiable {
     let trackerID: UUID?
 }
 
+private struct ShortcutDefaultsDraft: Identifiable {
+    let id: UUID
+}
+
 struct ShortcutSettingsView: View {
     let scopeKey: String
 
@@ -21,6 +25,7 @@ struct ShortcutSettingsView: View {
     @State private var selectedTrackerID: UUID?
     @State private var didChooseInitialTracker = false
     @State private var createDraft: ShortcutCreateDraft?
+    @State private var defaultsDraft: ShortcutDefaultsDraft?
     @State private var pendingRevocation: ShortcutCredentialSummary?
 
     init(scopeKey: String) {
@@ -121,11 +126,14 @@ struct ShortcutSettingsView: View {
                             ? String(localized: "Chosen by the automation")
                             : selectedDefaultCategory?.name ?? String(localized: "Not configured")
                     )
-                    NavigationLink {
-                        LocalDataSettingsView(scopeKey: scopeKey)
+                    Button {
+                        if let trackerID = selectedTrackerID {
+                            defaultsDraft = ShortcutDefaultsDraft(id: trackerID)
+                        }
                     } label: {
                         Label("Edit tracker defaults", systemImage: "slider.horizontal.3")
                     }
+                    .disabled(selectedTrackerID == nil || selectedTracker == nil)
                 }
             } header: {
                 Text("Capture defaults")
@@ -242,6 +250,28 @@ struct ShortcutSettingsView: View {
             }
             .interactiveDismissDisabled(controller.oneTimeToken != nil)
         }
+        .sheet(item: $defaultsDraft) { draft in
+            if let tracker = eligibleTrackers.first(where: { $0.id == draft.id }) {
+                ShortcutTrackerDefaultsView(
+                    tracker: tracker,
+                    accounts: accounts.filter {
+                        $0.trackerID == tracker.id &&
+                            $0.deletedAt == nil &&
+                            ($0.archivedAt == nil || $0.id == tracker.defaultAccountID)
+                    },
+                    categories: categories.filter {
+                        $0.trackerID == tracker.id &&
+                            $0.deletedAt == nil &&
+                            ($0.archivedAt == nil || $0.id == tracker.defaultCategoryID)
+                    }
+                )
+            } else {
+                ContentUnavailableView(
+                    "Tracker unavailable",
+                    systemImage: "person.crop.circle.badge.exclamationmark"
+                )
+            }
+        }
         .confirmationDialog(
             "Revoke Shortcut token?",
             isPresented: Binding(
@@ -297,6 +327,117 @@ struct ShortcutSettingsView: View {
         } catch {
             controller.presentAuthenticationUnavailable()
             return nil
+        }
+    }
+}
+
+private struct ShortcutTrackerDefaultsView: View {
+    let tracker: LocalTracker
+    let accounts: [LocalAccount]
+    let categories: [LocalCategory]
+
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+    @EnvironmentObject private var session: SessionController
+    @EnvironmentObject private var sync: SyncController
+    @State private var defaultAccountID: UUID?
+    @State private var defaultCategoryID: UUID?
+    @State private var safeError: String?
+
+    init(
+        tracker: LocalTracker,
+        accounts: [LocalAccount],
+        categories: [LocalCategory]
+    ) {
+        self.tracker = tracker
+        self.accounts = accounts
+        self.categories = categories
+        _defaultAccountID = State(
+            initialValue: accounts.contains { $0.id == tracker.defaultAccountID }
+                ? tracker.defaultAccountID : nil
+        )
+        _defaultCategoryID = State(
+            initialValue: categories.contains { $0.id == tracker.defaultCategoryID }
+                ? tracker.defaultCategoryID : nil
+        )
+    }
+
+    private var availableAccounts: [LocalAccount] {
+        accounts.filter { $0.archivedAt == nil || $0.id == tracker.defaultAccountID }
+    }
+
+    private var availableCategories: [LocalCategory] {
+        categories.filter { $0.archivedAt == nil || $0.id == tracker.defaultCategoryID }
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    Picker("Default account", selection: $defaultAccountID) {
+                        Text("No default account").tag(UUID?.none)
+                        ForEach(availableAccounts) { account in
+                            Text(account.name).tag(Optional(account.id))
+                        }
+                    }
+                    Picker("Default category", selection: $defaultCategoryID) {
+                        Text("No default category").tag(UUID?.none)
+                        ForEach(availableCategories) { category in
+                            Text("\(category.name) · \(categoryKindName(category.kind))")
+                                .tag(Optional(category.id))
+                        }
+                    }
+                } header: {
+                    Text("Shortcut defaults")
+                } footer: {
+                    Text("These shared tracker defaults are used when the Wallet Shortcut does not send an account or category.")
+                }
+
+                if let safeError {
+                    Section {
+                        Label(safeError, systemImage: "exclamationmark.triangle.fill")
+                            .foregroundStyle(LedgerTheme.negative)
+                    }
+                }
+            }
+            .navigationTitle(tracker.name)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") { save() }
+                        .fontWeight(.semibold)
+                }
+            }
+        }
+    }
+
+    private func save() {
+        do {
+            try LocalLedgerRepository(context: modelContext).updateTracker(
+                tracker,
+                name: tracker.name,
+                description: tracker.trackerDescription,
+                icon: tracker.icon,
+                colorHex: tracker.colorHex,
+                defaultAccount: availableAccounts.first { $0.id == defaultAccountID },
+                defaultCategory: availableCategories.first { $0.id == defaultCategoryID }
+            )
+            Task { await sync.synchronize(session: session) }
+            dismiss()
+        } catch {
+            safeError = String(localized: "Tracker defaults could not be saved.")
+        }
+    }
+
+    private func categoryKindName(_ kind: LocalCategoryKind) -> String {
+        switch kind {
+        case .expense:
+            String(localized: "Expense")
+        case .income:
+            String(localized: "Income")
         }
     }
 }

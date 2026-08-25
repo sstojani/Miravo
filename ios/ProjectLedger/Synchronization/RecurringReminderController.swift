@@ -163,6 +163,43 @@ final class RecurringReminderController: ObservableObject {
         await refreshConfiguredScope(scopeKey: scopeKey, generation: generation)
     }
 
+    func activateAfterSystemPrompt(scopeKey: String) async {
+        guard !isUpdating else {
+            deferredRefreshScopeKey = scopeKey
+            return
+        }
+        isUpdating = true
+        guard let generation = await prepareScope(scopeKey) else { return }
+        message = nil
+        defer { finishOperation(generation: generation, scopeKey: scopeKey) }
+
+        var state = await scheduler.authorizationState()
+        guard isCurrent(generation, scopeKey: scopeKey) else { return }
+        if state == .notDetermined {
+            do {
+                _ = try await scheduler.requestAuthorization()
+            } catch {
+                message = String(
+                    localized: "Reminder settings could not be updated. Try again."
+                )
+            }
+            guard isCurrent(generation, scopeKey: scopeKey) else { return }
+            state = await scheduler.authorizationState()
+        }
+
+        authorizationState = state
+        guard state == .authorized else {
+            preferences.setRecurringRemindersEnabled(false, scopeKey: scopeKey)
+            isEnabled = false
+            await removePending(scopeKey: scopeKey)
+            return
+        }
+
+        preferences.setRecurringRemindersEnabled(true, scopeKey: scopeKey)
+        isEnabled = true
+        await reconcile(scopeKey: scopeKey, generation: generation)
+    }
+
     func refresh(scopeKey: String) async {
         guard !isUpdating else {
             deferredRefreshScopeKey = scopeKey
