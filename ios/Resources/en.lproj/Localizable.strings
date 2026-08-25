@@ -844,3 +844,6 @@
 "A budget crossed one of your spending thresholds. Open Miravo to review it." = "A budget crossed one of your spending thresholds. Open Miravo to review it.";
 "Some budget alerts could not be delivered. Try again." = "Some budget alerts could not be delivered. Try again.";
 "When local notifications are enabled, crossing these thresholds can alert you. Budget totals remain correct even if notifications are off." = "When local notifications are enabled, crossing these thresholds can alert you. Budget totals remain correct even if notifications are off.";
+"Shortcut defaults" = "Shortcut defaults";
+"These shared tracker defaults are used when the Wallet Shortcut does not send an account or category." = "These shared tracker defaults are used when the Wallet Shortcut does not send an account or category.";
+"Tracker defaults could not be saved." = "Tracker defaults could not be saved.";

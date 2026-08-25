@@ -100,11 +100,15 @@ struct LoginView: View {
                         Button("Open previously synchronized data offline") {
                             session.openOffline()
                         }
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(LedgerTheme.accent)
                         .frame(maxWidth: .infinity)
                     } else if !allowsDismiss {
                         Button("Continue without server") {
                             session.completeOnboarding()
                         }
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(LedgerTheme.accent)
                         .frame(maxWidth: .infinity)
                     }
                 }
@@ -172,6 +176,10 @@ private extension View {
             .textFieldStyle(.plain)
             .padding(.horizontal, 16)
             .padding(.vertical, 14)
-            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 8))
+            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8))
+            .overlay {
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(.white.opacity(0.08), lineWidth: 1)
+            }
     }
 }

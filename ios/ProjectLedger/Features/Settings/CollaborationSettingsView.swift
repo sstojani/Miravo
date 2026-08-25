@@ -336,7 +336,7 @@ struct CollaborationSettingsView: View {
 
     private func loadInvitations() async {
         guard let selectedTrackerID else { return }
-        _ = await sync.synchronize(session: session)
+        _ = await sync.synchronize(session: session, presentErrors: false)
         guard let authentication = await authenticationContext() else { return }
         await controller.loadInvitations(
             trackerID: selectedTrackerID,

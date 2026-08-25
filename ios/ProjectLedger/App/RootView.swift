@@ -144,6 +144,7 @@ private struct MainTabView: View {
         }
         .task(id: scopeKey) {
             await reminders.configure(scopeKey: scopeKey)
+            await reminders.activateAfterSystemPrompt(scopeKey: scopeKey)
 
             guard session.hasServerConnection else {
                 return

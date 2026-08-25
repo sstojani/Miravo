@@ -844,3 +844,6 @@
 "A budget crossed one of your spending thresholds. Open Miravo to review it." = "Një buxhet kaloi një nga pragjet e shpenzimeve. Hap Miravo për ta kontrolluar.";
 "Some budget alerts could not be delivered. Try again." = "Disa njoftime të buxhetit nuk mund të dërgoheshin. Provo përsëri.";
 "When local notifications are enabled, crossing these thresholds can alert you. Budget totals remain correct even if notifications are off." = "Kur njoftimet lokale janë aktive, kalimi i këtyre pragjeve mund të të njoftojë. Totali i buxhetit mbetet i saktë edhe kur njoftimet janë të çaktivizuara.";
+"Shortcut defaults" = "Parazgjedhjet e Shortcut-it";
+"These shared tracker defaults are used when the Wallet Shortcut does not send an account or category." = "Këto parazgjedhje të përbashkëta të gjurmuesit përdoren kur Wallet Shortcut nuk dërgon llogari ose kategori.";
+"Tracker defaults could not be saved." = "Parazgjedhjet e gjurmuesit nuk mund të ruheshin.";

@@ -35,6 +35,7 @@ struct PlansView: View {
     @State private var pendingDelete: LocalBudget?
     @State private var includeArchived = false
     @State private var safeError: String?
+    @State private var didChooseTrackerManually = false
 
     init(scopeKey: String) {
         self.scopeKey = scopeKey
@@ -87,17 +88,9 @@ struct PlansView: View {
 
     private var preferredTracker: LocalTracker? {
         activeTrackers.first { tracker in
-            budgets.contains {
-                $0.trackerID == tracker.id && (includeArchived || $0.archivedAt == nil)
-            }
+            trackerHasPlans(tracker)
         } ?? activeTrackers.first { tracker in
-            recurringRules.contains {
-                $0.trackerID == tracker.id && $0.archivedAt == nil
-            }
-        } ?? activeTrackers.first { tracker in
-            installmentPlans.contains {
-                $0.trackerID == tracker.id && $0.archivedAt == nil
-            }
+            transactions.contains { $0.trackerID == tracker.id }
         } ?? activeTrackers.first
     }
 
@@ -226,10 +219,13 @@ struct PlansView: View {
             Text("The deletion is saved as a recoverable sync tombstone. Existing transactions are not changed.")
         }
         .onAppear {
-            if selectedTrackerID == nil { selectedTrackerID = preferredTracker?.id }
+            selectPreferredTrackerIfNeeded(force: true)
         }
         .onChange(of: trackers.map(\.id)) { _, _ in
-            if selectedTracker == nil { selectedTrackerID = preferredTracker?.id }
+            selectPreferredTrackerIfNeeded()
+        }
+        .onChange(of: planSelectionSignature) { _, _ in
+            selectPreferredTrackerIfNeeded()
         }
     }
 
@@ -255,8 +251,52 @@ struct PlansView: View {
     private var trackerSelection: Binding<UUID> {
         Binding(
             get: { selectedTracker?.id ?? UUID() },
-            set: { selectedTrackerID = $0 }
+            set: {
+                didChooseTrackerManually = true
+                selectedTrackerID = $0
+            }
         )
+    }
+
+    private var planSelectionSignature: String {
+        let budgetPart = budgets.map {
+            "\($0.trackerID.uuidString):\($0.id.uuidString):\($0.archivedAt == nil)"
+        }.joined(separator: "|")
+        let recurringPart = recurringRules.map {
+            "\($0.trackerID.uuidString):\($0.id.uuidString):\($0.archivedAt == nil)"
+        }.joined(separator: "|")
+        let installmentPart = installmentPlans.map {
+            "\($0.trackerID.uuidString):\($0.id.uuidString):\($0.archivedAt == nil)"
+        }.joined(separator: "|")
+        return [budgetPart, recurringPart, installmentPart].joined(separator: "#")
+    }
+
+    private func trackerHasPlans(_ tracker: LocalTracker) -> Bool {
+        budgets.contains {
+            $0.trackerID == tracker.id && (includeArchived || $0.archivedAt == nil)
+        } || recurringRules.contains {
+            $0.trackerID == tracker.id && (includeArchived || $0.archivedAt == nil)
+        } || installmentPlans.contains {
+            $0.trackerID == tracker.id && (includeArchived || $0.archivedAt == nil)
+        }
+    }
+
+    private func selectPreferredTrackerIfNeeded(force: Bool = false) {
+        guard let preferredTracker else {
+            selectedTrackerID = nil
+            return
+        }
+        guard !didChooseTrackerManually else {
+            if selectedTracker == nil { selectedTrackerID = preferredTracker.id }
+            return
+        }
+        if force ||
+            selectedTrackerID == nil ||
+            selectedTracker == nil ||
+            selectedTracker.map({ !trackerHasPlans($0) }) == true &&
+                trackerHasPlans(preferredTracker) {
+            selectedTrackerID = preferredTracker.id
+        }
     }
 
     private func budgetCard(_ budget: LocalBudget) -> some View {

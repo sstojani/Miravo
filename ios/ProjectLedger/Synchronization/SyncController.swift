@@ -32,13 +32,16 @@ final class SyncController: ObservableObject {
     }
 
     @discardableResult
-    func synchronize(session: SessionController) async -> Bool {
+    func synchronize(
+        session: SessionController,
+        presentErrors: Bool = true
+    ) async -> Bool {
         guard !isRunning else {
             rerunRequested = true
             return false
         }
         isRunning = true
-        message = nil
+        if presentErrors { message = nil }
         defer {
             isRunning = false
             rerunRequested = false
@@ -48,7 +51,10 @@ final class SyncController: ObservableObject {
         repeat {
             rerunRequested = false
             pass += 1
-            succeeded = await synchronizeOnce(session: session)
+            succeeded = await synchronizeOnce(
+                session: session,
+                presentErrors: presentErrors
+            )
         } while rerunRequested && pass < 2
 
         if foregroundRealtimeEnabled {
@@ -77,7 +83,10 @@ final class SyncController: ObservableObject {
         backgroundRefreshScheduled = BackgroundSyncScheduler.schedule()
     }
 
-    private func synchronizeOnce(session: SessionController) async -> Bool {
+    private func synchronizeOnce(
+        session: SessionController,
+        presentErrors: Bool
+    ) async -> Bool {
         do {
             guard let authentication = try await session.synchronizationContext() else {
                 return false
@@ -89,35 +98,45 @@ final class SyncController: ObservableObject {
                     rerunRequested = true
                 }
                 if transfers.quarantinedCount > 0 {
-                    message = String(
-                        localized: "A receipt was quarantined by the server and needs review."
-                    )
+                    if presentErrors {
+                        message = String(
+                            localized: "A receipt was quarantined by the server and needs review."
+                        )
+                    }
                 } else if transfers.failedCount > 0 {
-                    message = String(
-                        localized: "A receipt upload could not be completed. It remains stored on this iPhone."
-                    )
+                    if presentErrors {
+                        message = String(
+                            localized: "A receipt upload could not be completed. It remains stored on this iPhone."
+                        )
+                    }
                 }
             } catch {
-                message = String(
-                    localized: "Receipt uploads could not be processed. Local receipt files remain safe."
-                )
+                if presentErrors {
+                    message = String(
+                        localized: "Receipt uploads could not be processed. Local receipt files remain safe."
+                    )
+                }
             }
             diagnostics = try await engine.diagnostics(scopeKey: authentication.scopeKey)
             return true
         } catch let error as APIClientError {
-            message = message(for: error)
+            if presentErrors { message = message(for: error) }
             if let scopeKey = session.scopeKey {
                 diagnostics = (try? await engine.diagnostics(scopeKey: scopeKey)) ?? diagnostics
             }
             return false
         } catch is URLError {
-            message = String(localized: "The server is unreachable. Local changes will retry later.")
+            if presentErrors {
+                message = String(localized: "The server is unreachable. Local changes will retry later.")
+            }
             if let scopeKey = session.scopeKey {
                 diagnostics = (try? await engine.diagnostics(scopeKey: scopeKey)) ?? diagnostics
             }
             return false
         } catch {
-            message = String(localized: "Synchronization could not be completed. Local changes are safe and will be retried.")
+            if presentErrors {
+                message = String(localized: "Synchronization could not be completed. Local changes are safe and will be retried.")
+            }
             if let scopeKey = session.scopeKey {
                 diagnostics = (try? await engine.diagnostics(scopeKey: scopeKey)) ?? diagnostics
             }
