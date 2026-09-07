@@ -34,6 +34,10 @@ Successful server authentication now marks onboarding complete at the same prefe
 
 Reverted same-device Keychain auto-recovery after device testing showed it can make a deleted/reinstalled app skip first-time onboarding while the app container has no normal local session context. When onboarding preferences are absent, Miravo now shows a brief loading state, clears leftover local Keychain session tokens for this app service, and opens the first-time onboarding flow. A successful explicit server sign-in still marks onboarding complete for later relaunches. Added native source coverage for deleting all scoped Keychain session tokens; macOS/device execution remains external.
 
+## 2026-09-07 - Account hub and floating tab clearance
+
+Moved server disconnect out of the More hub into a dedicated User account screen with profile, security, server, sync, and scope rows. The More hub now treats the account row as navigation instead of presenting a destructive action beside it. Added a transparent bottom safe-area inset for non-Quick Add tabs so long scrollable screens can move their final rows above the floating navigation pill without bringing back an opaque bottom slab. Local source checks are recorded with this change; exact iPhone safe-area behavior remains device verification.
+
 ## 2026-08-09 — Milestone 0 and Milestone 1 start
 
 ### Inputs and inspection

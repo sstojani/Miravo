@@ -121,6 +121,13 @@ private struct MainTabView: View {
             selectedContent
                 .id(selectedTab)
                 .transition(selectedContentTransition)
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    if shouldReserveFloatingTabSpace {
+                        Color.clear
+                            .frame(height: FloatingTabBarMetrics.contentClearance)
+                            .allowsHitTesting(false)
+                    }
+                }
         }
         .clipped()
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.22), value: selectedTab)
@@ -202,6 +209,10 @@ private struct MainTabView: View {
             removal: .move(edge: tabTransitionDirection.removalEdge)
                 .combined(with: .opacity)
         )
+    }
+
+    private var shouldReserveFloatingTabSpace: Bool {
+        !keyboardVisible && selectedTab != .add
     }
 
     private func selectTab(_ tab: MainTab) {
@@ -297,6 +308,7 @@ private enum TabTransitionDirection {
 
 private enum FloatingTabBarMetrics {
     static let quickAddClearance: CGFloat = 88
+    static let contentClearance: CGFloat = 104
 }
 
 private struct FloatingTabBar: View {
@@ -352,42 +364,33 @@ private struct MoreView: View {
     let scopeKey: String
 
     @EnvironmentObject private var session: SessionController
-    @EnvironmentObject private var sync: SyncController
     @State private var showingSignIn = false
-    @State private var disconnecting = false
+
+    private var accountEmail: String {
+        session.preferences.lastEmail.isEmpty
+            ? String(localized: "Server account")
+            : session.preferences.lastEmail
+    }
 
     var body: some View {
         List {
             Section("Account") {
                 if session.hasServerConnection {
-                    Label {
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(session.preferences.lastEmail.isEmpty ? String(localized: "Server account") : session.preferences.lastEmail)
-                            Text("Signed in and syncing")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    } icon: {
-                        Image(systemName: "person.crop.circle.badge.checkmark")
-                            .foregroundStyle(LedgerTheme.positive)
-                    }
-
-                    Button {
-                        disconnecting = true
-                        Task {
-                            await sync.stopForegroundTriggers()
-                            await session.disconnectServer()
-                            disconnecting = false
-                        }
+                    NavigationLink {
+                        AccountSettingsView(scopeKey: scopeKey)
                     } label: {
                         Label {
-                            Text(disconnecting ? "Disconnecting…" : "Disconnect server")
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(accountEmail)
+                                Text("Signed in and syncing")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
                         } icon: {
-                            Image(systemName: "person.crop.circle.badge.xmark")
+                            Image(systemName: "person.crop.circle.badge.checkmark")
+                                .foregroundStyle(LedgerTheme.positive)
                         }
                     }
-                    .disabled(disconnecting)
-                    .tint(LedgerTheme.negative)
                 } else {
                     Button {
                         showingSignIn = true
@@ -415,6 +418,87 @@ private struct MoreView: View {
         .sheet(isPresented: $showingSignIn) {
             LoginView(allowsDismiss: true)
         }
+        .alert("Session notice", isPresented: Binding(
+            get: { session.logoutWarning != nil },
+            set: { if !$0 { session.logoutWarning = nil } }
+        )) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(session.logoutWarning ?? "")
+        }
+    }
+}
+
+private struct AccountSettingsView: View {
+    let scopeKey: String
+
+    @EnvironmentObject private var session: SessionController
+    @EnvironmentObject private var sync: SyncController
+    @State private var disconnecting = false
+
+    private var accountEmail: String {
+        session.preferences.lastEmail.isEmpty
+            ? String(localized: "Server account")
+            : session.preferences.lastEmail
+    }
+
+    private var serverAddress: String {
+        session.configuredServerURL.isEmpty
+            ? String(localized: "Not connected")
+            : session.configuredServerURL
+    }
+
+    private var syncStatus: String {
+        session.hasServerConnection
+            ? String(localized: "Connected")
+            : String(localized: "Local only")
+    }
+
+    var body: some View {
+        Form {
+            Section("Profile") {
+                LabeledContent("Email", value: accountEmail)
+                LabeledContent("Name", value: String(localized: "Not set"))
+            }
+
+            Section("Security") {
+                LabeledContent("Password", value: String(localized: "Server managed"))
+            }
+
+            Section("Server") {
+                LabeledContent("Sync", value: syncStatus)
+                LabeledContent("Server") {
+                    Text(serverAddress)
+                        .multilineTextAlignment(.trailing)
+                        .textSelection(.enabled)
+                }
+                LabeledContent("Scope") {
+                    Text(SyncDiagnosticReport.digest(scopeKey))
+                        .font(.caption.monospaced())
+                        .textSelection(.enabled)
+                }
+            }
+
+            Section {
+                Button(role: .destructive) {
+                    disconnecting = true
+                    Task {
+                        await sync.stopForegroundTriggers()
+                        await session.disconnectServer()
+                        disconnecting = false
+                    }
+                } label: {
+                    HStack {
+                        if disconnecting {
+                            ProgressView()
+                        }
+                        Text(disconnecting ? "Disconnecting…" : "Disconnect server")
+                    }
+                }
+                .disabled(disconnecting)
+            }
+        }
+        .navigationTitle("User account")
         .alert("Session notice", isPresented: Binding(
             get: { session.logoutWarning != nil },
             set: { if !$0 { session.logoutWarning = nil } }

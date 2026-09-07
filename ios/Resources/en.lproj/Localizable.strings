@@ -918,3 +918,10 @@
 "Use server state for this record?" = "Use server state for this record?";
 "Repair synchronization?" = "Repair synchronization?";
 "Use server version?" = "Use server version?";
+"Profile" = "Profile";
+"Security" = "Security";
+"Sync" = "Sync";
+"User account" = "User account";
+"Not set" = "Not set";
+"Server managed" = "Server managed";
+"Local only" = "Local only";

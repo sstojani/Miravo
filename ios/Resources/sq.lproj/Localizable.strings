@@ -918,3 +918,10 @@
 "Use server state for this record?" = "Të përdoret gjendja e serverit për këtë regjistrim?";
 "Repair synchronization?" = "Të riparohet sinkronizimi?";
 "Use server version?" = "Të përdoret versioni i serverit?";
+"Profile" = "Profili";
+"Security" = "Siguria";
+"Sync" = "Sinkronizimi";
+"User account" = "Llogaria e përdoruesit";
+"Not set" = "E pacaktuar";
+"Server managed" = "Menaxhohet nga serveri";
+"Local only" = "Vetëm lokal";

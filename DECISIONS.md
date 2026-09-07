@@ -12,6 +12,12 @@
 - **Why:** iOS removes the app container on uninstall while Keychain items can remain. Reusing only the token can skip the owner's onboarding/login choice and open an authenticated-looking shell without the expected local session context.
 - **Consequence:** Explicit server sign-in still persists onboarding completion for normal relaunches. A deleted/reinstalled app starts from onboarding and requires the user to sign in again to restore cloud data. Old server-side device sessions may still exist until normal expiry or explicit server/session revocation.
 
+## 2026-09-07 - Account actions live below the More hub
+
+- **Decision:** Keep More as a light navigation hub. The signed-in account row opens a User account screen, and server disconnect lives there with profile/security/server context instead of as a top-level More action.
+- **Why:** Destructive account/server actions beside ordinary navigation make the hub feel cramped and easy to mis-tap. Account management needs room for future name, email, and password controls.
+- **Consequence:** The destructive action is one tap deeper, Settings no longer duplicates it, and future profile/security work has a stable destination.
+
 ## 2026-09-07 - Explicit, durable sync recovery
 
 Permanent failures are not generic retry candidates. A server tombstone cannot be kept locally by rebasing an edit. Accepting deletion removes only that entity's queued edits and retains dependent work for review. Failed-operation discard is persisted and completed only after a full authorized bootstrap; new edits made after confirmation cancel that discard. Repair refuses outstanding mutations, unresolved conflicts and unfinished uploads. Real guest data remains a separate imported tracker, never merged by display name. Backend strict base-version validation remains intact. Branch publication precedes native verification at the owner's explicit request; see `docs/sync-recovery-handoff.md`.
