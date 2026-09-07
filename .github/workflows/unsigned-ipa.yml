@@ -12,8 +12,8 @@ permissions:
 env:
   XCODEGEN_VERSION: 2.46.0
   XCODE_PATH: /Applications/Xcode_16.4.app
-  EXPECTED_APP_NAME: Miravo
-  EXPECTED_BUNDLE_ID: com.example.projectledger
+  EXPECTED_APP_NAME: Miravo Clean
+  EXPECTED_BUNDLE_ID: com.example.projectledger.cleanroom
   EXPECTED_MINIMUM_IOS: "18.0"
 
 jobs:
