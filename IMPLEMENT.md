@@ -22,6 +22,10 @@ Hid the floating navigation pill while the iOS keyboard is visible, added extra 
 
 Moved the main floating navigation pill from a bottom safe-area inset into an overlay with explicit content clearance so the surrounding rectangular area no longer paints as a separate slab. Reworked Quick Add's bottom action from a full-width blue bar into a compact floating Save capsule, keeping the undo confirmation as a temporary chip above it. Local iOS localization, source-contract, and whitespace checks passed on Windows; physical safe-area appearance still needs iPhone review.
 
+## 2026-09-07 - Draft-only Quick Add action
+
+Removed the remaining global bottom clearance behind the floating navigation overlay. Quick Add now hides its bottom action completely until the user enters draft content, shows a compact Save capsule for the draft, replaces it with an Undo capsule for three seconds after save, then hides it again. Local iOS localization, source-contract, and whitespace checks passed on Windows; native Swift compilation and exact iPhone safe-area rendering remain external checks.
+
 ## 2026-08-09 — Milestone 0 and Milestone 1 start
 
 ### Inputs and inspection

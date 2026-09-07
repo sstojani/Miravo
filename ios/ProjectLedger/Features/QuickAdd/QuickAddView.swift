@@ -250,78 +250,78 @@ struct QuickAddView: View {
             configureDestinationDefault()
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            VStack(spacing: 8) {
-                if undoCandidate != nil {
-                    HStack(spacing: 12) {
-                        Label(
-                            "Saved on this iPhone",
-                            systemImage: "checkmark.circle.fill"
+            if undoCandidate != nil || hasDraftInput {
+                VStack(spacing: 8) {
+                    if undoCandidate != nil {
+                        Button {
+                            undoLastSave()
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "arrow.uturn.backward")
+                                    .font(.subheadline.weight(.bold))
+                                Text("Undo")
+                                    .fontWeight(.semibold)
+                            }
+                            .font(.headline)
+                            .padding(.horizontal, 28)
+                            .frame(minWidth: 170, minHeight: 54)
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(Color(uiColor: .systemBackground))
+                        .background(
+                            Capsule(style: .continuous)
+                                .fill(Color(uiColor: .label).opacity(0.92))
                         )
-                        .fontWeight(.semibold)
-                        Spacer()
-                        Button("Undo") { undoLastSave() }
-                            .fontWeight(.semibold)
+                        .overlay {
+                            Capsule(style: .continuous)
+                                .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                        }
+                        .shadow(color: .black.opacity(0.22), radius: 16, y: 8)
+                        .accessibilityLabel("Undo saved transaction")
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                    } else {
+                        Button {
+                            dismissKeyboard()
+                            save()
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "checkmark")
+                                    .font(.subheadline.weight(.bold))
+                                Text("Save")
+                                    .fontWeight(.semibold)
+                            }
+                            .font(.headline)
+                            .padding(.horizontal, 28)
+                            .frame(minWidth: 170, minHeight: 54)
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.white)
+                        .background(
+                            Capsule(style: .continuous)
+                                .fill(canSave ? LedgerTheme.accent : Color.secondary.opacity(0.28))
+                        )
+                        .overlay {
+                            Capsule(style: .continuous)
+                                .stroke(Color.white.opacity(canSave ? 0.18 : 0.08), lineWidth: 1)
+                        }
+                        .opacity(canSave ? 1 : 0.42)
+                        .shadow(
+                            color: canSave
+                                ? LedgerTheme.accent.opacity(0.28) : .clear,
+                            radius: 16,
+                            y: 8
+                        )
+                        .disabled(!canSave)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
                     }
-                    .padding(.horizontal, 16)
-                    .frame(minHeight: 48)
-                    .background(
-                        .thinMaterial,
-                        in: Capsule(style: .continuous)
-                    )
-                    .overlay {
-                        Capsule(style: .continuous)
-                            .stroke(Color.white.opacity(0.12), lineWidth: 1)
-                    }
-                    .accessibilityElement(children: .contain)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
-
-                Button {
-                    dismissKeyboard()
-                    save()
-                } label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: "checkmark")
-                            .font(.subheadline.weight(.bold))
-                        Text("Save")
-                            .fontWeight(.semibold)
-                    }
-                    .font(.headline)
-                    .padding(.horizontal, 28)
-                    .frame(minWidth: 170, minHeight: 54)
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(.white)
-                .background(
-                    Capsule(style: .continuous)
-                        .fill(canSave ? LedgerTheme.accent : Color.secondary.opacity(0.28))
-                )
-                .overlay {
-                    Capsule(style: .continuous)
-                        .stroke(Color.white.opacity(canSave ? 0.18 : 0.08), lineWidth: 1)
-                }
-                .opacity(canSave ? 1 : 0.42)
-                .shadow(
-                    color: canSave
-                        ? LedgerTheme.accent.opacity(0.28) : .clear,
-                    radius: 16,
-                    y: 8
-                )
-                .disabled(!canSave)
-
-                if undoCandidate == nil {
-                    Text(
-                        "Saving never waits for the network. Synchronization is attempted separately."
-                    )
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .padding(.bottom, bottomAccessoryPadding)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .animation(.easeInOut(duration: 0.18), value: undoCandidate?.id)
+                .animation(.easeInOut(duration: 0.18), value: hasDraftInput)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-            .padding(.bottom, bottomAccessoryPadding)
-            .animation(.easeInOut(duration: 0.18), value: undoCandidate?.id)
         }
         .onDisappear { undoExpiryTask?.cancel() }
     }
@@ -345,6 +345,15 @@ struct QuickAddView: View {
         }
         if requiresManualBaseAmount, baseAmount.isEmpty { return false }
         return true
+    }
+
+    private var hasDraftInput: Bool {
+        !amount.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+            !merchant.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+            !note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+            !destinationAmount.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+            !baseAmount.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+            !selectedTagIDs.isEmpty
     }
 
     private func configureDefaults() {
