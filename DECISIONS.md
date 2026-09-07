@@ -6,6 +6,12 @@
 - **Why:** The onboarding sign-in slide can create a valid authenticated scope without separately calling the local onboarding completion path. Relaunching then incorrectly returns to first-open onboarding even though a server session exists.
 - **Consequence:** Explicit sign-out still routes to sign-in, and a true iOS uninstall can still require login because the app container preferences are removed. After login, cloud bootstrap remains the recovery path for server data.
 
+## 2026-09-07 - Same-device reinstall may recover Keychain server sessions
+
+- **Decision:** Before showing first-run onboarding with empty preferences, enumerate Miravo's non-synchronizing Keychain session items and recover the newest valid server scope whose refresh credential is unexpired and whose token subject matches the scope user.
+- **Why:** iOS removes the app container on uninstall, but Keychain items can remain on the same device. Without enumerating the saved session account, Miravo cannot know which authenticated scope to reopen.
+- **Consequence:** Recovery is best-effort and same-device only. Explicit sign-out still deletes the active token. Empty, expired, local-only, malformed, or bundle-ID-mismatched Keychain items fall back to onboarding.
+
 ## 2026-09-07 - Explicit, durable sync recovery
 
 Permanent failures are not generic retry candidates. A server tombstone cannot be kept locally by rebasing an edit. Accepting deletion removes only that entity's queued edits and retains dependent work for review. Failed-operation discard is persisted and completed only after a full authorized bootstrap; new edits made after confirmation cancel that discard. Repair refuses outstanding mutations, unresolved conflicts and unfinished uploads. Real guest data remains a separate imported tracker, never merged by display name. Backend strict base-version validation remains intact. Branch publication precedes native verification at the owner's explicit request; see `docs/sync-recovery-handoff.md`.
