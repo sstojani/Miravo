@@ -8,7 +8,9 @@
 "Advanced" = "Advanced";
 "All types" = "All types";
 "Amount" = "Amount";
+"App appearance" = "App appearance";
 "App lock protects the user interface. iOS Data Protection and a device passcode protect local files." = "App lock protects the user interface. iOS Data Protection and a device passcode protect local files.";
+"Appearance" = "Appearance";
 "Archive" = "Archive";
 "Archived detail format" = "%@ · Archived";
 "Base currency" = "Base currency";
@@ -38,6 +40,8 @@
 "Details" = "Details";
 "Development HTTP is allowed only for this device's loopback host." = "Development HTTP is allowed only for this device's loopback host.";
 "Digital wallet" = "Digital wallet";
+"Disconnecting…" = "Disconnecting…";
+"Dark" = "Dark";
 "Duplicate" = "Duplicate";
 "Edit" = "Edit";
 "Edit transaction" = "Edit transaction";
@@ -52,6 +56,7 @@
 "Enter valid transaction details." = "Enter valid transaction details.";
 "Entries save locally first. A network problem never blocks ordinary expense entry." = "Entries save locally first. A network problem never blocks ordinary expense entry.";
 "Everyday" = "Everyday";
+"Explore" = "Explore";
 "Expense" = "Expense";
 "Expenses" = "Expenses";
 "Face ID or passcode app lock" = "Face ID or passcode app lock";
@@ -67,6 +72,7 @@
 "Insights" = "Insights";
 "Insights are calculated from records currently stored on this iPhone. Currency totals are never combined without conversion snapshots." = "Insights are calculated from records currently stored on this iPhone. Currency totals are never combined without conversion snapshots.";
 "Last successful sync" = "Last successful sync";
+"Light" = "Light";
 "Local data" = "Local data";
 "Local data ready" = "Local data ready";
 "Local data needs attention" = "Local data needs attention";
@@ -77,6 +83,7 @@
 "Manual retry, server cursors, and conflict review are implemented with the synchronization milestone. Local saving does not depend on them." = "Manual retry, server cursors, and conflict review are implemented with the synchronization milestone. Local saving does not depend on them.";
 "Merchant or payee" = "Merchant or payee";
 "Merchant, note, or amount" = "Merchant, note, or amount";
+"More" = "More";
 "Name" = "Name";
 "New account" = "New account";
 "New category" = "New category";
@@ -126,6 +133,7 @@
 "Savings" = "Savings";
 "Server" = "Server";
 "Server address" = "Server address";
+"Server account" = "Server account";
 "Server URL" = "Server URL";
 "Sign in to Miravo" = "Sign in to Miravo";
 "Sign in or continue as a guest" = "Sign in or continue as a guest";
@@ -142,13 +150,16 @@
 "Settlement" = "Settlement";
 "Show recently deleted" = "Show recently deleted";
 "Sign in" = "Sign in";
+"Sign in to sync" = "Sign in to sync";
 "Sign in could not be completed securely." = "Sign in could not be completed securely.";
 "Sign out" = "Sign out";
 "Signing in…" = "Signing in…";
 "Signing out does not erase local records. Another account cannot see them because every cached object is scoped to its server and user." = "Signing out does not erase local records. Another account cannot see them because every cached object is scoped to its server and user.";
 "Spending" = "Spending";
 "Support code: local_store_unavailable" = "Support code: local_store_unavailable";
+"System" = "System";
 "Sync state" = "Sync state";
+"Signed in and syncing" = "Signed in and syncing";
 "Synced" = "Synced";
 "Synchronization" = "Synchronization";
 "Synchronization can happen later without blocking this entry." = "Synchronization can happen later without blocking this entry.";

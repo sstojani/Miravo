@@ -1,4 +1,35 @@
 import Foundation
+import SwiftUI
+
+enum AppAppearanceMode: String, CaseIterable, Identifiable {
+    case system
+    case light
+    case dark
+
+    var id: String { rawValue }
+
+    var title: LocalizedStringKey {
+        switch self {
+        case .system:
+            "System"
+        case .light:
+            "Light"
+        case .dark:
+            "Dark"
+        }
+    }
+
+    var colorScheme: ColorScheme? {
+        switch self {
+        case .system:
+            nil
+        case .light:
+            .light
+        case .dark:
+            .dark
+        }
+    }
+}
 
 @MainActor
 final class AppPreferences {
@@ -6,6 +37,7 @@ final class AppPreferences {
 
     private enum Key {
         static let appLockEnabled = "privacy.appLockEnabled"
+        static let appAppearance = "appearance.mode"
         static let budgetThresholdNotification =
             "planning.budgetThresholdNotification."
         static let completedOnboarding = "onboarding.completed"
@@ -89,6 +121,16 @@ final class AppPreferences {
     var appLockEnabled: Bool {
         get { defaults.bool(forKey: Key.appLockEnabled) }
         set { defaults.set(newValue, forKey: Key.appLockEnabled) }
+    }
+
+    var appAppearance: AppAppearanceMode {
+        get {
+            guard let value = defaults.string(forKey: Key.appAppearance),
+                  let mode = AppAppearanceMode(rawValue: value)
+            else { return .system }
+            return mode
+        }
+        set { defaults.set(newValue.rawValue, forKey: Key.appAppearance) }
     }
 
     func recurringRemindersEnabled(scopeKey: String) -> Bool {
@@ -216,6 +258,7 @@ final class AppPreferences {
     func resetForUITests() {
         for key in [
             Key.appLockEnabled,
+            Key.appAppearance,
             Key.completedOnboarding,
             Key.currentScopeKey,
             Key.hasAuthenticated,

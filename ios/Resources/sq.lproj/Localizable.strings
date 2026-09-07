@@ -8,7 +8,9 @@
 "Advanced" = "Të avancuara";
 "All types" = "Të gjitha llojet";
 "Amount" = "Shuma";
+"App appearance" = "Pamja e aplikacionit";
 "App lock protects the user interface. iOS Data Protection and a device passcode protect local files." = "Bllokimi i aplikacionit mbron ndërfaqen. Data Protection i iOS-it dhe kodi i pajisjes mbrojnë skedarët lokalë.";
+"Appearance" = "Pamja";
 "Archive" = "Arkivo";
 "Archived detail format" = "%@ · E arkivuar";
 "Base currency" = "Monedha bazë";
@@ -38,6 +40,8 @@
 "Details" = "Hollësitë";
 "Development HTTP is allowed only for this device's loopback host." = "HTTP për zhvillim lejohet vetëm për adresën loopback të kësaj pajisjeje.";
 "Digital wallet" = "Portofol digjital";
+"Disconnecting…" = "Duke u shkëputur…";
+"Dark" = "E errët";
 "Duplicate" = "Dyfisho";
 "Edit" = "Ndrysho";
 "Edit transaction" = "Ndrysho transaksionin";
@@ -52,6 +56,7 @@
 "Enter valid transaction details." = "Vendos të dhëna të vlefshme të transaksionit.";
 "Entries save locally first. A network problem never blocks ordinary expense entry." = "Regjistrimet ruhen fillimisht lokalisht. Një problem rrjeti nuk e pengon shtimin e zakonshëm të shpenzimeve.";
 "Everyday" = "Përditshmëria";
+"Explore" = "Eksploro";
 "Expense" = "Shpenzim";
 "Expenses" = "Shpenzimet";
 "Face ID or passcode app lock" = "Bllokim me Face ID ose kod";
@@ -67,6 +72,7 @@
 "Insights" = "Analizat";
 "Insights are calculated from records currently stored on this iPhone. Currency totals are never combined without conversion snapshots." = "Analizat llogariten nga regjistrimet që ruhen aktualisht në këtë iPhone. Totali i monedhave nuk bashkohet kurrë pa kursin përkatës të këmbimit.";
 "Last successful sync" = "Sinkronizimi i fundit i suksesshëm";
+"Light" = "E çelët";
 "Local data" = "Të dhënat lokale";
 "Local data ready" = "Të dhënat lokale janë gati";
 "Local data needs attention" = "Të dhënat lokale kërkojnë vëmendje";
@@ -77,6 +83,7 @@
 "Manual retry, server cursors, and conflict review are implemented with the synchronization milestone. Local saving does not depend on them." = "Riprova manuale, kursorët e serverit dhe shqyrtimi i konflikteve zbatohen në etapën e sinkronizimit. Ruajtja lokale nuk varet prej tyre.";
 "Merchant or payee" = "Tregtari ose përfituesi";
 "Merchant, note, or amount" = "Tregtari, shënimi ose shuma";
+"More" = "Më shumë";
 "Name" = "Emri";
 "New account" = "Llogari e re";
 "New category" = "Kategori e re";
@@ -126,6 +133,7 @@
 "Savings" = "Kursime";
 "Server" = "Serveri";
 "Server address" = "Adresa e serverit";
+"Server account" = "Llogaria e serverit";
 "Server URL" = "Adresa e serverit";
 "Sign in to Miravo" = "Hyr në Miravo";
 "Sign in or continue as a guest" = "Hyr ose vazhdo si mysafir";
@@ -142,13 +150,16 @@
 "Settlement" = "Shlyerje";
 "Show recently deleted" = "Shfaq të fshirat së fundi";
 "Sign in" = "Hyr";
+"Sign in to sync" = "Hyr për sinkronizim";
 "Sign in could not be completed securely." = "Hyrja nuk mund të përfundonte në mënyrë të sigurt.";
 "Sign out" = "Dil";
 "Signing in…" = "Po kryhet hyrja…";
 "Signing out does not erase local records. Another account cannot see them because every cached object is scoped to its server and user." = "Dalja nuk i fshin regjistrimet lokale. Një llogari tjetër nuk mund t'i shohë, sepse çdo objekt lokal lidhet me serverin dhe përdoruesin përkatës.";
 "Spending" = "Shpenzimet";
 "Support code: local_store_unavailable" = "Kodi i ndihmës: local_store_unavailable";
+"System" = "Sistemi";
 "Sync state" = "Gjendja e sinkronizimit";
+"Signed in and syncing" = "I identifikuar dhe duke sinkronizuar";
 "Synced" = "I sinkronizuar";
 "Synchronization" = "Sinkronizimi";
 "Synchronization can happen later without blocking this entry." = "Sinkronizimi mund të kryhet më vonë pa e bllokuar këtë regjistrim.";

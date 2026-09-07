@@ -41,6 +41,7 @@ struct SettingsView: View {
     var body: some View {
         Form {
             ledgerSection
+            appearanceSection
             privacySection
             synchronizationSection
             advancedSection
@@ -119,6 +120,23 @@ struct SettingsView: View {
             Text("App lock protects the user interface. iOS Data Protection and a device passcode protect local files.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
+        }
+    }
+
+    private var appearanceSection: some View {
+        Section("Appearance") {
+            Picker(
+                "App appearance",
+                selection: Binding(
+                    get: { session.appAppearance },
+                    set: { session.setAppAppearance($0) }
+                )
+            ) {
+                ForEach(AppAppearanceMode.allCases) { mode in
+                    Text(mode.title).tag(mode)
+                }
+            }
+            .pickerStyle(.segmented)
         }
     }
 

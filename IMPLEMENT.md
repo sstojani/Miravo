@@ -10,6 +10,10 @@ Implemented durable per-entity server-state recovery, guarded retry and tombston
 
 Retired the temporary cleanroom test app identity from XcodeGen and unsigned-IPA verification. The generated app now displays as `Miravo` and uses the centralized provisional bundle identifier `com.example.projectledger`; test bundles use the matching `.tests` and `.uitests` suffixes. This stabilizes future installs against the pre-cleanroom identity, but iOS will still treat the already-installed `com.example.projectledger.cleanroom` build as a separate app. Local project-contract, localization coverage/key-parity, and whitespace checks passed on Windows; native Xcode build/device behavior remains unverified until GitHub macOS or a local Mac runs it.
 
+## 2026-09-07 - Floating navigation and appearance controls
+
+Replaced the default bottom TabView chrome with a custom floating icon pill that keeps Overview, Transactions, Add, Plans, and More available from every main screen. The More hub now surfaces the current server account state, sign-in for guest/local users, server disconnect for authenticated users, and links to Insights and Settings. Added a persisted Settings -> Appearance segmented control for System, Light, and Dark presentation, applied at the root view. Transaction history delete swipe actions now use the Miravo destructive color. Public app self-registration was not added in this slice; the backend still supports multiple users through the existing `create_app_user` operator command while public registration remains disabled.
+
 ## 2026-08-09 — Milestone 0 and Milestone 1 start
 
 ### Inputs and inspection

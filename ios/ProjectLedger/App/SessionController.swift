@@ -31,6 +31,7 @@ final class SessionController: ObservableObject {
     @Published var errorMessage: String?
     @Published var requestID: String?
     @Published var logoutWarning: String?
+    @Published private(set) var appAppearance: AppAppearanceMode
 
     let preferences: AppPreferences
     private let tokenStore: KeychainSessionTokenStore
@@ -41,6 +42,7 @@ final class SessionController: ObservableObject {
     ) {
         self.preferences = preferences
         self.tokenStore = tokenStore
+        appAppearance = preferences.appAppearance
         #if DEBUG
             if ProcessInfo.processInfo.arguments.contains("-ui-testing-reset-onboarding") {
                 preferences.resetForUITests()
@@ -94,6 +96,11 @@ final class SessionController: ObservableObject {
     }
 
     var appLockEnabled: Bool { preferences.appLockEnabled }
+
+    func setAppAppearance(_ mode: AppAppearanceMode) {
+        preferences.appAppearance = mode
+        appAppearance = mode
+    }
 
     func synchronizationContext() async throws -> SyncAuthenticationContext? {
         guard hasServerConnection,

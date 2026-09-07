@@ -10,6 +10,12 @@ Permanent failures are not generic retry candidates. A server tombstone cannot b
 - **Why:** iOS partitions app container and Keychain data by bundle identifier. Keeping a cleanroom suffix after the sync repair would make reinstall/login tests look like a different app and could hide whether data continuity is actually working.
 - **Consequence:** The first install after this change is separate from any already-installed cleanroom build, but future builds remain on the stable pre-cleanroom identity unless the owner later chooses a final non-example bundle identifier.
 
+## 2026-09-07 - Main navigation uses a floating native shell
+
+- **Decision:** Replace the default TabView bar in the authenticated app shell with a custom floating icon pill, move Settings and Insights behind a More hub, and persist a root-level Appearance preference with System, Light, and Dark modes.
+- **Why:** Device review showed the old bar felt heavy and the More tab was too sparse. A compact icon shell matches the requested visual direction while keeping the five primary destinations stable and putting account/session actions somewhere discoverable.
+- **Consequence:** The app now owns more navigation styling directly, so native compile, Dynamic Type, safe-area, VoiceOver, and device checks are required before treating this as final UI polish. Public self-registration remains separate from this navigation change; the current server can host multiple users, but user creation is still an operator action until a deliberate secure signup/invite flow is added.
+
 ## D-001 — Provisional identity and configuration
 
 - **Decision:** Use “Project Ledger” as the provisional app name, `com.example.projectledger` as the provisional bundle identifier, `ALL` as default currency, `Europe/Tirane` as default time zone, and an empty/invalid public URL placeholder.
