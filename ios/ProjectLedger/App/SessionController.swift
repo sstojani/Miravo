@@ -22,12 +22,6 @@ struct PendingGuestProfileAdoption: Codable, Equatable {
     let targetScopeKey: String
 }
 
-private struct RecoveredKeychainSession {
-    let scopeKey: String
-    let serverURL: URL
-    let refreshExpiresAt: Date
-}
-
 @MainActor
 final class SessionController: ObservableObject {
     @Published private(set) var phase: SessionPhase = .loading
@@ -374,7 +368,7 @@ final class SessionController: ObservableObject {
     private func restoreLocalSession() {
         guard preferences.hasCompletedOnboarding else {
             phase = .loading
-            Task { await recoverPersistedServerSessionOrShowOnboarding() }
+            Task { await prepareFreshInstallOnboarding() }
             return
         }
         guard !preferences.isSignedOut,
@@ -387,67 +381,13 @@ final class SessionController: ObservableObject {
         phase = preferences.appLockEnabled ? .locked : .authenticated
     }
 
-    private func recoverPersistedServerSessionOrShowOnboarding() async {
+    private func prepareFreshInstallOnboarding() async {
         guard !preferences.hasCompletedOnboarding else { return }
-
-        do {
-            let recoverableSessions = try await tokenStore.loadSavedSessions()
-                .compactMap(recoverableServerSession(from:))
-                .sorted { $0.refreshExpiresAt > $1.refreshExpiresAt }
-            guard let recovered = recoverableSessions.first else {
-                phase = .onboarding
-                return
-            }
-
-            preferences.recordAuthentication(
-                serverURL: recovered.serverURL,
-                email: preferences.lastEmail,
-                scopeKey: recovered.scopeKey,
-                remoteIdentityKey: recovered.scopeKey
-            )
-            scopeKey = recovered.scopeKey
-            errorMessage = nil
-            requestID = nil
-            phase = preferences.appLockEnabled ? .locked : .authenticated
-        } catch {
-            phase = .onboarding
-        }
-    }
-
-    private func recoverableServerSession(
-        from candidate: StoredSessionCandidate
-    ) -> RecoveredKeychainSession? {
-        guard !SessionScope.isLocal(candidate.scopeKey),
-              candidate.tokens.tokenType.caseInsensitiveCompare("Bearer") == .orderedSame,
-              !candidate.tokens.accessToken.isEmpty,
-              !candidate.tokens.refreshToken.isEmpty,
-              let refreshExpiresAt = APIDate.date(
-                from: candidate.tokens.refreshTokenExpiresAt
-              ),
-              refreshExpiresAt > .now
-        else {
-            return nil
-        }
-
-        let parts = candidate.scopeKey.split(
-            separator: "|",
-            maxSplits: 1,
-            omittingEmptySubsequences: false
-        )
-        guard parts.count == 2,
-              let userID = UUID(uuidString: String(parts[1])),
-              JWTSubjectParser.subject(from: candidate.tokens.accessToken) == userID,
-              let serverURL = try? ServerURLPolicy.validated(String(parts[0])),
-              SessionScope.key(serverURL: serverURL, userID: userID) == candidate.scopeKey
-        else {
-            return nil
-        }
-
-        return RecoveredKeychainSession(
-            scopeKey: candidate.scopeKey,
-            serverURL: serverURL,
-            refreshExpiresAt: refreshExpiresAt
-        )
+        try? await tokenStore.deleteAll()
+        scopeKey = nil
+        errorMessage = nil
+        requestID = nil
+        phase = .onboarding
     }
 
     private func finishLocalSignOut() {

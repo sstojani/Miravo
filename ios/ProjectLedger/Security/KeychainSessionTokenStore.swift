@@ -6,11 +6,6 @@ enum KeychainStoreError: Error, Equatable {
     case invalidData
 }
 
-struct StoredSessionCandidate: Equatable, Sendable {
-    let scopeKey: String
-    let tokens: SessionTokenBundle
-}
-
 actor KeychainSessionTokenStore {
     private let service: String
 
@@ -57,35 +52,15 @@ actor KeychainSessionTokenStore {
         return tokens
     }
 
-    func loadSavedSessions() throws -> [StoredSessionCandidate] {
-        var query = serviceQuery()
-        query[kSecReturnAttributes as String] = true
-        query[kSecReturnData as String] = true
-        query[kSecMatchLimit as String] = kSecMatchLimitAll
-
-        var item: CFTypeRef?
-        let status = SecItemCopyMatching(query as CFDictionary, &item)
-        if status == errSecItemNotFound { return [] }
-        guard status == errSecSuccess else {
+    func delete(scopeKey: String) throws {
+        let status = SecItemDelete(baseQuery(scopeKey: scopeKey) as CFDictionary)
+        guard status == errSecSuccess || status == errSecItemNotFound else {
             throw KeychainStoreError.unexpectedStatus(status)
-        }
-        guard let items = item as? [[String: Any]] else {
-            throw KeychainStoreError.invalidData
-        }
-
-        return try items.map { item in
-            guard let scopeKey = item[kSecAttrAccount as String] as? String,
-                  let data = item[kSecValueData as String] as? Data,
-                  let tokens = try? JSONDecoder().decode(SessionTokenBundle.self, from: data)
-            else {
-                throw KeychainStoreError.invalidData
-            }
-            return StoredSessionCandidate(scopeKey: scopeKey, tokens: tokens)
         }
     }
 
-    func delete(scopeKey: String) throws {
-        let status = SecItemDelete(baseQuery(scopeKey: scopeKey) as CFDictionary)
+    func deleteAll() throws {
+        let status = SecItemDelete(serviceQuery() as CFDictionary)
         guard status == errSecSuccess || status == errSecItemNotFound else {
             throw KeychainStoreError.unexpectedStatus(status)
         }

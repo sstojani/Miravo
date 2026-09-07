@@ -8,6 +8,7 @@ struct KeychainSessionTokenStoreTests {
             service: "ProjectLedgerTests.\(UUID().uuidString)"
         )
         let scope = "https://ledger.example|50000000-0000-0000-0000-000000000005"
+        let secondScope = "https://ledger.example|70000000-0000-0000-0000-000000000007"
         let tokens = SessionTokenBundle(
             accessToken: "test-access-token",
             accessTokenExpiresAt: "2026-08-09T12:15:00Z",
@@ -19,16 +20,16 @@ struct KeychainSessionTokenStoreTests {
 
         try await store.delete(scopeKey: scope)
         try await store.save(tokens, scopeKey: scope)
+        try await store.save(tokens, scopeKey: secondScope)
         let macroSafeExpectation1: Bool = try await store.load(scopeKey: scope) == tokens
         #expect(macroSafeExpectation1)
-        let savedSessions = try await store.loadSavedSessions()
-        #expect(savedSessions == [
-            StoredSessionCandidate(scopeKey: scope, tokens: tokens),
-        ])
         try await store.delete(scopeKey: scope)
         let macroSafeExpectation2: Bool = try await store.load(scopeKey: scope) == nil
         #expect(macroSafeExpectation2)
-        let macroSafeExpectation3: Bool = try await store.loadSavedSessions().isEmpty
+        let macroSafeExpectation3: Bool = try await store.load(scopeKey: secondScope) == tokens
         #expect(macroSafeExpectation3)
+        try await store.deleteAll()
+        let macroSafeExpectation4: Bool = try await store.load(scopeKey: secondScope) == nil
+        #expect(macroSafeExpectation4)
     }
 }

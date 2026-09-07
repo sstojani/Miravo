@@ -30,9 +30,9 @@ Removed the remaining global bottom clearance behind the floating navigation ove
 
 Successful server authentication now marks onboarding complete at the same preference boundary that stores the authenticated server scope. A relaunch after signing in no longer falls back to the first-open onboarding route simply because the session came from the onboarding sign-in slide. Added a native regression that rebuilds `SessionController` over the same defaults and expects the authenticated phase and scope. Local source checks are recorded with this change; native Swift execution remains a macOS/device check.
 
-## 2026-09-07 - Keychain-backed reinstall session recovery
+## 2026-09-07 - Fresh install clears leftover sessions
 
-When onboarding preferences are missing, Miravo now briefly checks its non-synchronizing Keychain session service for recoverable server credentials before showing first-run onboarding. Recovery accepts only non-local scopes whose refresh token is still dated in the future, whose stored scope URL validates under the HTTPS policy, and whose access-token subject matches the scope user ID. This lets a reinstall on the same device reopen an existing server session when iOS preserves the app Keychain item. If the Keychain is empty, expired, signed out, or invalid, onboarding remains the fallback. Added native source coverage for enumerating scoped Keychain sessions; macOS/device execution remains external.
+Reverted same-device Keychain auto-recovery after device testing showed it can make a deleted/reinstalled app skip first-time onboarding while the app container has no normal local session context. When onboarding preferences are absent, Miravo now shows a brief loading state, clears leftover local Keychain session tokens for this app service, and opens the first-time onboarding flow. A successful explicit server sign-in still marks onboarding complete for later relaunches. Added native source coverage for deleting all scoped Keychain session tokens; macOS/device execution remains external.
 
 ## 2026-08-09 — Milestone 0 and Milestone 1 start
 

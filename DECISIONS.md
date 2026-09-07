@@ -6,11 +6,11 @@
 - **Why:** The onboarding sign-in slide can create a valid authenticated scope without separately calling the local onboarding completion path. Relaunching then incorrectly returns to first-open onboarding even though a server session exists.
 - **Consequence:** Explicit sign-out still routes to sign-in, and a true iOS uninstall can still require login because the app container preferences are removed. After login, cloud bootstrap remains the recovery path for server data.
 
-## 2026-09-07 - Same-device reinstall may recover Keychain server sessions
+## 2026-09-07 - Fresh install must not silently reuse Keychain sessions
 
-- **Decision:** Before showing first-run onboarding with empty preferences, enumerate Miravo's non-synchronizing Keychain session items and recover the newest valid server scope whose refresh credential is unexpired and whose token subject matches the scope user.
-- **Why:** iOS removes the app container on uninstall, but Keychain items can remain on the same device. Without enumerating the saved session account, Miravo cannot know which authenticated scope to reopen.
-- **Consequence:** Recovery is best-effort and same-device only. Explicit sign-out still deletes the active token. Empty, expired, local-only, malformed, or bundle-ID-mismatched Keychain items fall back to onboarding.
+- **Decision:** When onboarding preferences are absent, treat the launch as a fresh install, clear leftover local session tokens from Miravo's non-synchronizing Keychain service, and show first-run onboarding instead of auto-opening an authenticated scope.
+- **Why:** iOS removes the app container on uninstall while Keychain items can remain. Reusing only the token can skip the owner's onboarding/login choice and open an authenticated-looking shell without the expected local session context.
+- **Consequence:** Explicit server sign-in still persists onboarding completion for normal relaunches. A deleted/reinstalled app starts from onboarding and requires the user to sign in again to restore cloud data. Old server-side device sessions may still exist until normal expiry or explicit server/session revocation.
 
 ## 2026-09-07 - Explicit, durable sync recovery
 
