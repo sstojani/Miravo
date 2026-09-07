@@ -341,26 +341,76 @@ private struct ScopedProfileSnapshot {
         let tracker = trackers[0]
         let account = accounts[0]
         let category = categories[0]
+
+        // Only discard the untouched starter scaffold. Checking the actual
+        // starter values prevents a user-edited guest profile from being
+        // mistaken for disposable data.
         guard tracker.serverVersion == nil,
               account.serverVersion == nil,
               category.serverVersion == nil,
+              tracker.name == String(localized: "Everyday"),
+              tracker.trackerDescription.isEmpty,
+              tracker.icon == "wallet.pass",
+              tracker.colorHex == "#3663F5",
+              tracker.baseCurrencyCode == "ALL",
+              tracker.baseCurrencyExponent == 2,
+              tracker.sortOrder == 0,
+              tracker.archivedAt == nil,
+              tracker.deletedAt == nil,
+              tracker.accessRevokedAt == nil,
               account.trackerID == tracker.id,
+              account.name == String(localized: "Cash"),
+              account.type == .cash,
+              account.currencyCode == "ALL",
+              account.currencyExponent == 2,
+              account.openingBalanceMinor == 0,
+              account.colorHex == "#3663F5",
+              account.icon == "banknote",
+              account.includeInNetWorth,
+              account.creditLimitMinor == nil,
+              account.archivedAt == nil,
+              account.deletedAt == nil,
               category.trackerID == tracker.id,
-              tracker.defaultAccountID == account.id,
-              tracker.defaultCategoryID == category.id,
+              category.parentID == nil,
               category.kind == .expense,
-              outboxMutations.count == 3
+              category.name == String(localized: "General"),
+              category.icon == "square.grid.2x2",
+              category.colorHex == "#73819B",
+              category.sortOrder == 0,
+              category.archivedAt == nil,
+              category.deletedAt == nil,
+              tracker.defaultAccountID == account.id,
+              tracker.defaultCategoryID == category.id
         else {
             return false
         }
 
-        let mutationKeys = outboxMutations.map {
-            "\($0.entityType)|\($0.command)|\($0.entityID.uuidString.lowercased())"
-        }
-        return Set(mutationKeys) == Set([
+        let requiredMutationKeys = Set([
             "tracker|create|\(tracker.id.uuidString.lowercased())",
+            "tracker|update|\(tracker.id.uuidString.lowercased())",
             "account|create|\(account.id.uuidString.lowercased())",
             "category|create|\(category.id.uuidString.lowercased())",
         ])
+
+        let groupedMutations = Dictionary(grouping: outboxMutations) {
+            "\($0.entityType)|\($0.command)|\($0.entityID.uuidString.lowercased())"
+        }
+
+        guard Set(groupedMutations.keys) == requiredMutationKeys else {
+            return false
+        }
+
+        // A harmless duplicated starter operation is acceptable only when it
+        // is byte-for-byte the same payload. A real edit produces a different
+        // payload or command and therefore keeps the guest profile.
+        return groupedMutations.values.allSatisfy { mutations in
+            guard let first = mutations.first else { return false }
+
+            return mutations.allSatisfy {
+                $0.baseServerVersion == nil &&
+                    $0.payloadJSON == first.payloadJSON &&
+                    $0.state == .pending
+            }
+        }
     }
 }

@@ -69,6 +69,7 @@ struct LocalLedgerRepository {
             try enqueue(tracker, command: .create)
             try enqueue(account, command: .create)
             try enqueue(category, command: .create)
+            try enqueue(tracker, command: .update)
         }
         return tracker
     }

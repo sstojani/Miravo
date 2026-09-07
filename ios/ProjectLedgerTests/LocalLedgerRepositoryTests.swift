@@ -44,6 +44,51 @@ struct LocalLedgerRepositoryTests {
         #expect(try context.fetch(FetchDescriptor<OutboxMutation>()).isEmpty)
     }
 
+    @Test func untouchedGuestBootstrapWithIdenticalDuplicateStarterMutationIsDiscarded() throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let repository = LocalLedgerRepository(context: context)
+        let guestScope = "local|guest-device"
+
+        _ = try repository.bootstrapDefaults(scopeKey: guestScope)
+
+        let mutations = try context.fetch(FetchDescriptor<OutboxMutation>())
+            .sorted { $0.localSequence < $1.localSequence }
+
+        let trackerUpdate = try #require(
+            mutations.first {
+                $0.entityType == "tracker" &&
+                    $0.command == "update"
+            }
+        )
+
+        let duplicateSequence = (mutations.map(\.localSequence).max() ?? 0) + 1
+
+        context.insert(
+            OutboxMutation(
+                scopeKey: guestScope,
+                localSequence: duplicateSequence,
+                entityID: trackerUpdate.entityID,
+                entityType: trackerUpdate.entityType,
+                command: trackerUpdate.command,
+                payloadJSON: trackerUpdate.payloadJSON,
+                baseServerVersion: trackerUpdate.baseServerVersion
+            )
+        )
+        try context.save()
+
+        let result = try repository.adoptGuestProfileForAuthentication(
+            sourceScopeKey: guestScope,
+            targetScopeKey: scope
+        )
+
+        #expect(result == .discardedDisposableProfile)
+        #expect(try context.fetch(FetchDescriptor<LocalTracker>()).isEmpty)
+        #expect(try context.fetch(FetchDescriptor<LocalAccount>()).isEmpty)
+        #expect(try context.fetch(FetchDescriptor<LocalCategory>()).isEmpty)
+        #expect(try context.fetch(FetchDescriptor<OutboxMutation>()).isEmpty)
+    }
+
     @Test func guestExpenseMovesToAuthenticatedScopeBeforeSync() throws {
         let container = try makeContainer()
         let context = container.mainContext
