@@ -26,7 +26,10 @@ struct SyncDiagnosticsView: View {
                 if let date = sync.diagnostics.lastAttemptAt {
                     LabeledContent("Last attempted sync") { Text(date, format: .dateTime) }
                 }
-                LabeledContent("Safe error code", value: SyncRecoveryPolicy.safeCode(sync.diagnostics.lastSafeErrorCode))
+                LabeledContent(
+                    "Safe error code",
+                    value: sync.diagnostics.lastSafeErrorCode.map(SyncRecoveryPolicy.safeCode) ?? String(localized: "None")
+                )
             }
             Section("App identity") {
                 LabeledContent("Bundle identifier", value: Bundle.main.bundleIdentifier ?? String(localized: "Unknown"))

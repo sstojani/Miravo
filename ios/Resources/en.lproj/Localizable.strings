@@ -875,6 +875,7 @@
 "Local sequence" = "Local sequence";
 "Miravo will replace stale sync metadata and download a fresh server copy. This repair refuses to discard unsynchronized changes." = "Miravo will replace stale sync metadata and download a fresh server copy. This repair refuses to discard unsynchronized changes.";
 "No failed operations" = "No failed operations";
+"None" = "None";
 "Operation details" = "Operation details";
 "Recovering synchronization…" = "Recovering synchronization…";
 "Recovery" = "Recovery";

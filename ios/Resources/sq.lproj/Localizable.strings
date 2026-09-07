@@ -875,6 +875,7 @@
 "Local sequence" = "Rendi lokal";
 "Miravo will replace stale sync metadata and download a fresh server copy. This repair refuses to discard unsynchronized changes." = "Miravo do të zëvendësojë metadatat e vjetruara të sinkronizimit dhe do të shkarkojë një kopje të re nga serveri. Ky riparim nuk heq ndryshime të pasinkronizuara.";
 "No failed operations" = "Nuk ka veprime të dështuara";
+"None" = "Asnjë";
 "Operation details" = "Detajet e veprimit";
 "Recovering synchronization…" = "Duke rikuperuar sinkronizimin…";
 "Recovery" = "Rikuperimi";
