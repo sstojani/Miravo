@@ -124,11 +124,14 @@ private struct MainTabView: View {
         }
         .clipped()
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.22), value: selectedTab)
-        .safeAreaInset(edge: .bottom) {
+        .safeAreaPadding(
+            .bottom,
+            keyboardVisible ? 0 : FloatingTabBarMetrics.contentClearance
+        )
+        .overlay(alignment: .bottom) {
             if !keyboardVisible {
                 FloatingTabBar(selectedTab: selectedTab, onSelect: selectTab)
                     .padding(.horizontal, 28)
-                    .padding(.top, 8)
                     .padding(.bottom, 10)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
@@ -297,6 +300,7 @@ private enum TabTransitionDirection {
 }
 
 private enum FloatingTabBarMetrics {
+    static let contentClearance: CGFloat = 96
     static let quickAddClearance: CGFloat = 88
 }
 

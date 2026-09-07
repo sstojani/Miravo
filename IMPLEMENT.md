@@ -18,6 +18,10 @@ Replaced the default bottom TabView chrome with a custom floating icon pill that
 
 Hid the floating navigation pill while the iOS keyboard is visible, added extra bottom clearance for Quick Add's save panel when the pill is visible, and changed the saved/undo confirmation into a transient row above the Save button that dismisses after three seconds. Added directional tab transitions between main destinations while respecting Reduce Motion. Local iOS localization, source-contract, and whitespace checks passed on Windows; native layout/runtime behavior remains a device or macOS simulator check.
 
+## 2026-09-07 - Transparent floating chrome polish
+
+Moved the main floating navigation pill from a bottom safe-area inset into an overlay with explicit content clearance so the surrounding rectangular area no longer paints as a separate slab. Reworked Quick Add's bottom action from a full-width blue bar into a compact floating Save capsule, keeping the undo confirmation as a temporary chip above it. Local iOS localization, source-contract, and whitespace checks passed on Windows; physical safe-area appearance still needs iPhone review.
+
 ## 2026-08-09 — Milestone 0 and Milestone 1 start
 
 ### Inputs and inspection

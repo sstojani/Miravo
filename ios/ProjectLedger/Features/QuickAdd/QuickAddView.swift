@@ -280,32 +280,32 @@ struct QuickAddView: View {
                     dismissKeyboard()
                     save()
                 } label: {
-                    HStack(spacing: 10) {
-                        Image(systemName: "checkmark.circle.fill")
-                        Text("Save on this iPhone")
+                    HStack(spacing: 8) {
+                        Image(systemName: "checkmark")
+                            .font(.subheadline.weight(.bold))
+                        Text("Save")
                             .fontWeight(.semibold)
-                        Spacer()
-                        Image(systemName: "arrow.right")
-                            .font(.subheadline.weight(.semibold))
                     }
-                    .padding(.horizontal, 18)
-                    .frame(maxWidth: .infinity, minHeight: 54)
+                    .font(.headline)
+                    .padding(.horizontal, 28)
+                    .frame(minWidth: 170, minHeight: 54)
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(.white)
                 .background(
-                    LedgerTheme.accent,
-                    in: RoundedRectangle(
-                        cornerRadius: LedgerTheme.cornerRadius,
-                        style: .continuous
-                    )
+                    Capsule(style: .continuous)
+                        .fill(canSave ? LedgerTheme.accent : Color.secondary.opacity(0.28))
                 )
+                .overlay {
+                    Capsule(style: .continuous)
+                        .stroke(Color.white.opacity(canSave ? 0.18 : 0.08), lineWidth: 1)
+                }
                 .opacity(canSave ? 1 : 0.42)
                 .shadow(
                     color: canSave
                         ? LedgerTheme.accent.opacity(0.28) : .clear,
-                    radius: 12,
-                    y: 6
+                    radius: 16,
+                    y: 8
                 )
                 .disabled(!canSave)
 
@@ -321,7 +321,6 @@ struct QuickAddView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
             .padding(.bottom, bottomAccessoryPadding)
-            .background(.ultraThinMaterial)
             .animation(.easeInOut(duration: 0.18), value: undoCandidate?.id)
         }
         .onDisappear { undoExpiryTask?.cancel() }
