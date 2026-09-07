@@ -38,6 +38,10 @@ Reverted same-device Keychain auto-recovery after device testing showed it can m
 
 Moved server disconnect out of the More hub into a dedicated User account screen with profile, security, server, sync, and scope rows. The More hub now treats the account row as navigation instead of presenting a destructive action beside it. Added a transparent bottom safe-area inset for non-Quick Add tabs so long scrollable screens can move their final rows above the floating navigation pill without bringing back an opaque bottom slab. Local source checks are recorded with this change; exact iPhone safe-area behavior remains device verification.
 
+## 2026-09-07 - Plans bottom scroll tail
+
+Added an explicit transparent tail spacer to the Plans scroll content so the final Split balances section can scroll above the floating navigation pill instead of stopping in the same visual row. This is a targeted device-polish follow-up to the shared bottom safe-area clearance; exact height remains device-review tunable.
+
 ## 2026-08-09 — Milestone 0 and Milestone 1 start
 
 ### Inputs and inspection
