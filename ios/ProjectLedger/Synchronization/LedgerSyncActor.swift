@@ -290,6 +290,18 @@ actor LedgerSyncActor {
         state.lastSafeErrorCode = nil
         try saveOrRollback()
 
+        // A bootstrap must run before push when the local database needs one.
+        // Besides restoring the cursor, bootstrap can recover missing
+        // baseServerVersion values for local non-create mutations.
+        let initialState = try cursorState(scopeKey: scopeKey)
+        if initialState.bootstrapRequired || initialState.cursor == nil {
+            try await bootstrapAll(
+                scopeKey: scopeKey,
+                client: client,
+                accessToken: accessToken
+            )
+        }
+
         let pushedCount = try await pushAvailable(
             scopeKey: scopeKey,
             client: client,
@@ -412,6 +424,25 @@ actor LedgerSyncActor {
             }
             guard !seenEntities.contains(entityKey), operations.count < 100 else { continue }
             seenEntities.insert(entityKey)
+
+            // Never send a mutation that violates the sync version invariant:
+            // create => no base version; every other command => base version required.
+            let isCreate = mutation.command == LocalMutationCommand.create.rawValue
+            let invalidBaseVersion =
+                (isCreate && mutation.baseServerVersion != nil) ||
+                (!isCreate && mutation.baseServerVersion == nil)
+            if invalidBaseVersion {
+                mutation.stateRaw = LocalSyncState.failed.rawValue
+                mutation.nextAttemptAt = nil
+                mutation.lastSafeErrorCode = "invalid_base_server_version"
+                mutation.updatedAt = now
+                if !isCreate {
+                    let state = try cursorState(scopeKey: scopeKey)
+                    state.bootstrapRequired = true
+                }
+                continue
+            }
+
             do {
                 let payload = try JSONDecoder().decode(JSONValue.self, from: mutation.payloadJSON)
                 guard payload.objectValue != nil else {
@@ -925,6 +956,28 @@ actor LedgerSyncActor {
                 scopeKey: scopeKey,
                 pendingKeys: pendingKeys
             )
+
+            // Preserve the local mutation payload, but repair an impossible
+            // versionless update/delete/archive/etc. from the authoritative
+            // version returned by bootstrap. This also recovers mutations
+            // previously marked failed by the server's validation response.
+            if pendingKeys.contains(key) {
+                let repairableMutations = preservingOutbox.filter {
+                    $0.entityType == row.entityType &&
+                        $0.entityID == row.entityID &&
+                        $0.command != LocalMutationCommand.create.rawValue &&
+                        $0.baseServerVersion == nil
+                }
+                for mutation in repairableMutations {
+                    mutation.baseServerVersion = row.serverVersion
+                    mutation.stateRaw = LocalSyncState.pending.rawValue
+                    mutation.attemptCount = 0
+                    mutation.nextAttemptAt = nil
+                    mutation.lastSafeErrorCode = nil
+                    mutation.updatedAt = .now
+                }
+            }
+
             if !pendingKeys.contains(key) &&
                 !parentBlocked &&
                 !projectionBlocked {
