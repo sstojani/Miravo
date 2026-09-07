@@ -17,7 +17,7 @@ struct SyncAuthenticationContext: Sendable {
     let tokenStore: KeychainSessionTokenStore
 }
 
-struct PendingGuestProfileAdoption: Equatable {
+struct PendingGuestProfileAdoption: Codable, Equatable {
     let sourceScopeKey: String
     let targetScopeKey: String
 }
@@ -31,7 +31,6 @@ final class SessionController: ObservableObject {
     @Published var errorMessage: String?
     @Published var requestID: String?
     @Published var logoutWarning: String?
-    @Published private var pendingGuestProfileAdoption: PendingGuestProfileAdoption?
 
     let preferences: AppPreferences
     private let tokenStore: KeychainSessionTokenStore
@@ -97,13 +96,17 @@ final class SessionController: ObservableObject {
     var appLockEnabled: Bool { preferences.appLockEnabled }
 
     func synchronizationContext() async throws -> SyncAuthenticationContext? {
-        guard phase == .authenticated,
+        guard hasServerConnection,
               let scopeKey,
+              pendingGuestAdoption(for: scopeKey) == nil,
               let tokens = try await tokenStore.load(scopeKey: scopeKey)
         else {
             return nil
         }
         let baseURL = try ServerURLPolicy.validated(preferredServerURLString)
+        guard let userID = JWTSubjectParser.subject(from: tokens.accessToken),
+              SessionScope.key(serverURL: baseURL, userID: userID) == scopeKey
+        else { throw KeychainStoreError.invalidData }
         return SyncAuthenticationContext(
             scopeKey: scopeKey,
             baseURL: baseURL,
@@ -185,6 +188,11 @@ final class SessionController: ObservableObject {
             )
 
             let existingScope = scopeKey ?? preferences.currentScopeKey
+            if let pending = preferences.pendingGuestAdoption,
+               pending.targetScopeKey != remoteIdentityKey {
+                errorMessage = String(localized: "This local profile is already linked to a different server account.")
+                return
+            }
             let activeScopeKey = remoteIdentityKey
             let pendingAdoption: PendingGuestProfileAdoption?
 
@@ -211,6 +219,8 @@ final class SessionController: ObservableObject {
 
             try await tokenStore.save(tokens, scopeKey: activeScopeKey)
 
+            // Persist the handoff before switching scope. A restart can safely repeat adoption.
+            preferences.pendingGuestAdoption = pendingAdoption ?? preferences.pendingGuestAdoption
             preferences.recordAuthentication(
                 serverURL: baseURL,
                 email: email,
@@ -218,7 +228,6 @@ final class SessionController: ObservableObject {
                 remoteIdentityKey: remoteIdentityKey
             )
 
-            pendingGuestProfileAdoption = pendingAdoption
             scopeKey = activeScopeKey
             phase = .authenticated
         } catch let error as APIClientError {
@@ -234,13 +243,13 @@ final class SessionController: ObservableObject {
     }
 
     func pendingGuestAdoption(for scopeKey: String) -> PendingGuestProfileAdoption? {
-        guard pendingGuestProfileAdoption?.targetScopeKey == scopeKey else { return nil }
-        return pendingGuestProfileAdoption
+        guard preferences.pendingGuestAdoption?.targetScopeKey == scopeKey else { return nil }
+        return preferences.pendingGuestAdoption
     }
 
     func clearPendingGuestAdoption(_ adoption: PendingGuestProfileAdoption) {
-        guard pendingGuestProfileAdoption == adoption else { return }
-        pendingGuestProfileAdoption = nil
+        guard preferences.pendingGuestAdoption == adoption else { return }
+        preferences.pendingGuestAdoption = nil
     }
 
     func reportGuestAdoptionFailure() {

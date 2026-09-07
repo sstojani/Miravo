@@ -174,7 +174,11 @@ struct SettingsView: View {
             value: backgroundRefreshStatus
         )
         LabeledContent("Pending operations", value: pendingCount, format: .number)
-        LabeledContent("Failed operations", value: failedOutboxCount, format: .number)
+        NavigationLink {
+            FailedOperationsView(scopeKey: scopeKey)
+        } label: {
+            LabeledContent("Failed operations", value: failedOutboxCount, format: .number)
+        }
         LabeledContent("Pending attachments", value: pendingAttachmentCount, format: .number)
         LabeledContent("Failed attachments", value: failedAttachmentCount, format: .number)
         NavigationLink {
@@ -212,15 +216,10 @@ struct SettingsView: View {
         }
         .disabled(sync.isRunning)
 
-        if failedOutboxCount > 0 {
-            Button {
-                Task {
-                    await sync.retryFailed(scopeKey: scopeKey, session: session)
-                }
-            } label: {
-                Label("Retry failed operations", systemImage: "arrow.clockwise")
-            }
-            .disabled(sync.isRunning)
+        NavigationLink {
+            SyncDiagnosticsView(scopeKey: scopeKey)
+        } label: {
+            Label("Sync diagnostics and repair", systemImage: "stethoscope")
         }
     }
 
@@ -236,7 +235,7 @@ struct SettingsView: View {
                 .textSelection(.enabled)
             }
             LabeledContent("Local scope") {
-                Text(scopeKey.split(separator: "|").last.map(String.init) ?? "—")
+                Text(SyncDiagnosticReport.digest(scopeKey))
                     .font(.caption.monospaced())
                     .textSelection(.enabled)
             }

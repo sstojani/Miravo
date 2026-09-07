@@ -131,8 +131,8 @@ class SyncBootstrapView(APIView):
             state = decode_bootstrap_cursor(user=actor, cursor=supplied_cursor)
             if state.entity_index > len(BOOTSTRAP_ENTITY_ORDER):
                 raise InvalidBootstrapCursor()
-            if state.upper_sequence > current_max_sequence():
-                raise InvalidBootstrapCursor("The bootstrap cursor is ahead of server history.")
+            if state.upper_sequence != current_max_sequence():
+                raise InvalidBootstrapCursor("Server history changed; restart the snapshot.")
         else:
             upper_sequence = current_max_sequence()
             state = BootstrapCursorState(
@@ -147,6 +147,10 @@ class SyncBootstrapView(APIView):
             last_id=state.last_id,
             limit=serializer.validated_data["limit"],
         )
+        # UUID pagination reads current rows, not historical versions. A changed
+        # watermark would mix generations (including missing parents) across pages.
+        if current_max_sequence() != state.upper_sequence:
+            raise InvalidBootstrapCursor("Server history changed; restart the snapshot.")
         next_bootstrap_cursor = None
         if page.has_more:
             next_bootstrap_cursor = encode_bootstrap_cursor(

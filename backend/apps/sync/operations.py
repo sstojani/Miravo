@@ -125,7 +125,8 @@ def _ensure_available(model: type[Any], entity_id: UUID) -> None:
 def _require_version(
     *, instance: Any, expected: int, entity_type: str, actor: User, proposed: dict[str, Any]
 ) -> None:
-    if instance.version != expected:
+    # Restore commands unarchive active rows; the protocol has no undelete operation.
+    if instance.version != expected or instance.deleted_at is not None:
         current = serialize_instance(entity_type, instance.id, actor) or {
             "id": str(instance.id),
             "version": instance.version,

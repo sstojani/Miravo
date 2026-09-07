@@ -11,7 +11,10 @@ from django.utils import timezone
 from apps.audit.services import record_audit_event
 from apps.ledger.currency import normalize_currency
 from apps.ledger.models import Tracker, TrackerMembership
+from apps.ledger.services.collaboration import DEFAULT_CATEGORIES, participant_name_for_user
 from apps.users.models import User, UserManager
+
+STARTER_TRACKER_MAX_VERSION = 2
 
 
 @dataclass(frozen=True)
@@ -40,7 +43,7 @@ class TrackerSummary:
 
     @property
     def is_starter_only(self) -> bool:
-        return self.material_records == 0
+        return self.material_records == 0 and _has_only_starter_data(self.tracker)
 
 
 class Command(BaseCommand):
@@ -117,6 +120,7 @@ class Command(BaseCommand):
             return
 
         now = timezone.now()
+        deleted_count = 0
         with transaction.atomic():
             for summary in removable:
                 tracker = Tracker.objects.select_for_update(of=("self",)).get(
@@ -125,6 +129,11 @@ class Command(BaseCommand):
                     deleted_at__isnull=True,
                     archived_at__isnull=True,
                 )
+                if not _has_only_starter_data(tracker):
+                    self.stdout.write(
+                        self.style.WARNING(f"Changed since review; kept {tracker.id}.")
+                    )
+                    continue
                 tracker.archived_at = now
                 tracker.deleted_at = now
                 tracker.version += 1
@@ -137,8 +146,9 @@ class Command(BaseCommand):
                     target_id=tracker.id,
                     metadata={"reason": "duplicate_starter_cleanup", "result": "deleted"},
                 )
+                deleted_count += 1
         self.stdout.write(
-            self.style.SUCCESS(f"Deleted {len(removable)} empty duplicate tracker(s).")
+            self.style.SUCCESS(f"Deleted {deleted_count} empty duplicate tracker(s).")
         )
 
 
@@ -204,7 +214,86 @@ def _candidate_summaries(
 
 
 def _active_filter(related_name: str) -> Q:
-    return Q(**{f"{related_name}__deleted_at__isnull": True})
+    # Deleted financial history is material too and must never become a cleanup candidate.
+    return Q(**{f"{related_name}__id__isnull": False})
+
+
+def _has_only_starter_data(tracker: Tracker) -> bool:  # noqa: PLR0911
+    if (
+        tracker.name != "Everyday"
+        or tracker.description
+        or tracker.icon != "wallet.pass"
+        or tracker.color != "#3663F5"
+        or tracker.sort_order != 0
+        or tracker.version > STARTER_TRACKER_MAX_VERSION
+    ):
+        return False
+    for related in (
+        "transactions",
+        "budgets",
+        "recurring_rules",
+        "installment_plans",
+        "settlements",
+        "attachments",
+        "tags",
+        "merchants",
+        "invites",
+    ):
+        if getattr(tracker, related).exists():
+            return False
+    accounts = list(tracker.accounts.all())
+    if len(accounts) > 1:
+        return False
+    for account in accounts:
+        if (
+            account.name != "Cash"
+            or account.type != "cash"
+            or account.currency != tracker.base_currency
+            or account.opening_balance_minor != 0
+            or account.credit_limit_minor is not None
+            or not account.include_in_net_worth
+            or account.icon != "banknote"
+            or account.color != "#3663F5"
+            or account.archived_at is not None
+            or account.deleted_at is not None
+            or account.version != 1
+            or account.opening_date != account.created_at.date()
+        ):
+            return False
+    expected = {
+        (kind, name, icon, color, i)
+        for i, (kind, name, icon, color) in enumerate(DEFAULT_CATEGORIES)
+    }
+    expected.add(("expense", "General", "square.grid.2x2", "#73819B", 0))
+    categories = list(tracker.categories.all())
+    if any(
+        (category.kind, category.name, category.icon, category.color, category.sort_order)
+        not in expected
+        or category.parent_id is not None
+        or category.version != 1
+        or category.archived_at is not None
+        or category.deleted_at is not None
+        for category in categories
+    ):
+        return False
+    if tracker.default_account_id and tracker.default_account_id not in {a.id for a in accounts}:
+        return False
+    if tracker.default_category_id and tracker.default_category_id not in {
+        c.id for c in categories
+    }:
+        return False
+    members = list(tracker.memberships.all())
+    if len(members) != 1 or members[0].user_id != tracker.owner_id or members[0].version != 1:
+        return False
+    participants = list(tracker.participants.all())
+    return len(participants) == 1 and all(
+        p.linked_user_id == tracker.owner_id
+        and p.version == 1
+        and p.display_name == participant_name_for_user(tracker.owner)
+        and p.deleted_at is None
+        and p.archived_at is None
+        for p in participants
+    )
 
 
 def _select_tracker_to_keep(summaries: list[TrackerSummary]) -> TrackerSummary:
