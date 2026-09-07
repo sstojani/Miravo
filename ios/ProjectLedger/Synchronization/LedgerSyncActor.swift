@@ -761,9 +761,23 @@ actor LedgerSyncActor {
         client: any SyncTransport,
         accessToken: String
     ) async throws {
-        if try cursorState(scopeKey: scopeKey).bootstrapGenerationID == nil {
+        let initialState = try cursorState(scopeKey: scopeKey)
+
+        // A completed page with no continuation cursor but with a retained
+        // target means the previous one-page bootstrap was stranded before
+        // finalization. A new first-page request may legitimately have a
+        // different target cursor, so start a fresh generation instead of
+        // comparing it with stale state.
+        let strandedSinglePageBootstrap =
+            initialState.bootstrapGenerationID != nil &&
+            initialState.bootstrapCursor == nil &&
+            initialState.bootstrapTargetCursor != nil
+
+        if initialState.bootstrapGenerationID == nil ||
+            strandedSinglePageBootstrap {
             try resetBootstrap(scopeKey: scopeKey)
         }
+
         for _ in 0 ..< 10_000 {
             let state = try cursorState(scopeKey: scopeKey)
             let response = try await client.bootstrap(

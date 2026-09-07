@@ -391,6 +391,62 @@ struct LedgerSyncActorTests {
         #expect(mutation.lastSafeErrorCode == "overpayment_requires_confirmation")
     }
 
+    @Test func strandedSinglePageBootstrapGenerationRestartsBeforeRetry() async throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+
+        let cursor = SyncCursor(scopeKey: scope)
+        cursor.bootstrapRequired = true
+        cursor.bootstrapGenerationID = UUID()
+        cursor.bootstrapTargetCursor = "stale-bootstrap-target"
+        cursor.bootstrapCursor = nil
+
+        context.insert(cursor)
+        try context.save()
+
+        let transport = ScriptedSyncTransport(
+            pushResponses: [],
+            pullResponses: [
+                emptyPull(cursor: "after-bootstrap"),
+            ],
+            bootstrapResponses: [
+                SyncBootstrapResponse(
+                    protocolVersion: 1,
+                    generatedAt: "2026-09-07T08:03:10Z",
+                    cursor: "fresh-bootstrap-target",
+                    bootstrapCursor: nil,
+                    hasMore: false,
+                    data: bootstrapData()
+                ),
+            ],
+            ackResponses: [
+                ack(cursor: "after-bootstrap"),
+            ]
+        )
+
+        let summary = try await LedgerSyncActor(
+            modelContainer: container
+        ).synchronize(
+            authentication: try authentication(),
+            transport: transport
+        )
+
+        let verification = ModelContext(container)
+        let savedCursor = try #require(
+            verification.fetch(FetchDescriptor<SyncCursor>()).first
+        )
+        let requestedBootstrapCursors = await transport.capturedBootstrapCursors()
+
+        #expect(summary.pushedCount == 0)
+        #expect(summary.acknowledged)
+        #expect(requestedBootstrapCursors == [nil])
+        #expect(savedCursor.cursor == "after-bootstrap")
+        #expect(!savedCursor.bootstrapRequired)
+        #expect(savedCursor.bootstrapGenerationID == nil)
+        #expect(savedCursor.bootstrapTargetCursor == nil)
+        #expect(savedCursor.bootstrapCursor == nil)
+    }
+
     @Test func fullBootstrapPreservesAnUnsentInstallmentProjectionAndItsSchedule() async throws {
         let container = try makeContainer()
         let context = container.mainContext
