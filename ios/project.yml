@@ -12,14 +12,14 @@ configs:
 
 settings:
   base:
-    APP_DISPLAY_NAME: Miravo
+    APP_DISPLAY_NAME: Miravo Clean
     CURRENT_PROJECT_VERSION: 1
     DEVELOPMENT_LANGUAGE: en
     GENERATE_INFOPLIST_FILE: false
     IPHONEOS_DEPLOYMENT_TARGET: "18.0"
     MARKETING_VERSION: 0.1.0
     MIRAVO_DEFAULT_SERVER_URL: "https://laptop-1.tail029be8.ts.net:8443"
-    PRODUCT_BUNDLE_IDENTIFIER: com.example.projectledger
+    PRODUCT_BUNDLE_IDENTIFIER: com.example.projectledger.cleanroom
     SWIFT_STRICT_CONCURRENCY: complete
     SWIFT_VERSION: "6.0"
     TARGETED_DEVICE_FAMILY: "1"
@@ -62,7 +62,7 @@ targets:
       base:
         GENERATE_INFOPLIST_FILE: true
         BUNDLE_LOADER: "$(TEST_HOST)"
-        PRODUCT_BUNDLE_IDENTIFIER: com.example.projectledger.tests
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.projectledger.cleanroom.tests
         TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Miravo.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Miravo"
 
   ProjectLedgerUITests:
@@ -75,7 +75,7 @@ targets:
     settings:
       base:
         GENERATE_INFOPLIST_FILE: true
-        PRODUCT_BUNDLE_IDENTIFIER: com.example.projectledger.uitests
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.projectledger.cleanroom.uitests
         TEST_TARGET_NAME: ProjectLedger
 
 schemes:
