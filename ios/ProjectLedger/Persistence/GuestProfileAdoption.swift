@@ -349,7 +349,7 @@ private struct ScopedProfileSnapshot {
               tracker.defaultAccountID == account.id,
               tracker.defaultCategoryID == category.id,
               category.kind == .expense,
-              outboxMutations.count == 4
+              outboxMutations.count == 3
         else {
             return false
         }
@@ -359,7 +359,6 @@ private struct ScopedProfileSnapshot {
         }
         return Set(mutationKeys) == Set([
             "tracker|create|\(tracker.id.uuidString.lowercased())",
-            "tracker|update|\(tracker.id.uuidString.lowercased())",
             "account|create|\(account.id.uuidString.lowercased())",
             "category|create|\(category.id.uuidString.lowercased())",
         ])
