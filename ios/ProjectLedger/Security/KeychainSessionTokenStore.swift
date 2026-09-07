@@ -76,10 +76,7 @@ actor KeychainSessionTokenStore {
         return try items.map { item in
             guard let scopeKey = item[kSecAttrAccount as String] as? String,
                   let data = item[kSecValueData as String] as? Data,
-                  let tokens = try? JSONDecoder().decode(
-                    SessionTokenBundle.self,
-                    from: data
-                  )
+                  let tokens = try? JSONDecoder().decode(SessionTokenBundle.self, from: data)
             else {
                 throw KeychainStoreError.invalidData
             }
