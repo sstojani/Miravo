@@ -6,6 +6,10 @@ This is an append-oriented, chronological record. Verification statements name t
 
 Implemented durable per-entity server-state recovery, guarded retry and tombstone resolution, scoped diagnostics, persistent guest adoption, semantic scaffold checks, dependency quarantine, backend deleted-record protection, bootstrap generation invalidation, and conservative starter cleanup. Added backend and native regression coverage. Local Linux backend suite: 110 passed, 82.27% coverage. Windows Ruff and mypy checks passed; iOS localization/source-contract checks passed before the final native test addition. SwiftFormat was applied to then-changed Swift files; final lint, native compilation, XcodeGen and simulator/device execution remain unverified. Further tests were explicitly stopped by the owner before publishing this branch. No live server or production data was changed. Details and remaining gates: `docs/sync-recovery-handoff.md`.
 
+## 2026-09-07 - Restore stable Miravo identity
+
+Retired the temporary cleanroom test app identity from XcodeGen and unsigned-IPA verification. The generated app now displays as `Miravo` and uses the centralized provisional bundle identifier `com.example.projectledger`; test bundles use the matching `.tests` and `.uitests` suffixes. This stabilizes future installs against the pre-cleanroom identity, but iOS will still treat the already-installed `com.example.projectledger.cleanroom` build as a separate app. Local project-contract, localization coverage/key-parity, and whitespace checks passed on Windows; native Xcode build/device behavior remains unverified until GitHub macOS or a local Mac runs it.
+
 ## 2026-08-09 — Milestone 0 and Milestone 1 start
 
 ### Inputs and inspection

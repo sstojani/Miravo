@@ -4,6 +4,12 @@
 
 Permanent failures are not generic retry candidates. A server tombstone cannot be kept locally by rebasing an edit. Accepting deletion removes only that entity's queued edits and retains dependent work for review. Failed-operation discard is persisted and completed only after a full authorized bootstrap; new edits made after confirmation cancel that discard. Repair refuses outstanding mutations, unresolved conflicts and unfinished uploads. Real guest data remains a separate imported tracker, never merged by display name. Backend strict base-version validation remains intact. Branch publication precedes native verification at the owner's explicit request; see `docs/sync-recovery-handoff.md`.
 
+## 2026-09-07 - Retire cleanroom iOS identity
+
+- **Decision:** Remove the temporary `Miravo Clean` / `com.example.projectledger.cleanroom` test identity and return generated builds to the user-facing name `Miravo` with the centralized provisional bundle identifier `com.example.projectledger`.
+- **Why:** iOS partitions app container and Keychain data by bundle identifier. Keeping a cleanroom suffix after the sync repair would make reinstall/login tests look like a different app and could hide whether data continuity is actually working.
+- **Consequence:** The first install after this change is separate from any already-installed cleanroom build, but future builds remain on the stable pre-cleanroom identity unless the owner later chooses a final non-example bundle identifier.
+
 ## D-001 — Provisional identity and configuration
 
 - **Decision:** Use “Project Ledger” as the provisional app name, `com.example.projectledger` as the provisional bundle identifier, `ALL` as default currency, `Europe/Tirane` as default time zone, and an empty/invalid public URL placeholder.
