@@ -1,5 +1,9 @@
 # Decision log
 
+## 2026-09-07 - Explicit, durable sync recovery
+
+Permanent failures are not generic retry candidates. A server tombstone cannot be kept locally by rebasing an edit. Accepting deletion removes only that entity's queued edits and retains dependent work for review. Failed-operation discard is persisted and completed only after a full authorized bootstrap; new edits made after confirmation cancel that discard. Repair refuses outstanding mutations, unresolved conflicts and unfinished uploads. Real guest data remains a separate imported tracker, never merged by display name. Backend strict base-version validation remains intact. Branch publication precedes native verification at the owner's explicit request; see `docs/sync-recovery-handoff.md`.
+
 ## D-001 — Provisional identity and configuration
 
 - **Decision:** Use “Project Ledger” as the provisional app name, `com.example.projectledger` as the provisional bundle identifier, `ALL` as default currency, `Europe/Tirane` as default time zone, and an empty/invalid public URL placeholder.

@@ -59,6 +59,12 @@ private struct SyncConflictReviewView: View {
     @EnvironmentObject private var session: SessionController
     @EnvironmentObject private var sync: SyncController
     @State private var resolving = false
+    @State private var confirmingServer = false
+
+    private var serverDeleted: Bool {
+        guard let current = try? JSONDecoder().decode(JSONValue.self, from: conflict.currentJSON) else { return false }
+        return SyncRecoveryPolicy.isDeleted(current)
+    }
 
     private var comparisons: [ConflictFieldComparison] {
         let current = decodedObject(conflict.currentJSON)
@@ -75,6 +81,11 @@ private struct SyncConflictReviewView: View {
 
     var body: some View {
         List {
+            if serverDeleted {
+                Section("Server deletion") {
+                    Text("The server deleted this record. Your phone still has edits for an older version. Keeping those edits cannot restore a deleted record.")
+                }
+            }
             Section("Conflict details") {
                 LabeledContent("Record type") {
                     Text(verbatim: conflict.entityType)
@@ -112,25 +123,45 @@ private struct SyncConflictReviewView: View {
             } header: {
                 Text("Field review")
             } footer: {
-                Text("Keeping your version creates a new update based on the current server version. Keeping the server version discards only this pending edit.")
+                if serverDeleted {
+                    Text("Using the server deletion discards queued edits for this record. Other unsynchronized records remain available for review.")
+                } else {
+                    Text("Keeping your version creates a new update based on the current server version. Keeping the server version discards only this pending edit.")
+                }
             }
 
             Section {
                 Button {
-                    resolve(keepingMine: false)
+                    confirmingServer = true
                 } label: {
-                    Label("Keep server version", systemImage: "server.rack")
+                    if serverDeleted {
+                        Label("Use server deletion", systemImage: "trash")
+                    } else {
+                        Label("Keep server version", systemImage: "server.rack")
+                    }
                 }
-                Button {
-                    resolve(keepingMine: true)
-                } label: {
-                    Label("Keep my version", systemImage: "iphone")
+                if !serverDeleted {
+                    Button {
+                        resolve(keepingMine: true)
+                    } label: {
+                        Label("Keep my version", systemImage: "iphone")
+                    }
+                    .buttonStyle(.borderedProminent)
                 }
-                .buttonStyle(.borderedProminent)
             }
         }
         .navigationTitle("Review conflict")
-        .disabled(resolving)
+        .disabled(resolving || sync.isRunning)
+        .confirmationDialog("Use server version?", isPresented: $confirmingServer, titleVisibility: .visible) {
+            Button("Use server version", role: .destructive) { resolve(keepingMine: false) }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            if serverDeleted {
+                Text("This accepts the server deletion and discards all queued edits for this record. Dependent changes remain on this iPhone for review.")
+            } else {
+                Text("This discards the selected local edit and uses the server version.")
+            }
+        }
         .overlay {
             if resolving {
                 ProgressView("Resolving conflict…")

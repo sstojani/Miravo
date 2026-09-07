@@ -37,6 +37,8 @@ enum SyncRetryPolicy {
 
 @ModelActor
 actor LedgerSyncActor {
+    private var activeRun: Task<SyncRunSummary, Error>?
+    private var activeScopeKey: String?
     private enum DecodedRemote {
         case tracker(TrackerSnapshot)
         case membership(MembershipSnapshot)
@@ -112,6 +114,24 @@ actor LedgerSyncActor {
         authentication: SyncAuthenticationContext,
         transport: any SyncTransport
     ) async throws -> SyncRunSummary {
+        if let activeRun {
+            guard activeScopeKey == authentication.scopeKey else { throw SyncRecoveryError.syncInProgress }
+            return try await activeRun.value
+        }
+        let run = Task { try await self.synchronizeExclusively(authentication: authentication, transport: transport) }
+        activeRun = run
+        activeScopeKey = authentication.scopeKey
+        defer {
+            activeRun = nil
+            activeScopeKey = nil
+        }
+        return try await run.value
+    }
+
+    private func synchronizeExclusively(
+        authentication: SyncAuthenticationContext,
+        transport: any SyncTransport
+    ) async throws -> SyncRunSummary {
         do {
             return try await performSync(
                 scopeKey: authentication.scopeKey,
@@ -176,32 +196,30 @@ actor LedgerSyncActor {
     }
 
     func retryFailed(scopeKey: String) throws {
-        for mutation in try fetchOutbox(scopeKey: scopeKey) where mutation.state == .failed {
-            mutation.stateRaw = LocalSyncState.pending.rawValue
-            mutation.nextAttemptAt = nil
-            mutation.lastSafeErrorCode = nil
-            mutation.updatedAt = .now
-            try markInstallmentProjection(
-                scopeKey: scopeKey,
-                mutation: mutation,
-                state: .pending
-            )
-            try markSettlementProjection(
-                scopeKey: scopeKey,
-                mutation: mutation,
-                state: .pending
-            )
+        try requireIdle(scopeKey: scopeKey)
+        for mutation in try fetchOutbox(scopeKey: scopeKey) where canRetry(mutation) {
+            try prepareRetry(mutation, scopeKey: scopeKey)
         }
         try saveOrRollback()
     }
 
     func resolveKeepServer(scopeKey: String, operationID: UUID) throws {
+        try requireIdle(scopeKey: scopeKey)
         do {
             guard let conflict = try unresolvedConflict(
                 scopeKey: scopeKey,
                 operationID: operationID
             ) else { return }
             let current = try JSONDecoder().decode(JSONValue.self, from: conflict.currentJSON)
+            if SyncRecoveryPolicy.isDeleted(current) {
+                try acceptServerDeletion(
+                    scopeKey: scopeKey,
+                    key: SyncRecordKey(entityType: conflict.entityType, entityID: conflict.entityID),
+                    current: current
+                )
+                try saveOrRollback()
+                return
+            }
             let outbox = try fetchOutbox(scopeKey: scopeKey)
             let resolvedMutation = outbox.first { $0.operationID == operationID }
             try applyRepresentation(
@@ -250,6 +268,7 @@ actor LedgerSyncActor {
     }
 
     func resolveKeepMine(scopeKey: String, operationID: UUID) throws {
+        try requireIdle(scopeKey: scopeKey)
         do {
             guard let conflict = try unresolvedConflict(
                 scopeKey: scopeKey,
@@ -259,12 +278,16 @@ actor LedgerSyncActor {
             guard let currentVersion = current.objectValue?["version"]?.integerValue else {
                 throw SyncEngineError.invalidServerResponse
             }
+            guard !SyncRecoveryPolicy.isDeleted(current) else {
+                throw SyncRecoveryError.serverDeletionCannotBeKept
+            }
             guard let mutation = try fetchOutbox(scopeKey: scopeKey).first(where: {
                 $0.operationID == operationID
             }) else {
                 throw SyncEngineError.invalidLocalPayload
             }
             mutation.operationID = UUID()
+            mutation.serverReceiptRecorded = false
             mutation.baseServerVersion = currentVersion
             mutation.stateRaw = LocalSyncState.pending.rawValue
             mutation.attemptCount = 0
@@ -402,11 +425,8 @@ actor LedgerSyncActor {
         for mutation in outbox where mutation.state == .syncing {
             mutation.stateRaw = LocalSyncState.pending.rawValue
         }
-        let eligible = outbox
-            .filter {
-                $0.state == .pending && ($0.nextAttemptAt == nil || $0.nextAttemptAt! <= now)
-            }
-            .sorted { $0.localSequence < $1.localSequence }
+        let eligible = outbox.sorted { $0.localSequence < $1.localSequence }
+        let inventory = try SyncLocalInventory(context: modelContext, scopeKey: scopeKey)
         let blockedEntitySequences = Dictionary(
             grouping: outbox.filter { $0.state == .failed || $0.state == .conflicted },
             by: { "\($0.entityType)|\($0.entityID.uuidString)" }
@@ -424,6 +444,27 @@ actor LedgerSyncActor {
             }
             guard !seenEntities.contains(entityKey), operations.count < 100 else { continue }
             seenEntities.insert(entityKey)
+            guard mutation.state == .pending, mutation.serverStateRequestedAt == nil,
+                  mutation.nextAttemptAt.map({ $0 <= now }) ?? true
+            else { continue }
+
+            let decodedPayload = try? JSONDecoder().decode(JSONValue.self, from: mutation.payloadJSON)
+            var references = decodedPayload.map(SyncRecoveryPolicy.references) ?? []
+            // Tracker CREATE deliberately precedes default-account/category creation.
+            if mutation.entityType == "tracker" && mutation.command == "create" { references = [] }
+            if let trackerID = inventory.records[mutation.recordKey]?.trackerID {
+                references.insert(SyncRecordKey(entityType: "tracker", entityID: trackerID))
+            }
+            if references.contains(where: { inventory.records[$0]?.deletedAt != nil }) {
+                mutation.stateRaw = LocalSyncState.failed.rawValue
+                mutation.lastSafeErrorCode = "parent_unavailable"
+                mutation.nextAttemptAt = nil
+                mutation.updatedAt = now
+                continue
+            }
+            if outbox.contains(where: { $0.command == "create" && references.contains($0.recordKey) }) {
+                continue
+            }
 
             // Never send a mutation that violates the sync version invariant:
             // create => no base version; every other command => base version required.
@@ -499,6 +540,14 @@ actor LedgerSyncActor {
             guard let mutation = outbox.first(where: { $0.operationID == result.operationID }) else {
                 throw SyncEngineError.invalidServerResponse
             }
+            guard result.entityType == mutation.entityType, result.entityID == mutation.entityID else {
+                throw SyncEngineError.invalidServerResponse
+            }
+            mutation.serverReceiptRecorded = true
+            if let representation = result.representation {
+                mutation.serverSnapshotJSON = try JSONEncoder().encode(representation)
+                mutation.serverSnapshotMissing = false
+            }
             switch result.status {
             case .accepted, .duplicate:
                 guard let representation = result.representation,
@@ -506,12 +555,17 @@ actor LedgerSyncActor {
                 else {
                     throw SyncEngineError.missingServerRepresentation
                 }
-                try applyRepresentation(
-                    entityType: result.entityType,
-                    value: representation,
-                    scopeKey: scopeKey,
-                    respectPending: false
-                )
+                let hasLaterEdits = outbox.contains {
+                    $0.recordKey == mutation.recordKey && $0.localSequence > mutation.localSequence
+                }
+                if !hasLaterEdits {
+                    try applyRepresentation(
+                        entityType: result.entityType,
+                        value: representation,
+                        scopeKey: scopeKey,
+                        respectPending: false
+                    )
+                }
                 modelContext.delete(mutation)
                 rebaseRemainingMutations(
                     outbox,
@@ -540,7 +594,7 @@ actor LedgerSyncActor {
                 processed += 1
             case .rejected, .unauthorized:
                 mutation.stateRaw = LocalSyncState.failed.rawValue
-                mutation.lastSafeErrorCode = result.error?.code ?? "operation_rejected"
+                mutation.lastSafeErrorCode = SyncRecoveryPolicy.safeCode(result.error?.code ?? "operation_rejected")
                 mutation.nextAttemptAt = nil
                 mutation.updatedAt = .now
                 try markEntityState(
@@ -699,9 +753,23 @@ actor LedgerSyncActor {
             return lhs.index < rhs.index
         }
 
+        var knownVersions = try SyncLocalInventory(context: modelContext, scopeKey: scopeKey).records.compactMapValues(\.serverVersion)
         for item in ordered {
             let change = item.change
             let remote = item.remote
+            let key = SyncRecordKey(entityType: change.entityType, entityID: change.entityID)
+            if let known = knownVersions[key], known > change.version { continue }
+            knownVersions[key] = change.version
+            if change.operation == "delete" || SyncRecoveryPolicy.isDeleted(change.data) {
+                if try hasLocalMutation(scopeKey: scopeKey, entityType: change.entityType, entityID: change.entityID) {
+                    var tombstone = change.data.objectValue ?? [:]
+                    tombstone["id"] = .string(change.entityID.uuidString)
+                    tombstone["version"] = .integer(change.version)
+                    tombstone["deleted_at"] = .string(change.changedAt)
+                    try rememberServerState(scopeKey: scopeKey, key: key, value: .object(tombstone))
+                    continue
+                }
+            }
             if try hasBlockingInstallmentParentMutation(
                 remote: remote,
                 scopeKey: scopeKey
@@ -725,9 +793,13 @@ actor LedgerSyncActor {
                     entityType: change.entityType,
                     entityID: change.entityID
                 ) {
+                    try rememberServerState(scopeKey: scopeKey, key: key, value: change.data)
                     continue
                 }
                 try applyDecoded(remote, scopeKey: scopeKey)
+                if change.operation == "delete" || SyncRecoveryPolicy.isDeleted(change.data) {
+                    try quarantineDependents(scopeKey: scopeKey, key: key, changedAt: parseTimestamp(change.changedAt))
+                }
             }
         }
         let state = try cursorState(scopeKey: scopeKey)
@@ -799,7 +871,7 @@ actor LedgerSyncActor {
         throw SyncEngineError.invalidServerResponse
     }
 
-    private func resetBootstrap(scopeKey: String) throws {
+    func resetBootstrap(scopeKey: String) throws {
         for row in try modelContext.fetch(
             FetchDescriptor<BootstrapStagedEntity>(
                 predicate: #Predicate { $0.scopeKey == scopeKey }
@@ -921,11 +993,18 @@ actor LedgerSyncActor {
             return (row, try decodeRemote(entityType: row.entityType, data: value))
         }
         try validateBootstrapRelationships(decoded.map(\.1))
+        try completeRequestedRecoveries(scopeKey: scopeKey, staged: staged)
         let outbox = try fetchOutbox(scopeKey: scopeKey)
-        let preservingOutbox = outbox.filter { $0.state != .conflicted }
+        let preservingOutbox = outbox
         let pendingKeys = Set(
             preservingOutbox.map { "\($0.entityType)|\($0.entityID.uuidString)" }
         )
+        var protectedKeys = pendingKeys
+        for mutation in preservingOutbox {
+            if let payload = try? decoder.decode(JSONValue.self, from: mutation.payloadJSON) {
+                protectedKeys.formUnion(SyncRecoveryPolicy.references(in: payload).map(\.storageKey))
+            }
+        }
         var remoteIDs = [String: Set<UUID>]()
         let bootstrapPriority = [
             "tracker": 0,
@@ -976,13 +1055,21 @@ actor LedgerSyncActor {
             // version returned by bootstrap. This also recovers mutations
             // previously marked failed by the server's validation response.
             if pendingKeys.contains(key) {
+                let value = try decoder.decode(JSONValue.self, from: row.payloadJSON)
+                try rememberServerState(scopeKey: scopeKey, key: SyncRecordKey(entityType: row.entityType, entityID: row.entityID), value: value)
                 let repairableMutations = preservingOutbox.filter {
                     $0.entityType == row.entityType &&
                         $0.entityID == row.entityID &&
                         $0.command != LocalMutationCommand.create.rawValue &&
-                        $0.baseServerVersion == nil
+                        $0.baseServerVersion == nil &&
+                        $0.state != .conflicted &&
+                        !SyncRecoveryPolicy.isDeleted(value)
                 }
                 for mutation in repairableMutations {
+                    if mutation.serverReceiptRecorded || (mutation.state == .failed && mutation.attemptCount > 0) {
+                        mutation.operationID = UUID()
+                    }
+                    mutation.serverReceiptRecorded = false
                     mutation.baseServerVersion = row.serverVersion
                     mutation.stateRaw = LocalSyncState.pending.rawValue
                     mutation.attemptCount = 0
@@ -998,10 +1085,16 @@ actor LedgerSyncActor {
                 try applyDecoded(remote, scopeKey: scopeKey)
             }
         }
+        for mutation in outbox where !(remoteIDs[mutation.entityType] ?? []).contains(mutation.entityID) && mutation.command != "create" && !outbox.contains(where: { $0.recordKey == mutation.recordKey && $0.command == "create" }) {
+            mutation.serverSnapshotMissing = true
+            mutation.stateRaw = LocalSyncState.failed.rawValue
+            mutation.lastSafeErrorCode = "server_record_unavailable"
+            mutation.nextAttemptAt = nil
+        }
         try removeMissingSynchronizedEntities(
             scopeKey: scopeKey,
             remoteIDs: remoteIDs,
-            pendingKeys: pendingKeys
+            pendingKeys: protectedKeys
         )
         for row in staged { modelContext.delete(row) }
         state.cursor = finalCursor
@@ -1317,7 +1410,7 @@ actor LedgerSyncActor {
         }
     }
 
-    private func applyRepresentation(
+    func applyRepresentation(
         entityType: String,
         value: JSONValue,
         scopeKey: String,
@@ -2994,13 +3087,16 @@ actor LedgerSyncActor {
         }
     }
 
-    private func applyTombstone(
+    func applyTombstone(
         entityType: String,
         entityID: UUID,
         changedAt: Date,
         version: Int64,
         scopeKey: String
     ) throws {
+        let key = SyncRecordKey(entityType: entityType, entityID: entityID)
+        let inventory = try SyncLocalInventory(context: modelContext, scopeKey: scopeKey)
+        if let currentVersion = inventory.records[key]?.serverVersion, currentVersion > version { return }
         switch entityType {
         case "tracker":
             if let value = try modelContext.fetch(
@@ -3403,7 +3499,7 @@ actor LedgerSyncActor {
         modelContext.delete(plan)
     }
 
-    private func storeConflict(
+    func storeConflict(
         scopeKey: String,
         mutation: OutboxMutation,
         result: SyncOperationResult
@@ -3461,7 +3557,7 @@ actor LedgerSyncActor {
         return try? decoder.decode(SettlementMutationPayload.self, from: mutation.payloadJSON)
     }
 
-    private func markSettlementProjection(
+    func markSettlementProjection(
         scopeKey: String,
         mutation: OutboxMutation,
         state: LocalSyncState
@@ -3568,7 +3664,7 @@ actor LedgerSyncActor {
         }
     }
 
-    private func markInstallmentProjection(
+    func markInstallmentProjection(
         scopeKey: String,
         mutation: OutboxMutation,
         state: LocalSyncState
@@ -3587,7 +3683,7 @@ actor LedgerSyncActor {
         }
     }
 
-    private func discardInstallmentProjection(
+    func discardInstallmentProjection(
         scopeKey: String,
         mutation: OutboxMutation
     ) throws {
@@ -3601,6 +3697,20 @@ actor LedgerSyncActor {
                 }
             )
         ).first, record.source == .installment, record.serverVersion == nil {
+            let relatedWork = try fetchOutbox(scopeKey: scopeKey).contains {
+                $0.entityType == "transaction" && $0.entityID == transactionID
+            }
+            let transfers = try modelContext.fetch(FetchDescriptor<AttachmentTransfer>(
+                predicate: #Predicate { $0.scopeKey == scopeKey && $0.transactionID == transactionID }
+            ))
+            let attachments = try modelContext.fetch(FetchDescriptor<LocalAttachment>(
+                predicate: #Predicate { $0.scopeKey == scopeKey && $0.transactionID == transactionID }
+            ))
+            if relatedWork || !transfers.isEmpty || !attachments.isEmpty {
+                record.deletedAt = .now
+                try quarantineDependents(scopeKey: scopeKey, key: SyncRecordKey(entityType: "transaction", entityID: transactionID), changedAt: .now)
+                return
+            }
             try deleteTransactionAndChildren(record, scopeKey: scopeKey)
         }
     }
@@ -3656,7 +3766,7 @@ actor LedgerSyncActor {
         let code = safeErrorCode(error)
         let permanent = (error as? APIClientError).map {
             ($0.statusCode ?? 0) >= 400 && ($0.statusCode ?? 0) < 500 &&
-                !shouldRefresh(after: $0)
+                !shouldRefresh(after: $0) && $0.statusCode != 408 && $0.statusCode != 429
         } ?? false
         for mutation in try fetchOutbox(scopeKey: scopeKey)
         where operationIDs.contains(mutation.operationID) {
@@ -3706,15 +3816,22 @@ actor LedgerSyncActor {
         excluding operationID: UUID
     ) {
         for mutation in outbox where mutation.operationID != operationID &&
+            mutation.command != LocalMutationCommand.create.rawValue &&
+            mutation.state != .conflicted &&
+            (mutation.state != .failed || mutation.lastSafeErrorCode == "invalid_base_server_version") &&
             mutation.entityType == entityType && mutation.entityID == entityID &&
             (mutation.baseServerVersion == nil || mutation.baseServerVersion == oldVersion) {
+            if mutation.serverReceiptRecorded {
+                mutation.operationID = UUID()
+                mutation.serverReceiptRecorded = false
+            }
             mutation.baseServerVersion = newVersion
             mutation.stateRaw = LocalSyncState.pending.rawValue
             mutation.nextAttemptAt = nil
         }
     }
 
-    private func markEntityState(
+    func markEntityState(
         scopeKey: String,
         entityType: String,
         entityID: UUID,
@@ -3729,7 +3846,7 @@ actor LedgerSyncActor {
                 )
             ).first {
                 value.syncStateRaw = state.rawValue
-                if let serverVersion { value.serverVersion = serverVersion }
+                if let serverVersion { value.serverVersion = max(value.serverVersion ?? 0, serverVersion) }
             }
         case "participant":
             if let value = try modelContext.fetch(
@@ -3738,7 +3855,7 @@ actor LedgerSyncActor {
                 )
             ).first {
                 value.syncStateRaw = state.rawValue
-                if let serverVersion { value.serverVersion = serverVersion }
+                if let serverVersion { value.serverVersion = max(value.serverVersion ?? 0, serverVersion) }
             }
         case "account":
             if let value = try modelContext.fetch(
@@ -3747,7 +3864,7 @@ actor LedgerSyncActor {
                 )
             ).first {
                 value.syncStateRaw = state.rawValue
-                if let serverVersion { value.serverVersion = serverVersion }
+                if let serverVersion { value.serverVersion = max(value.serverVersion ?? 0, serverVersion) }
             }
         case "category":
             if let value = try modelContext.fetch(
@@ -3756,7 +3873,7 @@ actor LedgerSyncActor {
                 )
             ).first {
                 value.syncStateRaw = state.rawValue
-                if let serverVersion { value.serverVersion = serverVersion }
+                if let serverVersion { value.serverVersion = max(value.serverVersion ?? 0, serverVersion) }
             }
         case "tag":
             if let value = try modelContext.fetch(
@@ -3765,7 +3882,7 @@ actor LedgerSyncActor {
                 )
             ).first {
                 value.syncStateRaw = state.rawValue
-                if let serverVersion { value.serverVersion = serverVersion }
+                if let serverVersion { value.serverVersion = max(value.serverVersion ?? 0, serverVersion) }
             }
         case "budget":
             if let value = try modelContext.fetch(
@@ -3774,7 +3891,7 @@ actor LedgerSyncActor {
                 )
             ).first {
                 value.syncStateRaw = state.rawValue
-                if let serverVersion { value.serverVersion = serverVersion }
+                if let serverVersion { value.serverVersion = max(value.serverVersion ?? 0, serverVersion) }
             }
         case "recurring_rule":
             if let value = try modelContext.fetch(
@@ -3783,7 +3900,7 @@ actor LedgerSyncActor {
                 )
             ).first {
                 value.syncStateRaw = state.rawValue
-                if let serverVersion { value.serverVersion = serverVersion }
+                if let serverVersion { value.serverVersion = max(value.serverVersion ?? 0, serverVersion) }
             }
         case "installment_plan":
             if let value = try modelContext.fetch(
@@ -3792,7 +3909,7 @@ actor LedgerSyncActor {
                 )
             ).first {
                 value.syncStateRaw = state.rawValue
-                if let serverVersion { value.serverVersion = serverVersion }
+                if let serverVersion { value.serverVersion = max(value.serverVersion ?? 0, serverVersion) }
             }
         case "transaction":
             if let value = try modelContext.fetch(
@@ -3801,7 +3918,7 @@ actor LedgerSyncActor {
                 )
             ).first {
                 value.syncStateRaw = state.rawValue
-                if let serverVersion { value.serverVersion = serverVersion }
+                if let serverVersion { value.serverVersion = max(value.serverVersion ?? 0, serverVersion) }
             }
         case "settlement":
             if let value = try modelContext.fetch(
@@ -3810,7 +3927,7 @@ actor LedgerSyncActor {
                 )
             ).first {
                 value.syncStateRaw = state.rawValue
-                if let serverVersion { value.serverVersion = serverVersion }
+                if let serverVersion { value.serverVersion = max(value.serverVersion ?? 0, serverVersion) }
             }
         default:
             break
@@ -3842,7 +3959,7 @@ actor LedgerSyncActor {
         ).first
     }
 
-    private func cursorState(scopeKey: String) throws -> SyncCursor {
+    func cursorState(scopeKey: String) throws -> SyncCursor {
         if let existing = try modelContext.fetch(
             FetchDescriptor<SyncCursor>(
                 predicate: #Predicate { $0.scopeKey == scopeKey }
@@ -3855,7 +3972,7 @@ actor LedgerSyncActor {
         return created
     }
 
-    private func fetchOutbox(scopeKey: String) throws -> [OutboxMutation] {
+    func fetchOutbox(scopeKey: String) throws -> [OutboxMutation] {
         try modelContext.fetch(
             FetchDescriptor<OutboxMutation>(
                 predicate: #Predicate { $0.scopeKey == scopeKey },
@@ -3878,7 +3995,7 @@ actor LedgerSyncActor {
     }
 
     private func safeErrorCode(_ error: Error) -> String {
-        if let apiError = error as? APIClientError { return apiError.code }
+        if let apiError = error as? APIClientError { return SyncRecoveryPolicy.safeCode(apiError.code) }
         if error is URLError { return "network_unavailable" }
         if let engineError = error as? SyncEngineError {
             switch engineError {
@@ -3925,7 +4042,7 @@ actor LedgerSyncActor {
         return date
     }
 
-    private func saveOrRollback() throws {
+    func saveOrRollback() throws {
         do {
             try modelContext.save()
         } catch {

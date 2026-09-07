@@ -92,6 +92,7 @@ final class SyncController: ObservableObject {
                 return false
             }
             _ = try await engine.synchronize(authentication: authentication)
+            guard session.scopeKey == authentication.scopeKey, session.hasServerConnection else { return false }
             do {
                 let transfers = try await attachmentWorker.process(authentication: authentication)
                 if transfers.uploadedCount > 0 || transfers.quarantinedCount > 0 {
@@ -180,6 +181,7 @@ final class SyncController: ObservableObject {
     }
 
     func retryFailed(scopeKey: String, session: SessionController) async {
+        guard !isRunning, session.scopeKey == scopeKey else { return }
         do {
             try await engine.retryFailed(scopeKey: scopeKey)
             try await attachmentWorker.retryFailed(scopeKey: scopeKey)
@@ -195,8 +197,10 @@ final class SyncController: ObservableObject {
         operationID: UUID,
         session: SessionController
     ) async -> Bool {
+        guard !isRunning, session.scopeKey == scopeKey else { return false }
         do {
             try await engine.resolveKeepServer(scopeKey: scopeKey, operationID: operationID)
+            await refreshDiagnostics(scopeKey: scopeKey)
             await synchronize(session: session)
             return true
         } catch {
@@ -210,14 +214,55 @@ final class SyncController: ObservableObject {
         operationID: UUID,
         session: SessionController
     ) async -> Bool {
+        guard !isRunning, session.scopeKey == scopeKey else { return false }
         do {
             try await engine.resolveKeepMine(scopeKey: scopeKey, operationID: operationID)
+            await refreshDiagnostics(scopeKey: scopeKey)
             await synchronize(session: session)
             return true
         } catch {
             message = String(localized: "The conflict could not be resolved safely.")
             return false
         }
+    }
+
+    func failedOperations(scopeKey: String) async throws -> [FailedOperationSnapshot] {
+        try await engine.failedOperations(scopeKey: scopeKey)
+    }
+
+    func recoverOperation(scopeKey: String, operationID: UUID, useServer: Bool, session: SessionController) async -> Bool {
+        guard !isRunning, session.scopeKey == scopeKey else { return false }
+        isRunning = true
+        do {
+            if useServer {
+                try await engine.requestServerState(scopeKey: scopeKey, operationID: operationID)
+            } else {
+                try await engine.retryOperation(scopeKey: scopeKey, operationID: operationID)
+            }
+        } catch {
+            isRunning = false
+            message = String(localized: "This change needs review before it can be retried or discarded.")
+            return false
+        }
+        isRunning = false
+        await synchronize(session: session)
+        await refreshDiagnostics(scopeKey: scopeKey)
+        return true
+    }
+
+    func repairSynchronization(scopeKey: String, session: SessionController) async {
+        guard !isRunning, session.scopeKey == scopeKey else { return }
+        isRunning = true
+        do {
+            try await engine.repairSynchronization(scopeKey: scopeKey)
+        } catch {
+            isRunning = false
+            message = String(localized: "Review unsynchronized changes and receipt uploads before repairing synchronization.")
+            return
+        }
+        isRunning = false
+        await synchronize(session: session)
+        await refreshDiagnostics(scopeKey: scopeKey)
     }
 
     private func message(for error: APIClientError) -> String {

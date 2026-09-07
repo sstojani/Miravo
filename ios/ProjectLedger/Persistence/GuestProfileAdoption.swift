@@ -75,6 +75,9 @@ extension LocalLedgerRepository {
         targetScopeKey: String
     ) throws {
         let mutations = profile.outboxMutations.sorted { $0.localSequence < $1.localSequence }
+        let sourceIDs = try SyncLocalInventory(context: context, scopeKey: profile.scopeKey).records.keys
+        let targetIDs = try SyncLocalInventory(context: context, scopeKey: targetScopeKey).records.keys
+        guard Set(sourceIDs).isDisjoint(with: Set(targetIDs)) else { throw LocalLedgerError.invalidReference }
         let targetCursor = try cursor(scopeKey: targetScopeKey)
         var nextSequence = max(
             targetCursor.nextOutboxSequence,
@@ -112,7 +115,9 @@ extension LocalLedgerRepository {
             if mutation.state == .syncing {
                 mutation.stateRaw = LocalSyncState.pending.rawValue
             }
-            nextSequence += 1
+            let (next, overflow) = nextSequence.addingReportingOverflow(1)
+            guard !overflow else { throw MoneyError.outOfRange }
+            nextSequence = next
         }
         targetCursor.nextOutboxSequence = nextSequence
         targetCursor.bootstrapRequired = true
@@ -139,12 +144,15 @@ extension LocalLedgerRepository {
             predicate: #Predicate { $0.scopeKey == scopeKey }
         )
         let maximum = try context.fetch(descriptor).map(\.localSequence).max() ?? 0
-        return maximum + 1
+        let (next, overflow) = maximum.addingReportingOverflow(1)
+        guard !overflow else { throw MoneyError.outOfRange }
+        return next
     }
 }
 
 @MainActor
 private struct ScopedProfileSnapshot {
+    let scopeKey: String
     let trackers: [LocalTracker]
     let memberships: [LocalTrackerMembership]
     let accounts: [LocalAccount]
@@ -174,6 +182,7 @@ private struct ScopedProfileSnapshot {
     let syncConflicts: [SyncConflict]
 
     init(context: ModelContext, scopeKey: String) throws {
+        self.scopeKey = scopeKey
         trackers = try context.fetch(FetchDescriptor<LocalTracker>(
             predicate: #Predicate { $0.scopeKey == scopeKey }
         ))
@@ -348,7 +357,8 @@ private struct ScopedProfileSnapshot {
         guard tracker.serverVersion == nil,
               account.serverVersion == nil,
               category.serverVersion == nil,
-              tracker.name == String(localized: "Everyday"),
+              isStarterName(tracker.name, key: "Everyday"),
+              tracker.role == .owner,
               tracker.trackerDescription.isEmpty,
               tracker.icon == "wallet.pass",
               tracker.colorHex == "#3663F5",
@@ -359,11 +369,12 @@ private struct ScopedProfileSnapshot {
               tracker.deletedAt == nil,
               tracker.accessRevokedAt == nil,
               account.trackerID == tracker.id,
-              account.name == String(localized: "Cash"),
+              isStarterName(account.name, key: "Cash"),
               account.type == .cash,
               account.currencyCode == "ALL",
               account.currencyExponent == 2,
               account.openingBalanceMinor == 0,
+              abs(account.openingDate.timeIntervalSince(account.createdAt)) < 1,
               account.colorHex == "#3663F5",
               account.icon == "banknote",
               account.includeInNetWorth,
@@ -373,7 +384,7 @@ private struct ScopedProfileSnapshot {
               category.trackerID == tracker.id,
               category.parentID == nil,
               category.kind == .expense,
-              category.name == String(localized: "General"),
+              isStarterName(category.name, key: "General"),
               category.icon == "square.grid.2x2",
               category.colorHex == "#73819B",
               category.sortOrder == 0,
@@ -405,12 +416,68 @@ private struct ScopedProfileSnapshot {
         // payload or command and therefore keeps the guest profile.
         return groupedMutations.values.allSatisfy { mutations in
             guard let first = mutations.first else { return false }
+            guard matchesStarterPayload(first, tracker: tracker, account: account, category: category) else { return false }
 
             return mutations.allSatisfy {
                 $0.baseServerVersion == nil &&
                     $0.payloadJSON == first.payloadJSON &&
-                    $0.state == .pending
+                    $0.state == .pending &&
+                    $0.attemptCount == 0 &&
+                    $0.serverStateRequestedAt == nil &&
+                    !$0.serverReceiptRecorded
             }
         }
+    }
+
+    private func isStarterName(_ value: String, key: String) -> Bool {
+        if value == key { return true }
+        return Bundle.main.localizations.contains { locale in
+            guard let path = Bundle.main.path(forResource: locale, ofType: "lproj"),
+                  let bundle = Bundle(path: path) else { return false }
+            return value == bundle.localizedString(forKey: key, value: key, table: nil)
+        }
+    }
+
+    private func matchesStarterPayload(
+        _ mutation: OutboxMutation,
+        tracker: LocalTracker,
+        account: LocalAccount,
+        category: LocalCategory
+    ) -> Bool {
+        switch mutation.entityType {
+        case "tracker":
+            matchesPayload(mutation, expected: TrackerMutationPayload(
+                id: tracker.id, name: tracker.name, description: "", icon: tracker.icon,
+                color: tracker.colorHex, baseCurrency: "ALL", baseCurrencyExponent: 2,
+                sortOrder: 0, defaultAccountID: account.id, defaultCategoryID: category.id,
+                archivedAt: nil, deletedAt: nil
+            ))
+        case "account":
+            matchesPayload(mutation, expected: AccountMutationPayload(
+                id: account.id, trackerID: tracker.id, name: account.name, type: "cash",
+                currency: "ALL", currencyExponent: 2, openingBalanceMinor: 0,
+                openingDate: account.openingDate, color: account.colorHex, icon: account.icon,
+                includeInNetWorth: true, creditLimitMinor: nil, archivedAt: nil, deletedAt: nil
+            ))
+        case "category":
+            matchesPayload(mutation, expected: CategoryMutationPayload(
+                id: category.id, trackerID: tracker.id, parentID: nil, kind: "expense",
+                name: category.name, icon: category.icon, color: category.colorHex,
+                sortOrder: 0, archivedAt: nil, deletedAt: nil
+            ))
+        default: false
+        }
+    }
+
+    private func matchesPayload(_ mutation: OutboxMutation, expected: some Encodable) -> Bool {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        encoder.keyEncodingStrategy = .convertToSnakeCase
+        let decoder = JSONDecoder()
+        guard let data = try? encoder.encode(expected),
+              let canonical = try? decoder.decode(JSONValue.self, from: data),
+              let actual = try? decoder.decode(JSONValue.self, from: mutation.payloadJSON)
+        else { return false }
+        return canonical == actual
     }
 }

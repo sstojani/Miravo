@@ -2,6 +2,8 @@
 
 Status values: `planned`, `implemented`, `passing-local`, `passing-docker`, `passing-macos`, `manual-passed`, `blocked-external`.
 
+2026-09-07 recovery branch: `backend/tests/test_sync_recovery.py` is passing-local (local Linux; full suite 110 passed, 82.27% coverage). `SyncRecoveryTests.swift` and `GuestRecoveryTests.swift` are implemented, not executed. Native compilation, final formatting lint, XcodeGen, simulator, persistent-store migration, simultaneous-trigger and physical-iPhone acceptance gates remain blocked-external/unverified. The owner explicitly stopped further testing and requested a separate-branch push. Full handoff: `docs/sync-recovery-handoff.md`.
+
 | Area | Acceptance behavior | Automated coverage | Manual/E2E coverage | Status |
 |---|---|---|---|---|
 | Product identity | Miravo is the display/API/artifact name while the stable internal module stays `ProjectLedger`; bundle ID remains centralized and provisional | public-config test, iOS source contract, unsigned workflow metadata checks | Confirm installed app label and signed bundle ID | passing-local / blocked-external |

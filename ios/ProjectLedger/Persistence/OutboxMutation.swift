@@ -13,6 +13,11 @@ final class OutboxMutation {
     var baseServerVersion: Int64?
     var createdAt: Date
     var updatedAt: Date
+    // Recovery keeps the proposal until a complete bootstrap can replace it atomically.
+    var serverStateRequestedAt: Date?
+    var serverSnapshotJSON: Data?
+    var serverSnapshotMissing: Bool = false
+    var serverReceiptRecorded: Bool = false
     var attemptCount: Int
     var nextAttemptAt: Date?
     var lastSafeErrorCode: String?

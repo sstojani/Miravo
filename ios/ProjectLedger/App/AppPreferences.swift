@@ -23,6 +23,7 @@ final class AppPreferences {
         static let shortcutExpenseNotificationScanAt =
             "shortcut.expenseNotificationScanAt."
         static let signedOut = "session.signedOut"
+        static let guestAdoption = "session.pendingGuestAdoption"
     }
 
     private let defaults: UserDefaults
@@ -63,6 +64,16 @@ final class AppPreferences {
     var currentScopeKey: String? {
         get { defaults.string(forKey: Key.currentScopeKey) }
         set { defaults.set(newValue, forKey: Key.currentScopeKey) }
+    }
+
+    var pendingGuestAdoption: PendingGuestProfileAdoption? {
+        get {
+            guard let data = defaults.data(forKey: Key.guestAdoption) else { return nil }
+            return try? JSONDecoder().decode(PendingGuestProfileAdoption.self, from: data)
+        }
+        set {
+            defaults.set(newValue.flatMap { try? JSONEncoder().encode($0) }, forKey: Key.guestAdoption)
+        }
     }
 
     var hasAuthenticatedBefore: Bool {
@@ -213,6 +224,7 @@ final class AppPreferences {
             Key.serverConnectionEnabled,
             Key.serverURL,
             Key.signedOut,
+            Key.guestAdoption,
         ] {
             defaults.removeObject(forKey: key)
         }

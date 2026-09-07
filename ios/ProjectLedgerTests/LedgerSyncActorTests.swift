@@ -1304,7 +1304,7 @@ struct LedgerSyncActorTests {
 
     private var timestamp: String { "2026-08-09T12:30:00Z" }
 
-    private func authentication(
+    func authentication(
         tokenStore: KeychainSessionTokenStore? = nil
     ) throws -> SyncAuthenticationContext {
         SyncAuthenticationContext(
@@ -1324,7 +1324,7 @@ struct LedgerSyncActorTests {
         )
     }
 
-    private func trackerRepresentation(
+    func trackerRepresentation(
         id: UUID,
         name: String,
         version: Int64,
@@ -1350,7 +1350,7 @@ struct LedgerSyncActorTests {
         ])
     }
 
-    private func accountRepresentation(id: UUID, trackerID: UUID) -> JSONValue {
+    func accountRepresentation(id: UUID, trackerID: UUID) -> JSONValue {
         .object([
             "id": .string(id.uuidString.lowercased()),
             "tracker_id": .string(trackerID.uuidString.lowercased()),
@@ -1845,7 +1845,7 @@ struct LedgerSyncActorTests {
         ])
     }
 
-    private func bootstrapData(
+    func bootstrapData(
         trackers: [JSONValue] = [],
         memberships: [JSONValue] = [],
         participants: [JSONValue] = [],
@@ -1890,16 +1890,15 @@ struct LedgerSyncActorTests {
         return formatter.date(from: value)
     }
 
-    private func emptyPull(cursor: String) -> SyncPullResponse {
+    func emptyPull(cursor: String) -> SyncPullResponse {
         SyncPullResponse(protocolVersion: 1, cursor: cursor, hasMore: false, changes: [])
     }
 
-    private func ack(cursor: String) -> SyncAckResponse {
+    func ack(cursor: String) -> SyncAckResponse {
         SyncAckResponse(protocolVersion: 1, cursor: cursor, acknowledgedAt: timestamp)
     }
 
-    private func makeContainer() throws -> ModelContainer {
-        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+    func makeContainer(configuration: ModelConfiguration = ModelConfiguration(isStoredInMemoryOnly: true)) throws -> ModelContainer {
         return try ModelContainer(
             for: LocalTracker.self,
             LocalTrackerMembership.self,
@@ -1933,11 +1932,11 @@ struct LedgerSyncActorTests {
     }
 }
 
-private enum ScriptedTransportError: Error {
+enum ScriptedTransportError: Error {
     case unexpectedCall
 }
 
-private actor ScriptedSyncTransport: SyncTransport {
+actor ScriptedSyncTransport: SyncTransport {
     private var pushResponses: [SyncPushResponse]
     private var pullResponses: [SyncPullResponse]
     private var bootstrapResponses: [SyncBootstrapResponse]
