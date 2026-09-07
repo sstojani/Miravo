@@ -14,6 +14,10 @@ Retired the temporary cleanroom test app identity from XcodeGen and unsigned-IPA
 
 Replaced the default bottom TabView chrome with a custom floating icon pill that keeps Overview, Transactions, Add, Plans, and More available from every main screen. The More hub now surfaces the current server account state, sign-in for guest/local users, server disconnect for authenticated users, and links to Insights and Settings. Added a persisted Settings -> Appearance segmented control for System, Light, and Dark presentation, applied at the root view. Transaction history delete swipe actions now use the Miravo destructive color. Public app self-registration was not added in this slice; the backend still supports multiple users through the existing `create_app_user` operator command while public registration remains disabled.
 
+## 2026-09-07 - Quick Add keyboard and undo follow-up
+
+Hid the floating navigation pill while the iOS keyboard is visible, added extra bottom clearance for Quick Add's save panel when the pill is visible, and changed the saved/undo confirmation into a transient row above the Save button that dismisses after three seconds. Added directional tab transitions between main destinations while respecting Reduce Motion. Local iOS localization, source-contract, and whitespace checks passed on Windows; native layout/runtime behavior remains a device or macOS simulator check.
+
 ## 2026-08-09 — Milestone 0 and Milestone 1 start
 
 ### Inputs and inspection

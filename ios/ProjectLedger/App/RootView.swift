@@ -1,5 +1,6 @@
 import SwiftData
 import SwiftUI
+import UIKit
 
 struct RootView: View {
     let storeUnavailable: Bool
@@ -108,6 +109,9 @@ private struct MainTabView: View {
     let scopeKey: String
 
     @State private var selectedTab: MainTab = .overview
+    @State private var tabTransitionDirection: TabTransitionDirection = .forward
+    @State private var keyboardVisible = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @EnvironmentObject private var session: SessionController
     @EnvironmentObject private var sync: SyncController
     @EnvironmentObject private var reminders: RecurringReminderController
@@ -115,12 +119,19 @@ private struct MainTabView: View {
     var body: some View {
         ZStack {
             selectedContent
+                .id(selectedTab)
+                .transition(selectedContentTransition)
         }
+        .clipped()
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.22), value: selectedTab)
         .safeAreaInset(edge: .bottom) {
-            FloatingTabBar(selectedTab: $selectedTab)
-                .padding(.horizontal, 28)
-                .padding(.top, 8)
-                .padding(.bottom, 10)
+            if !keyboardVisible {
+                FloatingTabBar(selectedTab: selectedTab, onSelect: selectTab)
+                    .padding(.horizontal, 28)
+                    .padding(.top, 8)
+                    .padding(.bottom, 10)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
         }
         .task(id: scopeKey) {
             await reminders.configure(scopeKey: scopeKey)
@@ -143,6 +154,20 @@ private struct MainTabView: View {
         .onChange(of: sync.diagnostics.lastSuccessfulSyncAt) { _, _ in
             Task { await reminders.refresh(scopeKey: scopeKey) }
         }
+        .onReceive(
+            NotificationCenter.default.publisher(
+                for: UIResponder.keyboardWillShowNotification
+            )
+        ) { _ in
+            setKeyboardVisible(true)
+        }
+        .onReceive(
+            NotificationCenter.default.publisher(
+                for: UIResponder.keyboardWillHideNotification
+            )
+        ) { _ in
+            setKeyboardVisible(false)
+        }
     }
 
     @ViewBuilder
@@ -153,11 +178,52 @@ private struct MainTabView: View {
         case .transactions:
             NavigationStack { TransactionsView(scopeKey: scopeKey) }
         case .add:
-            NavigationStack { QuickAddView(scopeKey: scopeKey) }
+            NavigationStack {
+                QuickAddView(
+                    scopeKey: scopeKey,
+                    bottomAccessoryPadding: keyboardVisible
+                        ? 0
+                        : FloatingTabBarMetrics.quickAddClearance
+                )
+            }
         case .plans:
             NavigationStack { PlansView(scopeKey: scopeKey) }
         case .more:
             NavigationStack { MoreView(scopeKey: scopeKey) }
+        }
+    }
+
+    private var selectedContentTransition: AnyTransition {
+        if reduceMotion {
+            return .opacity
+        }
+        return .asymmetric(
+            insertion: .move(edge: tabTransitionDirection.insertionEdge)
+                .combined(with: .opacity),
+            removal: .move(edge: tabTransitionDirection.removalEdge)
+                .combined(with: .opacity)
+        )
+    }
+
+    private func selectTab(_ tab: MainTab) {
+        guard tab != selectedTab else { return }
+        tabTransitionDirection = tab.order > selectedTab.order ? .forward : .backward
+        if reduceMotion {
+            selectedTab = tab
+        } else {
+            withAnimation(.easeInOut(duration: 0.22)) {
+                selectedTab = tab
+            }
+        }
+    }
+
+    private func setKeyboardVisible(_ visible: Bool) {
+        if reduceMotion {
+            keyboardVisible = visible
+        } else {
+            withAnimation(.easeInOut(duration: 0.18)) {
+                keyboardVisible = visible
+            }
         }
     }
 }
@@ -200,16 +266,49 @@ private enum MainTab: String, CaseIterable, Identifiable {
             "ellipsis"
         }
     }
+
+    var order: Int {
+        switch self {
+        case .overview:
+            0
+        case .transactions:
+            1
+        case .add:
+            2
+        case .plans:
+            3
+        case .more:
+            4
+        }
+    }
+}
+
+private enum TabTransitionDirection {
+    case forward
+    case backward
+
+    var insertionEdge: Edge {
+        self == .forward ? .trailing : .leading
+    }
+
+    var removalEdge: Edge {
+        self == .forward ? .leading : .trailing
+    }
+}
+
+private enum FloatingTabBarMetrics {
+    static let quickAddClearance: CGFloat = 88
 }
 
 private struct FloatingTabBar: View {
-    @Binding var selectedTab: MainTab
+    let selectedTab: MainTab
+    let onSelect: (MainTab) -> Void
 
     var body: some View {
         HStack(spacing: 18) {
             ForEach(MainTab.allCases) { tab in
                 Button {
-                    selectedTab = tab
+                    onSelect(tab)
                 } label: {
                     Image(systemName: tab.systemImage)
                         .font(.system(size: tab == .add ? 24 : 21, weight: .semibold))

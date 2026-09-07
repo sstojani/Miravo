@@ -4,6 +4,7 @@ import UIKit
 
 struct QuickAddView: View {
     let scopeKey: String
+    let bottomAccessoryPadding: CGFloat
 
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject private var reminders: RecurringReminderController
@@ -29,8 +30,9 @@ struct QuickAddView: View {
     @State private var undoCandidate: LedgerTransaction?
     @State private var undoExpiryTask: Task<Void, Never>?
 
-    init(scopeKey: String) {
+    init(scopeKey: String, bottomAccessoryPadding: CGFloat = 0) {
         self.scopeKey = scopeKey
+        self.bottomAccessoryPadding = bottomAccessoryPadding
         _rawTrackers = Query(
             filter: #Predicate { $0.scopeKey == scopeKey },
             sort: \LocalTracker.sortOrder
@@ -260,42 +262,54 @@ struct QuickAddView: View {
                         Button("Undo") { undoLastSave() }
                             .fontWeight(.semibold)
                     }
-                    .frame(minHeight: 54)
-                    .accessibilityElement(children: .contain)
-                } else {
-                    Button {
-                        dismissKeyboard()
-                        save()
-                    } label: {
-                        HStack(spacing: 10) {
-                            Image(systemName: "checkmark.circle.fill")
-                            Text("Save on this iPhone")
-                                .fontWeight(.semibold)
-                            Spacer()
-                            Image(systemName: "arrow.right")
-                                .font(.subheadline.weight(.semibold))
-                        }
-                        .padding(.horizontal, 18)
-                        .frame(maxWidth: .infinity, minHeight: 54)
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.white)
+                    .padding(.horizontal, 16)
+                    .frame(minHeight: 48)
                     .background(
-                        LedgerTheme.accent,
-                        in: RoundedRectangle(
-                            cornerRadius: LedgerTheme.cornerRadius,
-                            style: .continuous
-                        )
+                        .thinMaterial,
+                        in: Capsule(style: .continuous)
                     )
-                    .opacity(canSave ? 1 : 0.42)
-                    .shadow(
-                        color: canSave
-                            ? LedgerTheme.accent.opacity(0.28) : .clear,
-                        radius: 12,
-                        y: 6
-                    )
-                    .disabled(!canSave)
+                    .overlay {
+                        Capsule(style: .continuous)
+                            .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                    }
+                    .accessibilityElement(children: .contain)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
 
+                Button {
+                    dismissKeyboard()
+                    save()
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: "checkmark.circle.fill")
+                        Text("Save on this iPhone")
+                            .fontWeight(.semibold)
+                        Spacer()
+                        Image(systemName: "arrow.right")
+                            .font(.subheadline.weight(.semibold))
+                    }
+                    .padding(.horizontal, 18)
+                    .frame(maxWidth: .infinity, minHeight: 54)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.white)
+                .background(
+                    LedgerTheme.accent,
+                    in: RoundedRectangle(
+                        cornerRadius: LedgerTheme.cornerRadius,
+                        style: .continuous
+                    )
+                )
+                .opacity(canSave ? 1 : 0.42)
+                .shadow(
+                    color: canSave
+                        ? LedgerTheme.accent.opacity(0.28) : .clear,
+                    radius: 12,
+                    y: 6
+                )
+                .disabled(!canSave)
+
+                if undoCandidate == nil {
                     Text(
                         "Saving never waits for the network. Synchronization is attempted separately."
                     )
@@ -306,7 +320,9 @@ struct QuickAddView: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
+            .padding(.bottom, bottomAccessoryPadding)
             .background(.ultraThinMaterial)
+            .animation(.easeInOut(duration: 0.18), value: undoCandidate?.id)
         }
         .onDisappear { undoExpiryTask?.cancel() }
     }
@@ -469,7 +485,7 @@ struct QuickAddView: View {
         let transactionID = transaction.id
         undoExpiryTask = Task { @MainActor in
             do {
-                try await ContinuousClock().sleep(for: .seconds(8))
+                try await ContinuousClock().sleep(for: .seconds(3))
             } catch {
                 return
             }
