@@ -5,6 +5,10 @@ extension LedgerSyncActor {
     func failedOperations(scopeKey: String) throws -> [FailedOperationSnapshot] {
         let outbox = try fetchOutbox(scopeKey: scopeKey)
         let inventory = try SyncLocalInventory(context: modelContext, scopeKey: scopeKey)
+        var sameEntityCounts: [SyncRecordKey: Int] = [:]
+        for mutation in outbox {
+            sameEntityCounts[mutation.recordKey, default: 0] += 1
+        }
         return outbox.filter { $0.state == .failed || $0.serverStateRequestedAt != nil }.map { mutation in
             let current = mutation.serverSnapshotJSON.flatMap {
                 try? JSONDecoder().decode(JSONValue.self, from: $0)
@@ -27,7 +31,7 @@ extension LedgerSyncActor {
                 serverMissing: mutation.serverSnapshotMissing,
                 canRetry: canRetry(mutation),
                 awaitingServerState: mutation.serverStateRequestedAt != nil,
-                sameEntityOperationCount: outbox.filter { $0.recordKey == mutation.recordKey }.count
+                sameEntityOperationCount: sameEntityCounts[mutation.recordKey, default: 0]
             )
         }
     }
