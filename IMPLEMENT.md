@@ -26,6 +26,10 @@ Moved the main floating navigation pill from a bottom safe-area inset into an ov
 
 Removed the remaining global bottom clearance behind the floating navigation overlay. Quick Add now hides its bottom action completely until the user enters draft content, shows a compact Save capsule for the draft, replaces it with an Undo capsule for three seconds after save, then hides it again. Local iOS localization, source-contract, and whitespace checks passed on Windows; native Swift compilation and exact iPhone safe-area rendering remain external checks.
 
+## 2026-09-07 - Authenticated relaunch onboarding fix
+
+Successful server authentication now marks onboarding complete at the same preference boundary that stores the authenticated server scope. A relaunch after signing in no longer falls back to the first-open onboarding route simply because the session came from the onboarding sign-in slide. Added a native regression that rebuilds `SessionController` over the same defaults and expects the authenticated phase and scope. Local source checks are recorded with this change; native Swift execution remains a macOS/device check.
+
 ## 2026-08-09 — Milestone 0 and Milestone 1 start
 
 ### Inputs and inspection

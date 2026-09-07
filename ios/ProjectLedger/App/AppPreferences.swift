@@ -236,6 +236,7 @@ final class AppPreferences {
         scopeKey: String,
         remoteIdentityKey: String? = nil
     ) {
+        hasCompletedOnboarding = true
         serverURLString = serverURL.absoluteString
         lastEmail = email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         currentScopeKey = scopeKey
