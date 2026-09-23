@@ -24,10 +24,12 @@ struct PendingGuestProfileAdoption: Codable, Equatable {
 
 @MainActor
 final class SessionController: ObservableObject {
+    typealias TransportFactory = @Sendable (URL) -> any SessionTransport
     @Published private(set) var phase: SessionPhase = .loading
     @Published private(set) var scopeKey: String?
     @Published private(set) var isWorking = false
     @Published private(set) var isUnlocking = false
+    @Published private(set) var isSigningOut = false
     @Published var errorMessage: String?
     @Published var requestID: String?
     @Published var logoutWarning: String?
@@ -35,13 +37,18 @@ final class SessionController: ObservableObject {
 
     let preferences: AppPreferences
     private let tokenStore: KeychainSessionTokenStore
+    private let transportFactory: TransportFactory
+    private var sessionRevision = UUID()
+    private var logoutTask: Task<Void, Never>?
 
     init(
         preferences: AppPreferences = .standard,
-        tokenStore: KeychainSessionTokenStore = KeychainSessionTokenStore()
+        tokenStore: KeychainSessionTokenStore = KeychainSessionTokenStore(),
+        transportFactory: @escaping TransportFactory = { APIClient(baseURL: $0, timeout: 8) }
     ) {
         self.preferences = preferences
         self.tokenStore = tokenStore
+        self.transportFactory = transportFactory
         appAppearance = preferences.appAppearance
         #if DEBUG
             if ProcessInfo.processInfo.arguments.contains("-ui-testing-reset-onboarding") {
@@ -50,9 +57,16 @@ final class SessionController: ObservableObject {
                 return
             }
             if ProcessInfo.processInfo.arguments.contains("-ui-testing-authenticated") {
-                let testScope = "local|ui-testing"
+                preferences.resetForUITests()
+                let serverTest = ProcessInfo.processInfo.arguments.contains("-ui-testing-server-session")
+                let testScope = serverTest ? "https://ledger.example.test|ui-testing" : "local|ui-testing"
                 preferences.hasCompletedOnboarding = true
                 preferences.beginLocalProfile(scopeKey: testScope)
+                if serverTest {
+                    preferences.serverURLString = "https://ledger.example.test"
+                    preferences.serverConnectionEnabled = true
+                    preferences.lastEmail = "ui-test@example.test"
+                }
                 scopeKey = testScope
                 phase = .authenticated
                 return
@@ -103,6 +117,7 @@ final class SessionController: ObservableObject {
     }
 
     func synchronizationContext() async throws -> SyncAuthenticationContext? {
+        let revision = sessionRevision
         guard hasServerConnection,
               let scopeKey,
               pendingGuestAdoption(for: scopeKey) == nil,
@@ -111,12 +126,34 @@ final class SessionController: ObservableObject {
             return nil
         }
         let baseURL = try ServerURLPolicy.validated(preferredServerURLString)
+        guard revision == sessionRevision, hasServerConnection, self.scopeKey == scopeKey else { return nil }
         guard let userID = JWTSubjectParser.subject(from: tokens.accessToken),
               SessionScope.key(serverURL: baseURL, userID: userID) == scopeKey
         else { throw KeychainStoreError.invalidData }
         return SyncAuthenticationContext(
             scopeKey: scopeKey,
             baseURL: baseURL,
+            tokens: tokens,
+            tokenStore: tokenStore
+        )
+    }
+
+    func shortcutAuthenticationContext() async throws -> SyncAuthenticationContext? {
+        let revision = sessionRevision
+        guard let context = try await synchronizationContext() else { return nil }
+        let expiresAt = (try? Date.ISO8601FormatStyle(includingFractionalSeconds: true)
+            .parse(context.tokens.accessTokenExpiresAt)) ??
+            (try? Date.ISO8601FormatStyle().parse(context.tokens.accessTokenExpiresAt))
+        if let expiresAt, expiresAt.timeIntervalSinceNow > 60 { return context }
+        let client = APIClient(baseURL: context.baseURL, timeout: 8)
+        let tokens = try await tokenStore.refresh(scopeKey: context.scopeKey, replacing: context.tokens) { token in
+            try await client.refresh(refreshToken: token)
+        }
+        try Task.checkCancellation()
+        guard revision == sessionRevision, hasServerConnection, scopeKey == context.scopeKey else { return nil }
+        return SyncAuthenticationContext(
+            scopeKey: context.scopeKey,
+            baseURL: context.baseURL,
             tokens: tokens,
             tokenStore: tokenStore
         )
@@ -134,6 +171,8 @@ final class SessionController: ObservableObject {
     }
 
     func startLocalOnly() {
+        guard !isSigningOut else { return }
+        sessionRevision = UUID()
         let localScope = SessionScope.localKey(deviceID: preferences.deviceID)
 
         preferences.hasCompletedOnboarding = true
@@ -147,10 +186,13 @@ final class SessionController: ObservableObject {
     }
 
     func signIn(serverURL: String, email: String, password: String) async {
-        guard !isWorking else { return }
+        guard !isWorking, !isSigningOut else { return }
+        sessionRevision = UUID()
+        let revision = sessionRevision
         isWorking = true
         errorMessage = nil
         requestID = nil
+        logoutWarning = nil
         defer { isWorking = false }
 
         do {
@@ -160,7 +202,7 @@ final class SessionController: ObservableObject {
             let baseURL = try ServerURLPolicy.validated(
                 requestedServerURL.isEmpty ? preferredServerURLString : requestedServerURL
             )
-            let client = APIClient(baseURL: baseURL)
+            let client = transportFactory(baseURL)
             let tokens = try await client.login(
                 email: email.trimmingCharacters(in: .whitespacesAndNewlines),
                 password: password,
@@ -170,6 +212,8 @@ final class SessionController: ObservableObject {
                     forInfoDictionaryKey: "CFBundleShortVersionString"
                 ) as? String ?? ""
             )
+            try Task.checkCancellation()
+            guard revision == sessionRevision else { return }
             guard tokens.tokenType.caseInsensitiveCompare("Bearer") == .orderedSame,
                   !tokens.accessToken.isEmpty,
                   !tokens.refreshToken.isEmpty
@@ -225,6 +269,10 @@ final class SessionController: ObservableObject {
             }
 
             try await tokenStore.save(tokens, scopeKey: activeScopeKey)
+            guard revision == sessionRevision, !Task.isCancelled else {
+                try? await tokenStore.delete(scopeKey: activeScopeKey, matching: tokens)
+                return
+            }
 
             // Persist the handoff before switching scope. A restart can safely repeat adoption.
             preferences.pendingGuestAdoption = pendingAdoption ?? preferences.pendingGuestAdoption
@@ -237,14 +285,20 @@ final class SessionController: ObservableObject {
 
             scopeKey = activeScopeKey
             phase = .authenticated
+        } catch is CancellationError {
+            return
         } catch let error as APIClientError {
+            guard revision == sessionRevision else { return }
             errorMessage = localizedMessage(for: error)
             requestID = error.requestID
         } catch let error as ServerURLError {
+            guard revision == sessionRevision else { return }
             errorMessage = localizedMessage(for: error)
         } catch let error as URLError {
+            guard revision == sessionRevision, error.code != .cancelled else { return }
             errorMessage = networkMessage(for: error)
         } catch {
+            guard revision == sessionRevision else { return }
             errorMessage = String(localized: "Sign in could not be completed securely.")
         }
     }
@@ -299,70 +353,46 @@ final class SessionController: ObservableObject {
         preferences.appLockEnabled = enabled
     }
 
-    func disconnectServer() async {
-        guard let currentScope = scopeKey else { return }
-
+    func signOut() async {
+        guard !isSigningOut else { return }
+        isSigningOut = true
+        defer { isSigningOut = false }
+        sessionRevision = UUID()
+        let revision = sessionRevision
+        let baseURL = try? ServerURLPolicy.validated(preferredServerURLString)
         logoutWarning = nil
-
-        let savedTokens: SessionTokenBundle?
-        do {
-            savedTokens = try await tokenStore.load(scopeKey: currentScope)
-        } catch {
-            savedTokens = nil
-        }
-
-        if let baseURL = try? ServerURLPolicy.validated(preferredServerURLString),
-           let tokens = savedTokens {
-            do {
-                try await APIClient(baseURL: baseURL)
-                    .logout(accessToken: tokens.accessToken)
-            } catch {
-                logoutWarning = String(
-                    localized: "This phone disconnected locally, but the server session could not be revoked while offline."
-                )
-            }
-        }
-
-        do {
-            try await tokenStore.delete(scopeKey: currentScope)
-        } catch {
-            // The local ledger remains usable even if Keychain cleanup fails.
-        }
-
-        preferences.recordServerDisconnect()
         errorMessage = nil
         requestID = nil
-        phase = .authenticated
-    }
-
-    func signOut() async {
         guard let currentScope = scopeKey else {
             finishLocalSignOut()
             return
         }
-        logoutWarning = nil
+        // Hide the account immediately. Server availability cannot gate local sign-out.
+        finishLocalSignOut()
         let savedTokens: SessionTokenBundle?
         do {
             savedTokens = try await tokenStore.load(scopeKey: currentScope)
         } catch {
             savedTokens = nil
-        }
-        if let baseURL = try? ServerURLPolicy.validated(preferredServerURLString),
-           let tokens = savedTokens {
-            do {
-                try await APIClient(baseURL: baseURL).logout(accessToken: tokens.accessToken)
-            } catch {
-                logoutWarning = String(
-                    localized: "This phone signed out locally, but the server session could not be revoked while offline. Revoke it from Device sessions after reconnecting."
-                )
-            }
         }
         do {
             try await tokenStore.delete(scopeKey: currentScope)
         } catch {
             // Local sign-out still hides the scoped store if Keychain cleanup fails.
         }
-        finishLocalSignOut()
+        if let baseURL, let tokens = savedTokens {
+            let client = transportFactory(baseURL)
+            logoutTask = Task { [weak self] in
+                do {
+                    try await client.logout(accessToken: tokens.accessToken)
+                } catch {
+                    guard let self, self.sessionRevision == revision, self.phase == .signIn else { return }
+                    self.logoutWarning = String(
+                        localized: "This phone signed out locally, but the server session could not be revoked while offline. Revoke it from Device sessions after reconnecting."
+                    )
+                }
+            }
+        }
     }
 
     private func restoreLocalSession() {
@@ -392,6 +422,7 @@ final class SessionController: ObservableObject {
 
     private func finishLocalSignOut() {
         preferences.isSignedOut = true
+        preferences.serverConnectionEnabled = false
         scopeKey = nil
         phase = .signIn
     }

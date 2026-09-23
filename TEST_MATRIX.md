@@ -1,5 +1,11 @@
 # Acceptance and test matrix
 
+## 2026-09-24 session/Shortcut regressions
+
+`SessionControllerTests`: sign-out returns before blocked server logout, preserves scope, deletes credentials, survives relaunch, and ignores old errors after a new session. `SessionRefreshTests`: concurrent rotation coalesces, stale callers reuse current credentials, and delayed refresh cannot restore deleted credentials or overwrite a new login. `ProjectLedgerUITests`: floating tabs/Quick Add, Shortcut/defaults entry/save/cancel offline, sign-out/relaunch. Native tests authored; GitHub macOS pending.
+
+`test_app_signout_and_relogin_preserve_shortcut_capture_and_replay`: logout invalidates app access without revoking the narrow Shortcut token; relogin lists it and replay creates no duplicate expense. Local Windows backend run: 110 passed, one Unix permission assertion failed on Windows. Linux pending.
+
 Status values: `planned`, `implemented`, `passing-local`, `passing-docker`, `passing-macos`, `manual-passed`, `blocked-external`.
 
 2026-09-07 recovery branch: `backend/tests/test_sync_recovery.py` is passing-local (local Linux; full suite 110 passed, 82.27% coverage). `SyncRecoveryTests.swift` and `GuestRecoveryTests.swift` are implemented, not executed. Native compilation, final formatting lint, XcodeGen, simulator, persistent-store migration, simultaneous-trigger and physical-iPhone acceptance gates remain blocked-external/unverified. The owner explicitly stopped further testing and requested a separate-branch push. Full handoff: `docs/sync-recovery-handoff.md`.

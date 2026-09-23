@@ -1,5 +1,11 @@
 # Decision log
 
+## 2026-09-24 - Immediate sign-out and shared credential rotation
+
+Sign-out persists signed-out state and hides the scope before networking, retains pending local data, and independently attempts bounded device-session revocation. Failure warnings apply only to that signed-out session. Keychain coalesces refresh rotation across settings/sync and compares saved credentials before replacing them, preventing replay or resurrection after logout. The separate Shortcut token remains valid unless explicitly revoked/expired.
+
+Shortcut settings no longer waits for full ledger synchronization. Its sheet holds value selections and validates fresh records on save. Sync's model actor is constructed off the UI executor to keep database batches from blocking navigation. Native simulator/device regressions remain required; source checks alone cannot prove a device crash is fixed.
+
 ## 2026-09-07 - Server sign-in closes the onboarding gate
 
 - **Decision:** Treat successful server authentication as onboarding completion in the same persisted preference update that records server URL, normalized email, scope, and remote identity.

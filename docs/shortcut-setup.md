@@ -87,6 +87,10 @@ File append/replace behavior must be manually verified on the installed iOS rele
 
 ## Troubleshooting
 
+Settings -> Apple Wallet Shortcut loads token status independently of ledger sync. Session refresh is shared with concurrent synchronization; server errors leave the page navigable with a notice. Edit tracker defaults accepts active accounts and expense categories and validates them again when saving.
+
+More -> User account -> Sign out immediately returns to login and preserves scoped local records. Device-session revocation runs independently; this does not revoke the separate Wallet Shortcut token. Expired/revoked Shortcut tokens still require replacement in the automation header. Verify the actual Wallet trigger and queued replay on the iPhone after installing a validated build.
+
 | Result | Action |
 |---|---|
 | Unauthorized/revoked | Create a new scoped token in the app and replace the Shortcut header; never broaden to a normal refresh token |

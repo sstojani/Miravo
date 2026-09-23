@@ -20,6 +20,12 @@ struct ProjectLedgerApp: App {
             scheduler: SystemRecurringNotificationScheduler()
         )
         let sessionController = SessionController()
+        #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("-ui-testing-authenticated"),
+               let scopeKey = sessionController.scopeKey {
+                _ = try? LocalLedgerRepository(context: store.container.mainContext).bootstrapDefaults(scopeKey: scopeKey)
+            }
+        #endif
         let syncController = SyncController(modelContainer: store.container)
         let notificationDelegate = LocalNotificationPresentationDelegate()
         self.notificationDelegate = notificationDelegate
@@ -85,6 +91,14 @@ private struct LocalStoreBootstrap {
 
     static func make() -> LocalStoreBootstrap {
         do {
+            #if DEBUG
+                if ProcessInfo.processInfo.arguments.contains(where: { $0.hasPrefix("-ui-testing-") }) {
+                    return LocalStoreBootstrap(
+                        container: try makeContainer(configuration: ModelConfiguration(isStoredInMemoryOnly: true)),
+                        persistentStoreUnavailable: false
+                    )
+                }
+            #endif
             return LocalStoreBootstrap(
                 container: try makeContainer(),
                 persistentStoreUnavailable: false

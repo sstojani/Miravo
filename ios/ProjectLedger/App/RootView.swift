@@ -28,8 +28,11 @@ struct RootView: View {
             }
         }
         .onChange(of: session.scopeKey) { previous, current in
-            if previous != nil && current == nil {
-                Task { await reminders.deactivate() }
+            if let previous, previous != current {
+                Task {
+                    await sync.cancelSynchronization(scopeKey: previous)
+                    if current == nil { await reminders.deactivate() }
+                }
             }
         }
     }
@@ -48,6 +51,7 @@ struct RootView: View {
             case .authenticated:
                 if let scopeKey = session.scopeKey {
                     MainTabView(scopeKey: scopeKey)
+                        .id(scopeKey)
                         .task(id: scopeKey) {
                             let repository = LocalLedgerRepository(context: modelContext)
                             if let adoption = session.pendingGuestAdoption(for: scopeKey) {
@@ -71,6 +75,7 @@ struct RootView: View {
                             await sync.refreshDiagnostics(scopeKey: scopeKey)
                             let needsInitialProvisioning = sync.diagnostics.bootstrapRequired
                             let synchronized = await sync.synchronize(session: session)
+                            guard !Task.isCancelled, session.scopeKey == scopeKey, session.hasServerConnection else { return }
                             let hasTrackers = await sync.hasAvailableTrackers(scopeKey: scopeKey)
 
                             if synchronized &&
@@ -141,7 +146,13 @@ private struct MainTabView: View {
         }
         .task(id: scopeKey) {
             await reminders.configure(scopeKey: scopeKey)
-            await reminders.activateAfterSystemPrompt(scopeKey: scopeKey)
+            #if DEBUG
+                if !ProcessInfo.processInfo.arguments.contains("-ui-testing-authenticated") {
+                    await reminders.activateAfterSystemPrompt(scopeKey: scopeKey)
+                }
+            #else
+                await reminders.activateAfterSystemPrompt(scopeKey: scopeKey)
+            #endif
 
             guard session.hasServerConnection else {
                 return
@@ -336,6 +347,7 @@ private struct FloatingTabBar: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(tab.title)
+                .accessibilityIdentifier("tab.\(tab.rawValue)")
                 .accessibilityAddTraits(selectedTab == tab ? .isSelected : AccessibilityTraits())
             }
         }
@@ -412,6 +424,7 @@ private struct MoreView: View {
                 } label: {
                     Label("Settings", systemImage: "gearshape")
                 }
+                .accessibilityIdentifier("more.settings")
             }
         }
         .navigationTitle("More")
@@ -433,8 +446,6 @@ private struct AccountSettingsView: View {
     let scopeKey: String
 
     @EnvironmentObject private var session: SessionController
-    @EnvironmentObject private var sync: SyncController
-    @State private var disconnecting = false
 
     private var accountEmail: String {
         session.preferences.lastEmail.isEmpty
@@ -481,21 +492,17 @@ private struct AccountSettingsView: View {
 
             Section {
                 Button(role: .destructive) {
-                    disconnecting = true
-                    Task {
-                        await sync.stopForegroundTriggers()
-                        await session.disconnectServer()
-                        disconnecting = false
-                    }
+                    Task { await session.signOut() }
                 } label: {
                     HStack {
-                        if disconnecting {
+                        if session.isSigningOut {
                             ProgressView()
                         }
-                        Text(disconnecting ? "Disconnecting…" : "Disconnect server")
+                        Text("Sign out")
                     }
                 }
-                .disabled(disconnecting)
+                .disabled(session.isSigningOut)
+                .accessibilityIdentifier("account.signOut")
             }
         }
         .navigationTitle("User account")

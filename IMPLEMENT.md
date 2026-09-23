@@ -2,6 +2,17 @@
 
 This is an append-oriented, chronological record. Verification statements name the environment used.
 
+## 2026-09-24 - Shortcut entry and prompt sign-out
+
+- Fetched GitHub and merged main `d18161b` into a new repair branch without dropping the twelve newer local fixes.
+- Removed full synchronization from Shortcut screen entry, retry, create, and revoke. Shared Keychain refresh supplies credentials independently and rejects results after credentials are cleared/replaced.
+- Made Shortcut navigation lazy. Defaults sheets use value selections, refetch the scoped tracker at save, reject removed/revoked choices, and offer only active expense categories.
+- Created the sync model actor from a detached task to keep database processing off the UI executor; guarded startup/realtime/sync results against cancellation and session changes.
+- Renamed Disconnect server to Sign out. Account UI/preferences change immediately; data remains; credential cleanup precedes an independent bounded revocation attempt. Old failures cannot modify a new session.
+- Repaired invalid iOS workflow YAML and simulator runtime selection. Updated stale tab-bar/Save UI tests and added in-memory Shortcut/defaults/sign-out fixtures, delayed logout tests, and refresh concurrency tests.
+- Local Windows: contracts, 858 localization keys, workflow YAML parsing and changed backend-test Ruff passed. Backend suite: 110 passed; one POSIX file-permission assertion fails on Windows. Initial test-temp access errors were resolved with a fresh workspace temp directory. Linux and GitHub macOS runtime results pending.
+- No owner-device crash trace is available here. Physical Wallet trigger, installed automation configuration, and animation smoothness remain device checks. No production mutation/deployment performed.
+
 ## 2026-09-07 - Stale sync recovery branch publication
 
 Implemented durable per-entity server-state recovery, guarded retry and tombstone resolution, scoped diagnostics, persistent guest adoption, semantic scaffold checks, dependency quarantine, backend deleted-record protection, bootstrap generation invalidation, and conservative starter cleanup. Added backend and native regression coverage. Local Linux backend suite: 110 passed, 82.27% coverage. Windows Ruff and mypy checks passed; iOS localization/source-contract checks passed before the final native test addition. SwiftFormat was applied to then-changed Swift files; final lint, native compilation, XcodeGen and simulator/device execution remain unverified. Further tests were explicitly stopped by the owner before publishing this branch. No live server or production data was changed. Details and remaining gates: `docs/sync-recovery-handoff.md`.

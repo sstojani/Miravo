@@ -1,5 +1,11 @@
 # Miravo implementation plan
 
+## 2026-09-24 - Shortcut and session stability
+
+Integrated `origin/main` (`d18161b`) into `codex/shortcut-session-stability`, retaining the twelve newer local commits. Shortcut settings loads credentials independently of ledger sync, uses lazy navigation, and edits default selections as value snapshots with current-record validation at save. The sync model actor is created off the main actor. Sign out immediately hides the account, preserves scoped local records, clears credentials, and revokes the remote device session asynchronously. Shared token rotation rejects stale results after sign-out/new login.
+
+Restored valid iOS CI YAML and updated native UI tests for floating navigation, Shortcut defaults, and sign-out/relaunch. Added delayed logout and concurrent refresh tests. Local Windows: source/localization checks pass; backend 110 passed and one POSIX permission assertion failed on Windows. GitHub macOS and Linux verification pending; actual iPhone Wallet automation and reported crash require device confirmation. No production data was changed.
+
 ## 2026-09-07 repair branch handoff
 
 Sync recovery changes are implemented on `codex/stale-sync-recovery`, based on `origin/main` at `d41327d`. The owner requested immediate publication on a separate branch and explicitly stopped further testing. Native build/runtime verification and final integration review remain pending; this is not a release-ready milestone. See `docs/sync-recovery-handoff.md`.

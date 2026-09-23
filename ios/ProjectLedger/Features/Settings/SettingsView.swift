@@ -2,6 +2,7 @@ import SwiftData
 import SwiftUI
 
 struct SettingsView: View {
+    private enum Destination: Hashable { case shortcut }
     let scopeKey: String
 
     @EnvironmentObject private var session: SessionController
@@ -46,6 +47,12 @@ struct SettingsView: View {
             advancedSection
         }
         .navigationTitle("Settings")
+        .navigationDestination(for: Destination.self) { destination in
+            switch destination {
+            case .shortcut:
+                ShortcutSettingsView(scopeKey: scopeKey)
+            }
+        }
         .sheet(isPresented: $showingServerSetup) {
             LoginView(allowsDismiss: true)
         }
@@ -87,14 +94,13 @@ struct SettingsView: View {
                     Label("Collaboration", systemImage: "person.2")
                 }
 
-                NavigationLink {
-                    ShortcutSettingsView(scopeKey: scopeKey)
-                } label: {
+                NavigationLink(value: Destination.shortcut) {
                     Label(
                         "Apple Wallet Shortcut",
                         systemImage: "bolt.horizontal.circle"
                     )
                 }
+                .accessibilityIdentifier("settings.shortcut")
             }
             NavigationLink {
                 ExportSettingsView(scopeKey: scopeKey)
