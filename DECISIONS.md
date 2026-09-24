@@ -6,6 +6,8 @@ Sign-out persists signed-out state and hides the scope before networking, retain
 
 Shortcut settings no longer waits for full ledger synchronization. Its sheet holds value selections and validates fresh records on save. Sync's model actor is constructed off the UI executor to keep database batches from blocking navigation. Native simulator/device regressions remain required; source checks alone cannot prove a device crash is fixed.
 
+The default iOS workflow builds without executing the native unit/UI suite. Full simulator tests are manual through `workflow_dispatch` with `run_tests` enabled, because exploratory tests should not make every ordinary compile wait for the complete suite.
+
 ## 2026-09-07 - Server sign-in closes the onboarding gate
 
 - **Decision:** Treat successful server authentication as onboarding completion in the same persisted preference update that records server URL, normalized email, scope, and remote identity.

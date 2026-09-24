@@ -4,6 +4,8 @@ This is an append-oriented, chronological record. Verification statements name t
 
 ## 2026-09-24 - Shortcut entry and prompt sign-out
 
+- The iOS CI workflow now performs a fast simulator build for pull requests and ordinary pushes. Full native unit/UI tests are opt-in through manual `workflow_dispatch` with `run_tests=true`, keeping normal build feedback short while preserving an explicit regression-test path.
+
 - Fetched GitHub and merged main `d18161b` into a new repair branch without dropping the twelve newer local fixes.
 - Removed full synchronization from Shortcut screen entry, retry, create, and revoke. Shared Keychain refresh supplies credentials independently and rejects results after credentials are cleared/replaced.
 - Made Shortcut navigation lazy. Defaults sheets use value selections, refetch the scoped tracker at save, reject removed/revoked choices, and offer only active expense categories.
