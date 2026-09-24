@@ -104,6 +104,44 @@ def _payload(
     }
 
 
+def test_app_signout_and_relogin_preserve_shortcut_capture_and_replay(
+    user: User,
+    client_for_user: Callable[[User, str], APIClient],
+) -> None:
+    app = client_for_user(user, PASSWORD)
+    tracker_id = _tracker(app)
+    account_id = _account(app, tracker_id)
+    issued = _issue(app, tracker_id)
+    shortcut = _shortcut_client(issued["raw_token"])
+    payload = _payload(tracker_id, account_id, None)
+    payload["needs_review"] = True
+
+    assert app.post("/api/v1/auth/logout", {}, format="json").status_code == 204
+    assert app.get("/api/v1/shortcut/credentials").status_code == 401
+    assert shortcut.get("/api/v1/shortcut/context").status_code == 200
+    captured = shortcut.post(
+        "/api/v1/shortcut/transactions",
+        payload,
+        format="json",
+        HTTP_IDEMPOTENCY_KEY=payload["event_id"],
+    )
+    assert captured.status_code == 201, captured.data
+
+    reconnected = client_for_user(user, PASSWORD)
+    credentials = reconnected.get("/api/v1/shortcut/credentials")
+    assert credentials.status_code == 200
+    assert [str(row["id"]) for row in credentials.data] == [str(issued["id"])]
+    replay = shortcut.post(
+        "/api/v1/shortcut/transactions",
+        payload,
+        format="json",
+        HTTP_IDEMPOTENCY_KEY=payload["event_id"],
+    )
+    assert replay.status_code == 200
+    assert replay.data["status"] == "duplicate"
+    assert Transaction.objects.filter(tracker_id=tracker_id).count() == 1
+
+
 def test_credential_is_hashed_shown_once_user_scoped_and_immediately_revocable(
     user: User,
     client_for_user: Callable[[User, str], APIClient],

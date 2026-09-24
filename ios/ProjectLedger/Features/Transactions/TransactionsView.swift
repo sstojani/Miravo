@@ -186,6 +186,7 @@ struct TransactionsView: View {
                                             Button("Delete", role: .destructive) {
                                                 setDeleted(transaction, true)
                                             }
+                                            .tint(LedgerTheme.negative)
                                         } else {
                                             Button("Restore") { setDeleted(transaction, false) }
                                                 .tint(LedgerTheme.positive)

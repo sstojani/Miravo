@@ -8,6 +8,7 @@ struct LoginView: View {
     @State private var serverURL = ""
     @State private var email = ""
     @State private var password = ""
+    @State private var signInTask: Task<Void, Never>?
 
     init(allowsDismiss: Bool = false) {
         self.allowsDismiss = allowsDismiss
@@ -134,6 +135,7 @@ struct LoginView: View {
                 }
                 if email.isEmpty { email = session.preferences.lastEmail }
             }
+            .onDisappear { signInTask?.cancel() }
         }
     }
 
@@ -154,7 +156,8 @@ struct LoginView: View {
     }
 
     private func submit() {
-        Task {
+        guard !session.isWorking else { return }
+        signInTask = Task {
             await session.signIn(
                 serverURL: effectiveServerURL,
                 email: email,

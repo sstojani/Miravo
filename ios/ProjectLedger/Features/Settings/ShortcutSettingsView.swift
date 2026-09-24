@@ -13,6 +13,11 @@ private struct ShortcutDefaultsDraft: Identifiable {
     let id: UUID
 }
 
+private struct ShortcutDefaultOption: Identifiable {
+    let id: UUID
+    let name: String
+}
+
 struct ShortcutSettingsView: View {
     let scopeKey: String
 
@@ -46,7 +51,7 @@ struct ShortcutSettingsView: View {
 
     private var eligibleTrackers: [LocalTracker] {
         trackers.filter {
-            $0.deletedAt == nil && $0.archivedAt == nil && $0.role.canEditFinancialData
+            $0.deletedAt == nil && $0.archivedAt == nil && $0.accessRevokedAt == nil && $0.role.canEditFinancialData
         }
     }
 
@@ -93,11 +98,10 @@ struct ShortcutSettingsView: View {
                     }
                     Button("Retry") {
                         Task {
-                            _ = await sync.synchronize(session: session)
                             await loadCredentials()
                         }
                     }
-                    .disabled(controller.isWorking || sync.isRunning)
+                    .disabled(controller.isWorking)
                 }
             }
 
@@ -134,6 +138,7 @@ struct ShortcutSettingsView: View {
                         Label("Edit tracker defaults", systemImage: "slider.horizontal.3")
                     }
                     .disabled(selectedTrackerID == nil || selectedTracker == nil)
+                    .accessibilityIdentifier("shortcut.editDefaults")
                 }
             } header: {
                 Text("Capture defaults")
@@ -175,7 +180,7 @@ struct ShortcutSettingsView: View {
                 } label: {
                     Label("Create Shortcut token", systemImage: "key.fill")
                 }
-                .disabled(eligibleTrackers.isEmpty || controller.isWorking || sync.isRunning)
+                .disabled(eligibleTrackers.isEmpty || controller.isWorking)
             } header: {
                 Text("Active Shortcut tokens")
             } footer: {
@@ -217,17 +222,21 @@ struct ShortcutSettingsView: View {
             }
         }
         .navigationTitle("Wallet Shortcut")
-        .task {
+        .task(id: scopeKey) {
             if !didChooseInitialTracker {
                 selectedTrackerID = eligibleTrackers.first?.id
                 didChooseInitialTracker = true
             }
-            _ = await sync.synchronize(session: session)
             await loadCredentials()
         }
         .refreshable {
-            _ = await sync.synchronize(session: session)
             await loadCredentials()
+        }
+        .onChange(of: eligibleTrackers.map(\.id)) { _, ids in
+            if let selectedTrackerID, !ids.contains(selectedTrackerID) {
+                self.selectedTrackerID = ids.first
+                defaultsDraft = nil
+            }
         }
         .sheet(item: $createDraft, onDismiss: controller.clearOneTimeToken) { draft in
             NavigationStack {
@@ -248,7 +257,7 @@ struct ShortcutSettingsView: View {
                     )
                 }
             }
-            .interactiveDismissDisabled(controller.oneTimeToken != nil)
+            .interactiveDismissDisabled(controller.isWorking || controller.oneTimeToken != nil)
         }
         .sheet(item: $defaultsDraft) { draft in
             if let tracker = eligibleTrackers.first(where: { $0.id == draft.id }) {
@@ -302,7 +311,6 @@ struct ShortcutSettingsView: View {
     }
 
     private func createCredential(name: String, trackerID: UUID?) async -> Bool {
-        _ = await sync.synchronize(session: session)
         guard let authentication = await authenticationContext() else { return false }
         return await controller.create(
             name: name,
@@ -312,18 +320,22 @@ struct ShortcutSettingsView: View {
     }
 
     private func revoke(_ credential: ShortcutCredentialSummary) async {
-        _ = await sync.synchronize(session: session)
         guard let authentication = await authenticationContext() else { return }
         _ = await controller.revoke(id: credential.id, authentication: authentication)
     }
 
     private func authenticationContext() async -> SyncAuthenticationContext? {
         do {
-            guard let authentication = try await session.synchronizationContext() else {
+            try Task.checkCancellation()
+            guard let authentication = try await session.shortcutAuthenticationContext(),
+                  authentication.scopeKey == scopeKey
+            else {
                 controller.presentAuthenticationUnavailable()
                 return nil
             }
             return authentication
+        } catch is CancellationError {
+            return nil
         } catch {
             controller.presentAuthenticationUnavailable()
             return nil
@@ -332,9 +344,11 @@ struct ShortcutSettingsView: View {
 }
 
 private struct ShortcutTrackerDefaultsView: View {
-    let tracker: LocalTracker
-    let accounts: [LocalAccount]
-    let categories: [LocalCategory]
+    let scopeKey: String
+    let trackerID: UUID
+    let trackerName: String
+    let accounts: [ShortcutDefaultOption]
+    let categories: [ShortcutDefaultOption]
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
@@ -349,25 +363,21 @@ private struct ShortcutTrackerDefaultsView: View {
         accounts: [LocalAccount],
         categories: [LocalCategory]
     ) {
-        self.tracker = tracker
-        self.accounts = accounts
-        self.categories = categories
+        scopeKey = tracker.scopeKey
+        trackerID = tracker.id
+        trackerName = tracker.name
+        self.accounts = accounts.filter { $0.archivedAt == nil && $0.deletedAt == nil }
+            .map { ShortcutDefaultOption(id: $0.id, name: $0.name) }
+        self.categories = categories.filter { $0.kind == .expense && $0.archivedAt == nil && $0.deletedAt == nil }
+            .map { ShortcutDefaultOption(id: $0.id, name: $0.name) }
         _defaultAccountID = State(
-            initialValue: accounts.contains { $0.id == tracker.defaultAccountID }
+            initialValue: self.accounts.contains { $0.id == tracker.defaultAccountID }
                 ? tracker.defaultAccountID : nil
         )
         _defaultCategoryID = State(
-            initialValue: categories.contains { $0.id == tracker.defaultCategoryID }
+            initialValue: self.categories.contains { $0.id == tracker.defaultCategoryID }
                 ? tracker.defaultCategoryID : nil
         )
-    }
-
-    private var availableAccounts: [LocalAccount] {
-        accounts.filter { $0.archivedAt == nil || $0.id == tracker.defaultAccountID }
-    }
-
-    private var availableCategories: [LocalCategory] {
-        categories.filter { $0.archivedAt == nil || $0.id == tracker.defaultCategoryID }
     }
 
     var body: some View {
@@ -376,14 +386,14 @@ private struct ShortcutTrackerDefaultsView: View {
                 Section {
                     Picker("Default account", selection: $defaultAccountID) {
                         Text("No default account").tag(UUID?.none)
-                        ForEach(availableAccounts) { account in
+                        ForEach(accounts) { account in
                             Text(account.name).tag(Optional(account.id))
                         }
                     }
                     Picker("Default category", selection: $defaultCategoryID) {
                         Text("No default category").tag(UUID?.none)
-                        ForEach(availableCategories) { category in
-                            Text("\(category.name) · \(categoryKindName(category.kind))")
+                        ForEach(categories) { category in
+                            Text(category.name)
                                 .tag(Optional(category.id))
                         }
                     }
@@ -400,7 +410,7 @@ private struct ShortcutTrackerDefaultsView: View {
                     }
                 }
             }
-            .navigationTitle(tracker.name)
+            .navigationTitle(trackerName)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -416,14 +426,32 @@ private struct ShortcutTrackerDefaultsView: View {
 
     private func save() {
         do {
+            let scope = scopeKey
+            let id = trackerID
+            guard session.scopeKey == scope,
+                  let tracker = try modelContext.fetch(FetchDescriptor<LocalTracker>(
+                      predicate: #Predicate { $0.scopeKey == scope && $0.id == id }
+                  )).first,
+                  tracker.deletedAt == nil, tracker.archivedAt == nil, tracker.accessRevokedAt == nil,
+                  tracker.role.canEditFinancialData
+            else { throw LocalLedgerError.invalidReference }
+            let selectedAccount = try modelContext.fetch(FetchDescriptor<LocalAccount>(
+                predicate: #Predicate { $0.scopeKey == scope && $0.trackerID == id }
+            )).first { $0.id == defaultAccountID && $0.deletedAt == nil && $0.archivedAt == nil }
+            let selectedCategory = try modelContext.fetch(FetchDescriptor<LocalCategory>(
+                predicate: #Predicate { $0.scopeKey == scope && $0.trackerID == id }
+            )).first { $0.id == defaultCategoryID && $0.deletedAt == nil && $0.archivedAt == nil && $0.kind == .expense }
+            guard defaultAccountID == nil || selectedAccount != nil,
+                  defaultCategoryID == nil || selectedCategory != nil
+            else { throw LocalLedgerError.invalidReference }
             try LocalLedgerRepository(context: modelContext).updateTracker(
                 tracker,
                 name: tracker.name,
                 description: tracker.trackerDescription,
                 icon: tracker.icon,
                 colorHex: tracker.colorHex,
-                defaultAccount: availableAccounts.first { $0.id == defaultAccountID },
-                defaultCategory: availableCategories.first { $0.id == defaultCategoryID }
+                defaultAccount: selectedAccount,
+                defaultCategory: selectedCategory
             )
             Task { await sync.synchronize(session: session) }
             dismiss()
@@ -432,14 +460,6 @@ private struct ShortcutTrackerDefaultsView: View {
         }
     }
 
-    private func categoryKindName(_ kind: LocalCategoryKind) -> String {
-        switch kind {
-        case .expense:
-            String(localized: "Expense")
-        case .income:
-            String(localized: "Income")
-        }
-    }
 }
 
 private struct ShortcutCredentialRow: View {

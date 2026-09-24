@@ -99,6 +99,10 @@ enum SyncDiagnosticReport {
         SHA256.hash(data: Data(value.utf8)).prefix(8).map { String(format: "%02x", $0) }.joined()
     }
 
+    static func errorCodeText(_ code: String?) -> String {
+        code.map(SyncRecoveryPolicy.safeCode) ?? "none"
+    }
+
     static func text(
         scopeKey: String,
         deviceID: String,
@@ -119,7 +123,7 @@ enum SyncDiagnosticReport {
             "syncing: \(diagnostics.isSyncing)",
             "last_success: \(diagnostics.lastSuccessfulSyncAt.map(formatter.string) ?? "none")",
             "last_attempt: \(diagnostics.lastAttemptAt.map(formatter.string) ?? "none")",
-            "last_error: \(SyncRecoveryPolicy.safeCode(diagnostics.lastSafeErrorCode))",
+            "last_error: \(errorCodeText(diagnostics.lastSafeErrorCode))",
         ]
         for operation in operations {
             lines.append("operation: \(operation.id) entity: \(operation.entityType) id: \(operation.entityID) command: \(operation.command) sequence: \(operation.localSequence) state: \(operation.state) error: \(operation.safeErrorCode) base: \(operation.baseServerVersion.map(String.init) ?? "nil") attempts: \(operation.attemptCount) deleted: \(operation.serverDeleted) recovery_requested: \(operation.awaitingServerState)")

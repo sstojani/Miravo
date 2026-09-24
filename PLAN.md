@@ -1,8 +1,18 @@
 # Miravo implementation plan
 
+## 2026-09-24 - Shortcut and session stability
+
+Integrated `origin/main` (`d18161b`) into `codex/shortcut-session-stability`, retaining the twelve newer local commits. Shortcut settings loads credentials independently of ledger sync, uses lazy navigation, and edits default selections as value snapshots with current-record validation at save. The sync model actor is created off the main actor. Sign out immediately hides the account, preserves scoped local records, clears credentials, and revokes the remote device session asynchronously. Shared token rotation rejects stale results after sign-out/new login.
+
+Restored valid iOS CI YAML and updated native UI tests for floating navigation, Shortcut defaults, and sign-out/relaunch. Added delayed logout and concurrent refresh tests. Local Windows: source/localization checks pass; backend 110 passed and one POSIX permission assertion failed on Windows. GitHub macOS and Linux verification pending; actual iPhone Wallet automation and reported crash require device confirmation. No production data was changed.
+
 ## 2026-09-07 repair branch handoff
 
 Sync recovery changes are implemented on `codex/stale-sync-recovery`, based on `origin/main` at `d41327d`. The owner requested immediate publication on a separate branch and explicitly stopped further testing. Native build/runtime verification and final integration review remain pending; this is not a release-ready milestone. See `docs/sync-recovery-handoff.md`.
+
+The temporary cleanroom bundle/display identity has been removed from the repair branch. XcodeGen now builds the app as `Miravo` with the centralized provisional bundle ID `com.example.projectledger`, and unsigned-IPA verification expects that same identity.
+
+The bottom navigation is being restyled as a solid floating icon pill with a transparent surrounding bottom area and a More hub that exposes account navigation plus Settings/Insights entry points. Settings now includes a persistent Appearance preference for System, Light, or Dark mode. Quick Add hides its bottom action until a draft exists, hides the pill while the keyboard is visible, uses a compact floating Save capsule, and replaces Save with an Undo capsule for three seconds after saving before hiding again. Non-Quick Add tabs reserve transparent scroll clearance so final rows can move above the floating pill, and Plans adds a larger transparent scroll tail for the final Split balances section. Transaction-row destructive swipe actions are explicitly tinted with the Miravo destructive color instead of inheriting the global accent. Successful server authentication now also completes the onboarding gate so a signed-in relaunch does not show the first-open slides again; a true first launch after reinstall clears leftover local Keychain session tokens and shows onboarding instead of silently signing in. Public self-registration remains intentionally absent; additional users are still created by the server-side `create_app_user` operator command until a reviewed invitation/signup flow is designed.
 
 Last updated: 2026-08-25. A checked item is complete; its verification tier is recorded in `IMPLEMENT.md`. Items are not checked merely because scaffolding exists.
 

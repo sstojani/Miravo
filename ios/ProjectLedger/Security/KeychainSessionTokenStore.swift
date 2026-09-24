@@ -8,6 +8,7 @@ enum KeychainStoreError: Error, Equatable {
 
 actor KeychainSessionTokenStore {
     private let service: String
+    private var refreshes: [String: (id: UUID, sessionID: UUID, task: Task<SessionTokenBundle, Error>)] = [:]
 
     init(service: String = (Bundle.main.bundleIdentifier ?? "ProjectLedger") + ".session") {
         self.service = service
@@ -59,12 +60,63 @@ actor KeychainSessionTokenStore {
         }
     }
 
-    private func baseQuery(scopeKey: String) -> [String: Any] {
+    func delete(scopeKey: String, matching tokens: SessionTokenBundle) throws {
+        guard try load(scopeKey: scopeKey) == tokens else { return }
+        try delete(scopeKey: scopeKey)
+    }
+
+    func refresh(
+        scopeKey: String,
+        replacing previous: SessionTokenBundle,
+        request: @escaping @Sendable (String) async throws -> SessionTokenBundle
+    ) async throws -> SessionTokenBundle {
+        guard let current = try load(scopeKey: scopeKey), current.sessionID == previous.sessionID else {
+            throw CancellationError()
+        }
+        if current != previous { return current }
+
+        // Sync and settings share one rotation; replaying a refresh token revokes the session.
+        let existing = refreshes[scopeKey].flatMap { $0.sessionID == previous.sessionID ? $0 : nil }
+        let refresh = existing ?? (
+            id: UUID(),
+            sessionID: previous.sessionID,
+            task: Task { try await request(previous.refreshToken) }
+        )
+        refreshes[scopeKey] = refresh
+        defer {
+            if refreshes[scopeKey]?.id == refresh.id { refreshes[scopeKey] = nil }
+        }
+        let updated = try await refresh.task.value
+        guard updated.sessionID == previous.sessionID,
+              updated.tokenType.caseInsensitiveCompare("Bearer") == .orderedSame,
+              !updated.accessToken.isEmpty, !updated.refreshToken.isEmpty
+        else { throw KeychainStoreError.invalidData }
+        // A completed refresh must never restore credentials removed by sign-out.
+        guard let saved = try load(scopeKey: scopeKey) else { throw CancellationError() }
+        if saved == updated { return updated }
+        guard saved == previous else { throw CancellationError() }
+        try save(updated, scopeKey: scopeKey)
+        return updated
+    }
+
+    func deleteAll() throws {
+        let status = SecItemDelete(serviceQuery() as CFDictionary)
+        guard status == errSecSuccess || status == errSecItemNotFound else {
+            throw KeychainStoreError.unexpectedStatus(status)
+        }
+    }
+
+    private func serviceQuery() -> [String: Any] {
         [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
-            kSecAttrAccount as String: scopeKey,
             kSecAttrSynchronizable as String: kCFBooleanFalse as Any,
         ]
+    }
+
+    private func baseQuery(scopeKey: String) -> [String: Any] {
+        var query = serviceQuery()
+        query[kSecAttrAccount as String] = scopeKey
+        return query
     }
 }

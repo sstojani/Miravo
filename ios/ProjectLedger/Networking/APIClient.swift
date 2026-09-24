@@ -59,7 +59,18 @@ protocol SyncTransport: Sendable {
     func acknowledge(cursor: String, accessToken: String) async throws -> SyncAckResponse
 }
 
-actor APIClient: SyncTransport {
+protocol SessionTransport: Sendable {
+    func login(
+        email: String,
+        password: String,
+        deviceID: String,
+        deviceName: String,
+        appVersion: String
+    ) async throws -> SessionTokenBundle
+    func logout(accessToken: String) async throws
+}
+
+actor APIClient: SyncTransport, SessionTransport {
     private struct LoginRequest: Encodable {
         let email: String
         let password: String
@@ -109,7 +120,7 @@ actor APIClient: SyncTransport {
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
 
-    init(baseURL: URL, session: URLSession? = nil) {
+    init(baseURL: URL, session: URLSession? = nil, timeout: TimeInterval = 30) {
         self.baseURL = baseURL
         if let session {
             self.session = session
@@ -119,9 +130,9 @@ actor APIClient: SyncTransport {
             configuration.httpShouldSetCookies = false
             configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
             configuration.urlCache = nil
-            configuration.timeoutIntervalForRequest = 30
-            configuration.timeoutIntervalForResource = 60
-            configuration.waitsForConnectivity = true
+            configuration.timeoutIntervalForRequest = timeout
+            configuration.timeoutIntervalForResource = timeout * 2
+            configuration.waitsForConnectivity = false
             self.session = URLSession(
                 configuration: configuration,
                 delegate: NoRedirectURLSessionDelegate(),

@@ -1284,11 +1284,12 @@ struct LedgerSyncActorTests {
             refreshToken: "new-refresh",
             refreshTokenExpiresAt: timestamp,
             tokenType: "Bearer",
-            sessionID: UUID(uuidString: "92000000-0000-0000-0000-000000000009")!
+            sessionID: UUID(uuidString: "80000000-0000-0000-0000-000000000008")!
         )
         let transport = RefreshingSyncTransport(refreshed: refreshed, timestamp: timestamp)
         let engine = LedgerSyncActor(modelContainer: container)
 
+        try await store.save(try authentication(tokenStore: store).tokens, scopeKey: scope)
         let summary = try await engine.synchronize(
             authentication: try authentication(tokenStore: store),
             transport: transport

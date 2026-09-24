@@ -19,7 +19,8 @@ final class SyncController: ObservableObject {
     @Published private(set) var backgroundRefreshScheduled: Bool?
     @Published var message: String?
 
-    private let engine: LedgerSyncActor
+    private let engineTask: Task<LedgerSyncActor, Never>
+    private var engine: LedgerSyncActor { get async { await engineTask.value } }
     private let attachmentWorker: AttachmentTransferWorker
     private let realtimeClient = SyncInvalidationClient()
     private let connectivityMonitor = ConnectivitySyncMonitor()
@@ -27,7 +28,8 @@ final class SyncController: ObservableObject {
     private var foregroundRealtimeEnabled = false
 
     init(modelContainer: ModelContainer) {
-        engine = LedgerSyncActor(modelContainer: modelContainer)
+        // SwiftData binds its executor where the model actor is created.
+        engineTask = Task.detached { LedgerSyncActor(modelContainer: modelContainer) }
         attachmentWorker = AttachmentTransferWorker(modelContainer: modelContainer)
     }
 
@@ -36,6 +38,7 @@ final class SyncController: ObservableObject {
         session: SessionController,
         presentErrors: Bool = true
     ) async -> Bool {
+        guard !Task.isCancelled, session.hasServerConnection else { return false }
         guard !isRunning else {
             rerunRequested = true
             return false
@@ -64,6 +67,7 @@ final class SyncController: ObservableObject {
     }
 
     func startForegroundTriggers(session: SessionController) async {
+        guard !Task.isCancelled, session.hasServerConnection else { return }
         foregroundRealtimeEnabled = true
         connectivityMonitor.start { [weak self, weak session] in
             guard let self, let session else { return }
@@ -79,6 +83,11 @@ final class SyncController: ObservableObject {
         await realtimeClient.stop()
     }
 
+    func cancelSynchronization(scopeKey: String) async {
+        await engine.cancel(scopeKey: scopeKey)
+        message = nil
+    }
+
     func scheduleBackgroundRefresh() {
         backgroundRefreshScheduled = BackgroundSyncScheduler.schedule()
     }
@@ -87,6 +96,7 @@ final class SyncController: ObservableObject {
         session: SessionController,
         presentErrors: Bool
     ) async -> Bool {
+        let scopeKey = session.scopeKey
         do {
             guard let authentication = try await session.synchronizationContext() else {
                 return false
@@ -118,15 +128,21 @@ final class SyncController: ObservableObject {
                     )
                 }
             }
-            diagnostics = try await engine.diagnostics(scopeKey: authentication.scopeKey)
+            let updated = try await engine.diagnostics(scopeKey: authentication.scopeKey)
+            guard session.scopeKey == authentication.scopeKey, session.hasServerConnection else { return false }
+            diagnostics = updated
             return true
+        } catch is CancellationError {
+            return false
         } catch let error as APIClientError {
+            guard session.scopeKey == scopeKey, session.hasServerConnection else { return false }
             if presentErrors { message = message(for: error) }
             if let scopeKey = session.scopeKey {
                 diagnostics = (try? await engine.diagnostics(scopeKey: scopeKey)) ?? diagnostics
             }
             return false
         } catch is URLError {
+            guard !Task.isCancelled, session.scopeKey == scopeKey, session.hasServerConnection else { return false }
             if presentErrors {
                 message = String(localized: "The server is unreachable. Local changes will retry later.")
             }
@@ -135,6 +151,7 @@ final class SyncController: ObservableObject {
             }
             return false
         } catch {
+            guard session.scopeKey == scopeKey, session.hasServerConnection else { return false }
             if presentErrors {
                 message = String(localized: "Synchronization could not be completed. Local changes are safe and will be retried.")
             }
@@ -153,19 +170,22 @@ final class SyncController: ObservableObject {
             await realtimeClient.stop()
             return
         }
+        guard foregroundRealtimeEnabled, session.hasServerConnection else { return }
         await realtimeClient.start(
             baseURL: authentication.baseURL,
             tokens: authentication.tokens
         ) { [weak self, weak session] event in
             Task { @MainActor in
-                guard let self else { return }
+                guard let self, self.foregroundRealtimeEnabled,
+                      let session, session.hasServerConnection,
+                      session.scopeKey == authentication.scopeKey
+                else { return }
                 switch event {
                 case .connected:
                     self.realtimeConnected = true
                 case .disconnected:
                     self.realtimeConnected = false
                 case .invalidation:
-                    guard let session else { return }
                     await self.synchronize(session: session)
                 }
             }

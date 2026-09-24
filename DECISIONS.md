@@ -1,8 +1,46 @@
 # Decision log
 
+## 2026-09-24 - Immediate sign-out and shared credential rotation
+
+Sign-out persists signed-out state and hides the scope before networking, retains pending local data, and independently attempts bounded device-session revocation. Failure warnings apply only to that signed-out session. Keychain coalesces refresh rotation across settings/sync and compares saved credentials before replacing them, preventing replay or resurrection after logout. The separate Shortcut token remains valid unless explicitly revoked/expired.
+
+Shortcut settings no longer waits for full ledger synchronization. Its sheet holds value selections and validates fresh records on save. Sync's model actor is constructed off the UI executor to keep database batches from blocking navigation. Native simulator/device regressions remain required; source checks alone cannot prove a device crash is fixed.
+
+The default iOS workflow builds without executing the native unit/UI suite. Full simulator tests are manual through `workflow_dispatch` with `run_tests` enabled, because exploratory tests should not make every ordinary compile wait for the complete suite.
+
+## 2026-09-07 - Server sign-in closes the onboarding gate
+
+- **Decision:** Treat successful server authentication as onboarding completion in the same persisted preference update that records server URL, normalized email, scope, and remote identity.
+- **Why:** The onboarding sign-in slide can create a valid authenticated scope without separately calling the local onboarding completion path. Relaunching then incorrectly returns to first-open onboarding even though a server session exists.
+- **Consequence:** Explicit sign-out still routes to sign-in, and a true iOS uninstall can still require login because the app container preferences are removed. After login, cloud bootstrap remains the recovery path for server data.
+
+## 2026-09-07 - Fresh install must not silently reuse Keychain sessions
+
+- **Decision:** When onboarding preferences are absent, treat the launch as a fresh install, clear leftover local session tokens from Miravo's non-synchronizing Keychain service, and show first-run onboarding instead of auto-opening an authenticated scope.
+- **Why:** iOS removes the app container on uninstall while Keychain items can remain. Reusing only the token can skip the owner's onboarding/login choice and open an authenticated-looking shell without the expected local session context.
+- **Consequence:** Explicit server sign-in still persists onboarding completion for normal relaunches. A deleted/reinstalled app starts from onboarding and requires the user to sign in again to restore cloud data. Old server-side device sessions may still exist until normal expiry or explicit server/session revocation.
+
+## 2026-09-07 - Account actions live below the More hub
+
+- **Decision:** Keep More as a light navigation hub. The signed-in account row opens a User account screen, and server disconnect lives there with profile/security/server context instead of as a top-level More action.
+- **Why:** Destructive account/server actions beside ordinary navigation make the hub feel cramped and easy to mis-tap. Account management needs room for future name, email, and password controls.
+- **Consequence:** The destructive action is one tap deeper, Settings no longer duplicates it, and future profile/security work has a stable destination.
+
 ## 2026-09-07 - Explicit, durable sync recovery
 
 Permanent failures are not generic retry candidates. A server tombstone cannot be kept locally by rebasing an edit. Accepting deletion removes only that entity's queued edits and retains dependent work for review. Failed-operation discard is persisted and completed only after a full authorized bootstrap; new edits made after confirmation cancel that discard. Repair refuses outstanding mutations, unresolved conflicts and unfinished uploads. Real guest data remains a separate imported tracker, never merged by display name. Backend strict base-version validation remains intact. Branch publication precedes native verification at the owner's explicit request; see `docs/sync-recovery-handoff.md`.
+
+## 2026-09-07 - Retire cleanroom iOS identity
+
+- **Decision:** Remove the temporary `Miravo Clean` / `com.example.projectledger.cleanroom` test identity and return generated builds to the user-facing name `Miravo` with the centralized provisional bundle identifier `com.example.projectledger`.
+- **Why:** iOS partitions app container and Keychain data by bundle identifier. Keeping a cleanroom suffix after the sync repair would make reinstall/login tests look like a different app and could hide whether data continuity is actually working.
+- **Consequence:** The first install after this change is separate from any already-installed cleanroom build, but future builds remain on the stable pre-cleanroom identity unless the owner later chooses a final non-example bundle identifier.
+
+## 2026-09-07 - Main navigation uses a floating native shell
+
+- **Decision:** Replace the default TabView bar in the authenticated app shell with a custom floating icon pill, move Settings and Insights behind a More hub, and persist a root-level Appearance preference with System, Light, and Dark modes.
+- **Why:** Device review showed the old bar felt heavy and the More tab was too sparse. A compact icon shell matches the requested visual direction while keeping the five primary destinations stable and putting account/session actions somewhere discoverable.
+- **Consequence:** The app now owns more navigation styling directly, so native compile, Dynamic Type, safe-area, VoiceOver, and device checks are required before treating this as final UI polish. Public self-registration remains separate from this navigation change; the current server can host multiple users, but user creation is still an operator action until a deliberate secure signup/invite flow is added.
 
 ## D-001 — Provisional identity and configuration
 

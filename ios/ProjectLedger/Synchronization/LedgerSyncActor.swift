@@ -140,13 +140,13 @@ actor LedgerSyncActor {
             )
         } catch let error as APIClientError where shouldRefresh(after: error) {
             do {
-                let refreshed = try await transport.refresh(
-                    refreshToken: authentication.tokens.refreshToken
-                )
-                try await authentication.tokenStore.save(
-                    refreshed,
-                    scopeKey: authentication.scopeKey
-                )
+                try Task.checkCancellation()
+                let refreshed = try await authentication.tokenStore.refresh(
+                    scopeKey: authentication.scopeKey,
+                    replacing: authentication.tokens
+                ) { token in
+                    try await transport.refresh(refreshToken: token)
+                }
                 return try await performSync(
                     scopeKey: authentication.scopeKey,
                     client: transport,
@@ -182,6 +182,11 @@ actor LedgerSyncActor {
             bootstrapRequired: state.bootstrapRequired,
             isSyncing: state.isSyncing
         )
+    }
+
+    func cancel(scopeKey: String) {
+        guard activeScopeKey == scopeKey else { return }
+        activeRun?.cancel()
     }
 
     func hasAvailableTrackers(scopeKey: String) throws -> Bool {
@@ -307,6 +312,7 @@ actor LedgerSyncActor {
         client: any SyncTransport,
         accessToken: String
     ) async throws -> SyncRunSummary {
+        try Task.checkCancellation()
         let state = try cursorState(scopeKey: scopeKey)
         state.isSyncing = true
         state.lastAttemptAt = .now
@@ -394,6 +400,7 @@ actor LedgerSyncActor {
     ) async throws -> Int {
         var processed = 0
         for _ in 0 ..< 25 {
+            try Task.checkCancellation()
             guard let batch = try preparePushBatch(scopeKey: scopeKey) else { break }
             do {
                 let response = try await client.push(batch.request, accessToken: accessToken)
@@ -678,6 +685,7 @@ actor LedgerSyncActor {
     ) async throws -> Int {
         var total = 0
         for _ in 0 ..< 1_000 {
+            try Task.checkCancellation()
             let state = try cursorState(scopeKey: scopeKey)
             let response = try await client.pull(
                 cursor: state.cursor,
@@ -851,6 +859,7 @@ actor LedgerSyncActor {
         }
 
         for _ in 0 ..< 10_000 {
+            try Task.checkCancellation()
             let state = try cursorState(scopeKey: scopeKey)
             let response = try await client.bootstrap(
                 cursor: state.bootstrapCursor,

@@ -2,6 +2,7 @@ import SwiftData
 import SwiftUI
 
 struct SettingsView: View {
+    private enum Destination: Hashable { case shortcut }
     let scopeKey: String
 
     @EnvironmentObject private var session: SessionController
@@ -10,7 +11,6 @@ struct SettingsView: View {
     @Query private var cursors: [SyncCursor]
     @Query private var conflicts: [SyncConflict]
     @Query private var attachmentTransfers: [AttachmentTransfer]
-    @State private var signingOut = false
     @State private var showingServerAddress = false
     @State private var showingServerSetup = false
 
@@ -41,14 +41,18 @@ struct SettingsView: View {
     var body: some View {
         Form {
             ledgerSection
+            appearanceSection
             privacySection
             synchronizationSection
             advancedSection
-            if session.hasServerConnection {
-                serverConnectionSection
-            }
         }
         .navigationTitle("Settings")
+        .navigationDestination(for: Destination.self) { destination in
+            switch destination {
+            case .shortcut:
+                ShortcutSettingsView(scopeKey: scopeKey)
+            }
+        }
         .sheet(isPresented: $showingServerSetup) {
             LoginView(allowsDismiss: true)
         }
@@ -90,14 +94,13 @@ struct SettingsView: View {
                     Label("Collaboration", systemImage: "person.2")
                 }
 
-                NavigationLink {
-                    ShortcutSettingsView(scopeKey: scopeKey)
-                } label: {
+                NavigationLink(value: Destination.shortcut) {
                     Label(
                         "Apple Wallet Shortcut",
                         systemImage: "bolt.horizontal.circle"
                     )
                 }
+                .accessibilityIdentifier("settings.shortcut")
             }
             NavigationLink {
                 ExportSettingsView(scopeKey: scopeKey)
@@ -119,6 +122,23 @@ struct SettingsView: View {
             Text("App lock protects the user interface. iOS Data Protection and a device passcode protect local files.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
+        }
+    }
+
+    private var appearanceSection: some View {
+        Section("Appearance") {
+            Picker(
+                "App appearance",
+                selection: Binding(
+                    get: { session.appAppearance },
+                    set: { session.setAppAppearance($0) }
+                )
+            ) {
+                ForEach(AppAppearanceMode.allCases) { mode in
+                    Text(mode.title).tag(mode)
+                }
+            }
+            .pickerStyle(.segmented)
         }
     }
 
@@ -239,29 +259,6 @@ struct SettingsView: View {
                     .font(.caption.monospaced())
                     .textSelection(.enabled)
             }
-        }
-    }
-
-    private var serverConnectionSection: some View {
-        Section {
-            Button(role: .destructive) {
-                signingOut = true
-                Task {
-                    await sync.stopForegroundTriggers()
-                    await session.disconnectServer()
-                    signingOut = false
-                }
-            } label: {
-                HStack {
-                    if signingOut {
-                        ProgressView()
-                    }
-                    Text("Disconnect server")
-                }
-            }
-            .disabled(signingOut)
-        } footer: {
-            Text("Financial records stay on this iPhone and synchronize only with the self-hosted server you choose.")
         }
     }
 

@@ -2,9 +2,58 @@
 
 This is an append-oriented, chronological record. Verification statements name the environment used.
 
+## 2026-09-24 - Shortcut entry and prompt sign-out
+
+- The iOS CI workflow now performs a fast simulator build for pull requests and ordinary pushes. Full native unit/UI tests are opt-in through manual `workflow_dispatch` with `run_tests=true`, keeping normal build feedback short while preserving an explicit regression-test path.
+
+- Fetched GitHub and merged main `d18161b` into a new repair branch without dropping the twelve newer local fixes.
+- Removed full synchronization from Shortcut screen entry, retry, create, and revoke. Shared Keychain refresh supplies credentials independently and rejects results after credentials are cleared/replaced.
+- Made Shortcut navigation lazy. Defaults sheets use value selections, refetch the scoped tracker at save, reject removed/revoked choices, and offer only active expense categories.
+- Created the sync model actor from a detached task to keep database processing off the UI executor; guarded startup/realtime/sync results against cancellation and session changes.
+- Renamed Disconnect server to Sign out. Account UI/preferences change immediately; data remains; credential cleanup precedes an independent bounded revocation attempt. Old failures cannot modify a new session.
+- Repaired invalid iOS workflow YAML and simulator runtime selection. Updated stale tab-bar/Save UI tests and added in-memory Shortcut/defaults/sign-out fixtures, delayed logout tests, and refresh concurrency tests.
+- Local Windows: contracts, 858 localization keys, workflow YAML parsing and changed backend-test Ruff passed. Backend suite: 110 passed; one POSIX file-permission assertion fails on Windows. Initial test-temp access errors were resolved with a fresh workspace temp directory. Linux and GitHub macOS runtime results pending.
+- No owner-device crash trace is available here. Physical Wallet trigger, installed automation configuration, and animation smoothness remain device checks. No production mutation/deployment performed.
+
 ## 2026-09-07 - Stale sync recovery branch publication
 
 Implemented durable per-entity server-state recovery, guarded retry and tombstone resolution, scoped diagnostics, persistent guest adoption, semantic scaffold checks, dependency quarantine, backend deleted-record protection, bootstrap generation invalidation, and conservative starter cleanup. Added backend and native regression coverage. Local Linux backend suite: 110 passed, 82.27% coverage. Windows Ruff and mypy checks passed; iOS localization/source-contract checks passed before the final native test addition. SwiftFormat was applied to then-changed Swift files; final lint, native compilation, XcodeGen and simulator/device execution remain unverified. Further tests were explicitly stopped by the owner before publishing this branch. No live server or production data was changed. Details and remaining gates: `docs/sync-recovery-handoff.md`.
+
+## 2026-09-07 - Restore stable Miravo identity
+
+Retired the temporary cleanroom test app identity from XcodeGen and unsigned-IPA verification. The generated app now displays as `Miravo` and uses the centralized provisional bundle identifier `com.example.projectledger`; test bundles use the matching `.tests` and `.uitests` suffixes. This stabilizes future installs against the pre-cleanroom identity, but iOS will still treat the already-installed `com.example.projectledger.cleanroom` build as a separate app. Local project-contract, localization coverage/key-parity, and whitespace checks passed on Windows; native Xcode build/device behavior remains unverified until GitHub macOS or a local Mac runs it.
+
+## 2026-09-07 - Floating navigation and appearance controls
+
+Replaced the default bottom TabView chrome with a custom floating icon pill that keeps Overview, Transactions, Add, Plans, and More available from every main screen. The More hub now surfaces the current server account state, sign-in for guest/local users, server disconnect for authenticated users, and links to Insights and Settings. Added a persisted Settings -> Appearance segmented control for System, Light, and Dark presentation, applied at the root view. Transaction history delete swipe actions now use the Miravo destructive color. Public app self-registration was not added in this slice; the backend still supports multiple users through the existing `create_app_user` operator command while public registration remains disabled.
+
+## 2026-09-07 - Quick Add keyboard and undo follow-up
+
+Hid the floating navigation pill while the iOS keyboard is visible, added extra bottom clearance for Quick Add's save panel when the pill is visible, and changed the saved/undo confirmation into a transient row above the Save button that dismisses after three seconds. Added directional tab transitions between main destinations while respecting Reduce Motion. Local iOS localization, source-contract, and whitespace checks passed on Windows; native layout/runtime behavior remains a device or macOS simulator check.
+
+## 2026-09-07 - Transparent floating chrome polish
+
+Moved the main floating navigation pill from a bottom safe-area inset into an overlay with explicit content clearance so the surrounding rectangular area no longer paints as a separate slab. Reworked Quick Add's bottom action from a full-width blue bar into a compact floating Save capsule, keeping the undo confirmation as a temporary chip above it. Local iOS localization, source-contract, and whitespace checks passed on Windows; physical safe-area appearance still needs iPhone review.
+
+## 2026-09-07 - Draft-only Quick Add action
+
+Removed the remaining global bottom clearance behind the floating navigation overlay. Quick Add now hides its bottom action completely until the user enters draft content, shows a compact Save capsule for the draft, replaces it with an Undo capsule for three seconds after save, then hides it again. Local iOS localization, source-contract, and whitespace checks passed on Windows; native Swift compilation and exact iPhone safe-area rendering remain external checks.
+
+## 2026-09-07 - Authenticated relaunch onboarding fix
+
+Successful server authentication now marks onboarding complete at the same preference boundary that stores the authenticated server scope. A relaunch after signing in no longer falls back to the first-open onboarding route simply because the session came from the onboarding sign-in slide. Added a native regression that rebuilds `SessionController` over the same defaults and expects the authenticated phase and scope. Local source checks are recorded with this change; native Swift execution remains a macOS/device check.
+
+## 2026-09-07 - Fresh install clears leftover sessions
+
+Reverted same-device Keychain auto-recovery after device testing showed it can make a deleted/reinstalled app skip first-time onboarding while the app container has no normal local session context. When onboarding preferences are absent, Miravo now shows a brief loading state, clears leftover local Keychain session tokens for this app service, and opens the first-time onboarding flow. A successful explicit server sign-in still marks onboarding complete for later relaunches. Added native source coverage for deleting all scoped Keychain session tokens; macOS/device execution remains external.
+
+## 2026-09-07 - Account hub and floating tab clearance
+
+Moved server disconnect out of the More hub into a dedicated User account screen with profile, security, server, sync, and scope rows. The More hub now treats the account row as navigation instead of presenting a destructive action beside it. Added a transparent bottom safe-area inset for non-Quick Add tabs so long scrollable screens can move their final rows above the floating navigation pill without bringing back an opaque bottom slab. Local source checks are recorded with this change; exact iPhone safe-area behavior remains device verification.
+
+## 2026-09-07 - Plans bottom scroll tail
+
+Added an explicit transparent tail spacer to the Plans scroll content so the final Split balances section can scroll above the floating navigation pill instead of stopping in the same visual row. This is a targeted device-polish follow-up to the shared bottom safe-area clearance; exact height remains device-review tunable.
 
 ## 2026-08-09 — Milestone 0 and Milestone 1 start
 

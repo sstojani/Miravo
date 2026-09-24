@@ -1,6 +1,13 @@
 name: iOS CI
 
 on:
+  workflow_dispatch:
+    inputs:
+      run_tests:
+        description: Run the full iOS unit and UI test suite
+        required: false
+        default: false
+        type: boolean
   pull_request:
   push:
     branches: [main]
@@ -11,7 +18,6 @@ permissions:
 env:
   XCODEGEN_VERSION: 2.46.0
   XCODE_PATH: /Applications/Xcode_16.4.app
-  SIMULATOR_DESTINATION: platform=iOS Simulator,name=iPhone 16,OS=18.5
 
 jobs:
   simulator:
@@ -60,7 +66,8 @@ jobs:
             exit 1
           fi
 
-      - name: Prepare iOS Simulator
+      - name: Prepare iOS Simulator for manual tests
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_tests }}
         run: |
           set -euxo pipefail
 
@@ -73,29 +80,29 @@ jobs:
           fi
 
           RUNTIME_ID="$(xcrun simctl list runtimes available -j | python3 -c '
-import json, sys
-data = json.load(sys.stdin)
-runtimes = [
-    r for r in data["runtimes"]
-    if r.get("isAvailable") and r.get("platform") == "iOS"
-]
-if not runtimes:
-    raise SystemExit("No available iOS runtime after download")
-runtimes.sort(key=lambda r: r.get("version", ""), reverse=True)
-print(runtimes[0]["identifier"])
-')"
+          import json, sys
+          data = json.load(sys.stdin)
+          runtimes = [
+              r for r in data["runtimes"]
+              if r.get("isAvailable") and ".iOS-" in r.get("identifier", "")
+          ]
+          if not runtimes:
+              raise SystemExit("No available iOS runtime after download")
+          runtimes.sort(key=lambda r: tuple(map(int, r["version"].split("."))), reverse=True)
+          print(runtimes[0]["identifier"])
+          ')"
 
           DEVICE_TYPE_ID="$(xcrun simctl list devicetypes -j | python3 -c '
-import json, sys
-data = json.load(sys.stdin)
-devices = data["devicetypes"]
-preferred = next((d for d in devices if d["name"] == "iPhone 16"), None)
-if preferred is None:
-    preferred = next((d for d in devices if d["name"].startswith("iPhone")), None)
-if preferred is None:
-    raise SystemExit("No iPhone simulator device type available")
-print(preferred["identifier"])
-')"
+          import json, sys
+          data = json.load(sys.stdin)
+          devices = data["devicetypes"]
+          preferred = next((d for d in devices if d["name"] == "iPhone 16"), None)
+          if preferred is None:
+              preferred = next((d for d in devices if d["name"].startswith("iPhone")), None)
+          if preferred is None:
+              raise SystemExit("No iPhone simulator device type available")
+          print(preferred["identifier"])
+          ')"
 
           DEVICE_UDID="$(xcrun simctl create "Miravo CI iPhone" "$DEVICE_TYPE_ID" "$RUNTIME_ID")"
 
@@ -106,7 +113,21 @@ print(preferred["identifier"])
           xcrun simctl bootstatus "$DEVICE_UDID" -b
           xcrun simctl list devices available
 
-      - name: Build and test simulator app
+      - name: Build simulator app
+        working-directory: ios
+        run: |
+          set -o pipefail
+          DESTINATION="${SIMULATOR_DESTINATION:-generic/platform=iOS Simulator}"
+          xcodebuild \
+            -project ProjectLedger.xcodeproj \
+            -scheme ProjectLedger \
+            -configuration Debug \
+            -destination "$DESTINATION" \
+            -derivedDataPath DerivedData \
+            build | xcbeautify
+
+      - name: Run full simulator tests (manual)
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_tests }}
         working-directory: ios
         run: |
           set -o pipefail

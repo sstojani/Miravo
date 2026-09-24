@@ -22,10 +22,30 @@ struct AppPreferencesTests {
         #expect(preferences.lastEmail == "user@example.test")
         #expect(preferences.currentScopeKey == scope)
         #expect(preferences.hasAuthenticatedBefore)
+        #expect(preferences.hasCompletedOnboarding)
         #expect(!preferences.isSignedOut)
         #expect(defaults.dictionaryRepresentation().values.allSatisfy { value in
             String(describing: value) != "never-store-this-password"
         })
+    }
+
+    @Test func authenticationRestoresPastOnboardingOnRelaunch() throws {
+        let suite = "ProjectLedgerTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let scope = "https://ledger.example|40000000-0000-0000-0000-000000000004"
+        let preferences = AppPreferences(defaults: defaults)
+
+        #expect(!preferences.hasCompletedOnboarding)
+        preferences.recordAuthentication(
+            serverURL: URL(string: "https://ledger.example")!,
+            email: "user@example.test",
+            scopeKey: scope
+        )
+
+        let relaunched = SessionController(preferences: AppPreferences(defaults: defaults))
+        #expect(relaunched.phase == .authenticated)
+        #expect(relaunched.scopeKey == scope)
     }
 
     @Test func recurringReminderPreferencesAreScopedWithoutStoringRawScope() throws {

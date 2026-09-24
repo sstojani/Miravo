@@ -16,7 +16,7 @@ final class ShortcutCredentialController: ObservableObject {
 
     init(
         transportFactory: @escaping TransportFactory = { baseURL in
-            APIClient(baseURL: baseURL)
+            APIClient(baseURL: baseURL, timeout: 8)
         }
     ) {
         self.transportFactory = transportFactory
@@ -28,8 +28,10 @@ final class ShortcutCredentialController: ObservableObject {
         clearError()
         defer { isWorking = false }
         do {
-            credentials = try await transportFactory(authentication.baseURL)
+            let loaded = try await transportFactory(authentication.baseURL)
                 .listShortcutCredentials(accessToken: authentication.tokens.accessToken)
+            try Task.checkCancellation()
+            credentials = loaded
         } catch {
             present(error)
         }
@@ -65,7 +67,7 @@ final class ShortcutCredentialController: ObservableObject {
                     accessToken: authentication.tokens.accessToken
                 )
             guard issued.credential.trackerID == trackerID,
-                  issued.credential.scopes == ShortcutScope.allCases
+                  Set(issued.credential.scopes) == Set(ShortcutScope.allCases)
             else {
                 errorMessage = String(localized: "The server returned an invalid response.")
                 return false
@@ -130,6 +132,7 @@ final class ShortcutCredentialController: ObservableObject {
     }
 
     private func present(_ error: Error) {
+        if error is CancellationError || (error as? URLError)?.code == .cancelled { return }
         switch error {
         case let apiError as APIClientError:
             if apiError.statusCode == 401 {
