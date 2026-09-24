@@ -1,5 +1,9 @@
 # Decision log
 
+## 2026-09-24 - Keep navigation regression testing focused and opt-in
+
+The reported More/Settings failure gets one dedicated simulator smoke test instead of re-enabling the full native suite on every workflow. The test enters Insights, Settings, and the server-backed Settings destinations using stable accessibility identifiers, while GitHub push/PR jobs remain free of simulator test execution.
+
 ## 2026-09-24 - Immediate sign-out and shared credential rotation
 
 Sign-out persists signed-out state and hides the scope before networking, retains pending local data, and independently attempts bounded device-session revocation. Failure warnings apply only to that signed-out session. Keychain coalesces refresh rotation across settings/sync and compares saved credentials before replacing them, preventing replay or resurrection after logout. The separate Shortcut token remains valid unless explicitly revoked/expired.

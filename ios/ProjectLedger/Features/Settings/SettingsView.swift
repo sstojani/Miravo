@@ -77,12 +77,14 @@ struct SettingsView: View {
             } label: {
                 Label("Trackers, accounts, and categories", systemImage: "square.stack.3d.up")
             }
+            .accessibilityIdentifier("settings.localData")
             if session.hasServerConnection {
                 NavigationLink {
                     CollaborationSettingsView(scopeKey: scopeKey)
                 } label: {
                     Label("Collaboration", systemImage: "person.2")
                 }
+                .accessibilityIdentifier("settings.collaboration")
 
                 NavigationLink {
                     ShortcutSettingsView(scopeKey: scopeKey)
@@ -99,6 +101,7 @@ struct SettingsView: View {
             } label: {
                 Label("Exports", systemImage: "square.and.arrow.down")
             }
+            .accessibilityIdentifier("settings.exports")
         }
     }
 
@@ -191,6 +194,7 @@ struct SettingsView: View {
         } label: {
             LabeledContent("Failed operations", value: failedOutboxCount, format: .number)
         }
+        .accessibilityIdentifier("settings.failedOperations")
         LabeledContent("Pending attachments", value: pendingAttachmentCount, format: .number)
         LabeledContent("Failed attachments", value: failedAttachmentCount, format: .number)
         NavigationLink {
@@ -198,6 +202,7 @@ struct SettingsView: View {
         } label: {
             LabeledContent("Conflicts", value: conflicts.count, format: .number)
         }
+        .accessibilityIdentifier("settings.conflicts")
         .disabled(conflicts.isEmpty)
 
         if let lastSync = cursor?.lastSuccessfulSyncAt {
@@ -233,6 +238,7 @@ struct SettingsView: View {
         } label: {
             Label("Sync diagnostics and repair", systemImage: "stethoscope")
         }
+        .accessibilityIdentifier("settings.diagnostics")
     }
 
     private var advancedSection: some View {

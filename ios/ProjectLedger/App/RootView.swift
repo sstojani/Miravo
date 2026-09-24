@@ -418,6 +418,7 @@ private struct MoreView: View {
                 } label: {
                     Label("Insights", systemImage: "chart.xyaxis.line")
                 }
+                .accessibilityIdentifier("more.insights")
 
                 NavigationLink {
                     SettingsView(scopeKey: scopeKey)

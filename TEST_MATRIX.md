@@ -4,6 +4,8 @@
 
 `SessionControllerTests`: sign-out returns before blocked server logout, preserves scope, deletes credentials, survives relaunch, and ignores old errors after a new session. `SessionRefreshTests`: concurrent rotation coalesces, stale callers reuse current credentials, and delayed refresh cannot restore deleted credentials or overwrite a new login. `ProjectLedgerUITests`: floating tabs/Quick Add, Shortcut/defaults entry/save/cancel offline, sign-out/relaunch. Native tests authored; GitHub macOS pending.
 
+Focused navigation coverage: `testMoreAndSettingsDestinationsRemainNavigable` walks More -> Insights, More -> Settings, and the server-backed Settings child destinations. It is available through the manual `run_navigation_smoke` workflow input and is not part of ordinary push/PR execution.
+
 The iOS workflow builds the simulator app on pull requests and pushes without running the native test suite. The full unit and UI suite is available from `workflow_dispatch` by enabling the `run_tests` input, so exploratory test requests do not lengthen every ordinary compile.
 
 Settings entry regression: opening Settings must remain responsive offline and must not wait for a synchronization diagnostics task; the Shortcut child screen must open through the normal navigation stack.

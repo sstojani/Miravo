@@ -1,5 +1,12 @@
 # Implementation log
 
+## 2026-09-24 - Focused More and Settings navigation smoke test
+
+- Added stable accessibility identifiers for the More hub and Settings destinations.
+- Added `testMoreAndSettingsDestinationsRemainNavigable`, covering Insights, Local Data, Collaboration, Wallet Shortcut, Exports, and Sync diagnostics from the authenticated server-session UI fixture.
+- Added the manual-only `run_navigation_smoke` GitHub Actions input. Normal push/PR jobs still do not run the native simulator suite.
+- Verification boundary: the test is authored but requires GitHub macOS/Xcode execution; Windows cannot execute the iOS simulator.
+
 This is an append-oriented, chronological record. Verification statements name the environment used.
 
 ## 2026-09-24 - Shortcut entry and prompt sign-out
