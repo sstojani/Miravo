@@ -6,6 +6,8 @@
 
 The iOS workflow builds the simulator app on pull requests and pushes without running the native test suite. The full unit and UI suite is available from `workflow_dispatch` by enabling the `run_tests` input, so exploratory test requests do not lengthen every ordinary compile.
 
+Settings entry regression: opening Settings must remain responsive offline and must not wait for a synchronization diagnostics task; the Shortcut child screen must open through the normal navigation stack.
+
 `test_app_signout_and_relogin_preserve_shortcut_capture_and_replay`: logout invalidates app access without revoking the narrow Shortcut token; relogin lists it and replay creates no duplicate expense. Local Windows backend run: 110 passed, one Unix permission assertion failed on Windows. Linux pending.
 
 Status values: `planned`, `implemented`, `passing-local`, `passing-docker`, `passing-macos`, `manual-passed`, `blocked-external`.

@@ -8,6 +8,8 @@ Shortcut settings no longer waits for full ledger synchronization. Its sheet hol
 
 The default iOS workflow builds without executing the native unit/UI suite. Full simulator tests are manual through `workflow_dispatch` with `run_tests` enabled, because exploratory tests should not make every ordinary compile wait for the complete suite.
 
+Settings entry must remain local and immediate: it renders its scoped SwiftData queries without launching a diagnostics refresh, and child destinations use direct links unless value routing is required.
+
 ## 2026-09-07 - Server sign-in closes the onboarding gate
 
 - **Decision:** Treat successful server authentication as onboarding completion in the same persisted preference update that records server URL, normalized email, scope, and remote identity.
