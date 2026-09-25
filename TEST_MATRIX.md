@@ -2,9 +2,11 @@
 
 ## 2026-09-25 nested-navigation regression
 
-Manual simulator runs `36077651111`, `36079878639`, and `36081242490`: **failed-native** on More -> Settings -> Local data. XCTest timed out evaluating the Local data navigation-bar query on both custom and native tab hosts. A process sample captured Settings and Local data body work plus SwiftData fetches on the main thread. Value-based Settings navigation failed earlier, at opening Settings, in `36135497205`; that experiment was reverted. A passing focused navigation rerun is required before claiming a fix. The signed-in physical-device path remains **unverified**.
+Manual simulator runs `36077651111`, `36079878639`, and `36081242490`: **failed-native** on More -> Settings -> Local data. XCTest timed out evaluating the Local data navigation-bar query on both custom and native tab hosts. A process sample captured Settings and Local data body work plus SwiftData fetches on the main thread. Value-based Settings navigation failed earlier, at opening Settings, in `36135497205`; that experiment was reverted. The signed-in physical-device path remains **unverified**.
 
-Candidate fix pending macOS verification: settings containers and Local data rows now keep child accessibility elements contained instead of explicitly merging row content, reducing the SwiftUI accessibility/list update work seen in the sample. No native pass is claimed yet.
+Physical iPhone retest of `ca09515`: **failed-native**. All four Your ledger destinations still freeze. A grouped ScrollView replaced the Settings parent Form for the next isolation run. The ordinary push/PR iOS build does not run the navigation test.
+
+Focused simulator run `36152347324` on grouped ScrollView commit `ae26706`: **failed-native**. Build passed, then the navigation query timed out while the captured screen remained on Settings. Focused simulator run `36154745842` on full-screen destination commit `0941bb4`: **passed-native-simulator**. `testMoreAndSettingsDestinationsRemainNavigable` executed one test with zero failures in 74.668 seconds; it opened and returned from Local data, Collaboration, Wallet Shortcut, Exports, Failed operations, and Sync diagnostics. A signed-in physical-iPhone retest remains **unverified**.
 
 ## 2026-09-24 session/Shortcut regressions
 
