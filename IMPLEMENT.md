@@ -1,5 +1,11 @@
 # Implementation log
 
+## 2026-09-25 - Shortcut API verification in progress
+
+- Added a loopback-only, synthetic-data HTTP test that logs in, creates a tracker/account and scoped Shortcut credential, fetches context/categories/accounts, posts a Wallet-format expense, and retries the same event to verify one transaction. All 12 focused backend tests pass locally with SQLite; no deployed server or real financial data was used.
+- Manual iOS run `36171766674` compiled and passed the five `ShortcutCredentialTests` cases. Its Shortcut settings UI test reached the defaults editor and saved, then failed when the test tried to tap Overview behind the newly full-screen Settings presentation. Updated that UI test to close the presentation before changing tabs and added an opt-in Shortcut-only simulator workflow input. A focused native rerun is pending.
+- The user's actual automation request remains unverified because its HTTP status, safe error code, and payload are not available. The backend tests establish a working API contract, not the deployed host or Wallet trigger behavior.
+
 ## 2026-09-25 - Nested Settings freeze investigation
 
 - The owner retested `ca09515` on an iPhone: all four Your ledger links still freeze. The prior accessibility containment change did not resolve navigation. A grouped ScrollView parent preserved the existing destinations and controls for the next isolation run.

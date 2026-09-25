@@ -1,5 +1,9 @@
 # Miravo implementation plan
 
+## 2026-09-25 - Shortcut API verification
+
+The Wallet automation fires on the owner's iPhone, but its API request fails without a captured HTTP status or response. Verify the documented bearer/JSON/idempotency contract over local HTTP with synthetic data, run the existing Shortcut backend tests, and use a manual-only simulator smoke for native credential management and the defaults editor. Do not contact or mutate the deployed server with a test credential, and do not infer that a simulator can execute the real Wallet Transaction trigger. The exact deployed failure still needs a redacted request outcome or host-side diagnostic.
+
 ## 2026-09-25 - Settings destination freeze follow-up
 
 The owner confirmed that all four Your ledger destinations still freeze on the iPhone after `ca09515`. The captured simulator screen stayed on Settings after the Local data tap. Changing the Settings parent Form to grouped scroll content compiled but still failed the focused navigation test in run `36152347324`. Settings details now open in their own full-screen navigation presentation. Focused simulator run `36154745842` passed all tested Settings destinations at `0941bb4`; the next acceptance step is a signed-in iPhone retest. Do not treat this simulator result as proof of physical-device behavior.

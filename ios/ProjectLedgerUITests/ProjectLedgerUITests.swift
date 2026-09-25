@@ -94,6 +94,9 @@ final class ProjectLedgerUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Save"].waitForExistence(timeout: 5))
         app.buttons["Save"].tap()
         XCTAssertTrue(defaults.waitForExistence(timeout: 5))
+        app.navigationBars.buttons["Settings"].tap()
+        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5))
+        app.navigationBars.buttons["More"].tap()
         app.buttons["tab.overview"].tap()
         XCTAssertTrue(app.buttons["tab.overview"].waitForExistence(timeout: 5))
     }

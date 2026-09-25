@@ -1,5 +1,9 @@
 # Decision log
 
+## 2026-09-25 - Verify Shortcut requests without production mutation
+
+Use a local live HTTP server and synthetic credentials to exercise the same bearer, JSON, and idempotency headers as an Apple Shortcut. Keep a separate opt-in native Shortcut smoke for credential management and defaults navigation; ordinary iOS builds should not run the full simulator suite. Do not use a user's raw token or post a synthetic expense to the deployed ledger merely to diagnose an unknown request failure. The actual Wallet automation and deployed server still require a redacted error outcome for targeted diagnosis.
+
 ## 2026-09-25 - Diagnose the destination hang before changing tab architecture
 
 More -> Settings -> Local data hangs in the clean simulator fixture. Replacing the animated ZStack with a native TabView did not change that behavior, so the tab-host experiment was reverted. A process sample showed Settings and Local data body construction, synchronous SwiftData reads, and list updates on the main thread. Value-based Settings navigation then stalled earlier at Settings itself; it was reverted. Preserve the existing navigation and isolate the Local data list behavior before claiming a fix.

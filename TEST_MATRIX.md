@@ -1,5 +1,9 @@
 # Acceptance and test matrix
 
+## 2026-09-25 Shortcut request investigation
+
+Local Windows backend: `test_shortcut_api.py` plus new live-HTTP `test_shortcut_http.py` **passed-local** (12 tests). The HTTP test covers login, token issuance, context/category/account lookup, create, and identical retry with one transaction on disposable SQLite data. Manual macOS run `36171766674`: five Shortcut credential unit cases **passed-native-simulator**; the Shortcut settings UI test opened and saved defaults but failed at an obsolete final tab tap behind the new full-screen Settings presentation. The test is corrected and an opt-in focused rerun is pending. The installed automation's API status/body, deployed host, and actual Wallet trigger remain **unverified**.
+
 ## 2026-09-25 nested-navigation regression
 
 Manual simulator runs `36077651111`, `36079878639`, and `36081242490`: **failed-native** on More -> Settings -> Local data. XCTest timed out evaluating the Local data navigation-bar query on both custom and native tab hosts. A process sample captured Settings and Local data body work plus SwiftData fetches on the main thread. Value-based Settings navigation failed earlier, at opening Settings, in `36135497205`; that experiment was reverted. The signed-in physical-device path remains **unverified**.
