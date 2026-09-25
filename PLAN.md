@@ -2,7 +2,7 @@
 
 ## 2026-09-25 - Settings destination freeze follow-up
 
-The owner confirmed that all four Your ledger destinations still freeze on the iPhone after `ca09515`. The captured simulator screen stayed on Settings after the Local data tap. Changing the Settings parent Form to grouped scroll content compiled but still failed the focused navigation test in run `36152347324`. Isolate Settings detail views in their own full-screen navigation presentation, then require a passing focused native navigation test before asking for another device install. Do not treat a successful build alone as a navigation pass.
+The owner confirmed that all four Your ledger destinations still freeze on the iPhone after `ca09515`. The captured simulator screen stayed on Settings after the Local data tap. Changing the Settings parent Form to grouped scroll content compiled but still failed the focused navigation test in run `36152347324`. Settings details now open in their own full-screen navigation presentation. Focused simulator run `36154745842` passed all tested Settings destinations at `0941bb4`; the next acceptance step is a signed-in iPhone retest. Do not treat this simulator result as proof of physical-device behavior.
 
 ## 2026-09-25 - Reproduced nested Settings freeze
 

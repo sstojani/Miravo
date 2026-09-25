@@ -6,7 +6,7 @@ More -> Settings -> Local data hangs in the clean simulator fixture. Replacing t
 
 The first targeted accessibility containment change in `ca09515` did not resolve the freeze on the owner's iPhone. All four Your ledger destinations still fail. A grouped ScrollView parent was tried to isolate the nested Form/List push behavior while retaining the existing destinations and controls.
 
-The grouped ScrollView parent also failed the focused simulator run `36152347324`; the child push remained on Settings. The next isolation is a separate full-screen NavigationStack for Settings details, presented from the existing rows. Keep each destination's functionality and provide an explicit Settings return control. Native navigation verification is required.
+The grouped ScrollView parent also failed the focused simulator run `36152347324`; the child push remained on Settings. Settings details now use a separate full-screen NavigationStack, presented from the existing rows with an explicit Settings return control. Focused simulator run `36154745842` passed the complete navigation smoke at `0941bb4`. Keep the destination functionality unchanged; require a signed-in iPhone retest before calling the device freeze resolved.
 
 ## 2026-09-24 - Keep navigation regression testing focused and opt-in
 
