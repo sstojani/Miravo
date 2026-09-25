@@ -2,7 +2,7 @@
 
 ## 2026-09-25 - Diagnose the destination hang before changing tab architecture
 
-More -> Settings -> Local data hangs in the clean simulator fixture. Replacing the animated ZStack with a native TabView did not change that behavior, so the tab-host experiment was reverted. Keep the existing floating navigation and inspect a process sample of the Local data destination before altering financial views or navigation architecture again.
+More -> Settings -> Local data hangs in the clean simulator fixture. Replacing the animated ZStack with a native TabView did not change that behavior, so the tab-host experiment was reverted. A process sample showed repeated Settings and Local data body construction, synchronous SwiftData reads, and list updates on the main thread. Keep the existing floating navigation and make Settings destinations value-based so child views are constructed only on selection; require a passing navigation smoke before considering the issue fixed.
 
 ## 2026-09-24 - Keep navigation regression testing focused and opt-in
 

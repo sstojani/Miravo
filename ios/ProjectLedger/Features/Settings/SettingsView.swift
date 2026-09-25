@@ -1,6 +1,16 @@
 import SwiftData
 import SwiftUI
 
+private enum SettingsDestination: Hashable {
+    case localData
+    case collaboration
+    case shortcut
+    case exports
+    case failedOperations
+    case conflicts
+    case diagnostics
+}
+
 struct SettingsView: View {
     let scopeKey: String
 
@@ -46,6 +56,24 @@ struct SettingsView: View {
             advancedSection
         }
         .navigationTitle("Settings")
+        .navigationDestination(for: SettingsDestination.self) { destination in
+            switch destination {
+            case .localData:
+                LocalDataSettingsView(scopeKey: scopeKey)
+            case .collaboration:
+                CollaborationSettingsView(scopeKey: scopeKey)
+            case .shortcut:
+                ShortcutSettingsView(scopeKey: scopeKey)
+            case .exports:
+                ExportSettingsView(scopeKey: scopeKey)
+            case .failedOperations:
+                FailedOperationsView(scopeKey: scopeKey)
+            case .conflicts:
+                SyncConflictsView(scopeKey: scopeKey)
+            case .diagnostics:
+                SyncDiagnosticsView(scopeKey: scopeKey)
+            }
+        }
         .sheet(isPresented: $showingServerSetup) {
             LoginView(allowsDismiss: true)
         }
@@ -72,23 +100,17 @@ struct SettingsView: View {
 
     private var ledgerSection: some View {
         Section("Your ledger") {
-            NavigationLink {
-                LocalDataSettingsView(scopeKey: scopeKey)
-            } label: {
+            NavigationLink(value: SettingsDestination.localData) {
                 Label("Trackers, accounts, and categories", systemImage: "square.stack.3d.up")
             }
             .accessibilityIdentifier("settings.localData")
             if session.hasServerConnection {
-                NavigationLink {
-                    CollaborationSettingsView(scopeKey: scopeKey)
-                } label: {
+                NavigationLink(value: SettingsDestination.collaboration) {
                     Label("Collaboration", systemImage: "person.2")
                 }
                 .accessibilityIdentifier("settings.collaboration")
 
-                NavigationLink {
-                    ShortcutSettingsView(scopeKey: scopeKey)
-                } label: {
+                NavigationLink(value: SettingsDestination.shortcut) {
                     Label(
                         "Apple Wallet Shortcut",
                         systemImage: "bolt.horizontal.circle"
@@ -96,9 +118,7 @@ struct SettingsView: View {
                 }
                 .accessibilityIdentifier("settings.shortcut")
             }
-            NavigationLink {
-                ExportSettingsView(scopeKey: scopeKey)
-            } label: {
+            NavigationLink(value: SettingsDestination.exports) {
                 Label("Exports", systemImage: "square.and.arrow.down")
             }
             .accessibilityIdentifier("settings.exports")
@@ -189,17 +209,13 @@ struct SettingsView: View {
             value: backgroundRefreshStatus
         )
         LabeledContent("Pending operations", value: pendingCount, format: .number)
-        NavigationLink {
-            FailedOperationsView(scopeKey: scopeKey)
-        } label: {
+        NavigationLink(value: SettingsDestination.failedOperations) {
             LabeledContent("Failed operations", value: failedOutboxCount, format: .number)
         }
         .accessibilityIdentifier("settings.failedOperations")
         LabeledContent("Pending attachments", value: pendingAttachmentCount, format: .number)
         LabeledContent("Failed attachments", value: failedAttachmentCount, format: .number)
-        NavigationLink {
-            SyncConflictsView(scopeKey: scopeKey)
-        } label: {
+        NavigationLink(value: SettingsDestination.conflicts) {
             LabeledContent("Conflicts", value: conflicts.count, format: .number)
         }
         .accessibilityIdentifier("settings.conflicts")
@@ -233,9 +249,7 @@ struct SettingsView: View {
         }
         .disabled(sync.isRunning)
 
-        NavigationLink {
-            SyncDiagnosticsView(scopeKey: scopeKey)
-        } label: {
+        NavigationLink(value: SettingsDestination.diagnostics) {
             Label("Sync diagnostics and repair", systemImage: "stethoscope")
         }
         .accessibilityIdentifier("settings.diagnostics")

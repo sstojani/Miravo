@@ -3,7 +3,7 @@
 ## 2026-09-25 - Nested Settings freeze investigation
 
 - The first nested Settings destination hung even with an in-memory authenticated UI fixture, so it was not solely a server or restored-data delay. A native TabView hosting experiment compiled but reproduced the same hang, and was reverted to preserve the established floating-pill behavior.
-- XCTest result activity extraction identified Local data as the exact tap on both runs. The next manual-only simulator run collects a short process sample during the hang; native navigation and physical-device verification remain pending.
+- XCTest activity extraction identified Local data as the exact tap. Manual run `36081242490` captured main-thread work in `SettingsView.body`, `LocalDataSettingsView.body`, SwiftData fetches, and SwiftUI list updates during the stall. Settings now uses value-based NavigationLinks and one navigation destination resolver, avoiding construction of every child view while Settings renders. Focused simulator and physical-device verification remain pending.
 
 ## 2026-09-24 - Focused More and Settings navigation smoke test
 

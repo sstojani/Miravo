@@ -2,7 +2,7 @@
 
 ## 2026-09-25 - Reproduced nested Settings freeze
 
-Manual navigation smoke runs `36077651111` and `36079878639` both compiled but hung after tapping More -> Settings -> Local data, including after a native TabView host experiment. The second activity trail ruled out that tab-host change, which has been reverted. Capture a simulator process sample during the reproducible hang, isolate the blocking call, then rerun focused navigation and Shortcut flows. The signed-in physical-device path remains unverified.
+Manual navigation smoke runs `36077651111` and `36079878639` both compiled but hung after tapping More -> Settings -> Local data, including after a native TabView host experiment. The second activity trail ruled out that tab-host change, which has been reverted. Run `36081242490` captured the main thread repeatedly rebuilding Settings and Local data and performing SwiftData queries and list updates. Convert Settings links to value-based destinations so child views are created only when selected, then rerun focused navigation and Shortcut flows. The signed-in physical-device path remains unverified.
 
 ## 2026-09-24 - Focused navigation smoke coverage
 

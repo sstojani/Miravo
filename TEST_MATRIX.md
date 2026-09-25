@@ -2,7 +2,7 @@
 
 ## 2026-09-25 nested-navigation regression
 
-Manual simulator runs `36077651111` and `36079878639`: **failed-native** on More -> Settings -> Local data. XCTest recorded an unresponsive app event loop and timed out evaluating the Local data navigation-bar query on both the custom and native tab hosts. The native-host experiment was reverted. A process sample and a passing focused navigation rerun are required before claiming a fix; the signed-in physical-device path remains **unverified**.
+Manual simulator runs `36077651111`, `36079878639`, and `36081242490`: **failed-native** on More -> Settings -> Local data. XCTest recorded an unresponsive app event loop and timed out evaluating the Local data navigation-bar query on both custom and native tab hosts. A process sample captured repeated Settings and Local data body work plus SwiftData fetches on the main thread. Settings child navigation is now value-based; a passing focused navigation rerun is required before claiming a fix. The signed-in physical-device path remains **unverified**.
 
 ## 2026-09-24 session/Shortcut regressions
 
