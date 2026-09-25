@@ -4,7 +4,7 @@ import json
 from contextlib import closing
 from http.client import HTTPConnection
 from typing import Any
-from urllib.parse import urlsplit
+from urllib.parse import quote, urlsplit
 from uuid import uuid4
 
 import pytest
@@ -14,7 +14,7 @@ from apps.users.models import User
 
 
 @pytest.mark.django_db(transaction=True)
-def test_shortcut_capture_over_http(
+def test_shortcut_capture_over_http(  # noqa: PLR0915
     live_server: Any, user: User, login_payload: dict[str, str]
 ) -> None:
     server = urlsplit(live_server.url)
@@ -53,7 +53,7 @@ def test_shortcut_capture_over_http(
         "POST",
         "/api/v1/trackers/",
         token=access_token,
-        body={"name": "Shortcut HTTP test", "base_currency": "EUR"},
+        body={"name": "Shortcut HTTP test", "base_currency": "ALL"},
     )
     assert status == 201
     tracker_id = tracker["id"]
@@ -66,7 +66,7 @@ def test_shortcut_capture_over_http(
             "tracker_id": tracker_id,
             "name": "Test card",
             "type": "credit",
-            "currency": "EUR",
+            "currency": "ALL",
             "opening_balance_minor": 0,
             "opening_date": "2026-09-25",
         },
@@ -96,6 +96,10 @@ def test_shortcut_capture_over_http(
     assert status == 200
     assert any(row["id"] == account["id"] for row in accounts["results"])
 
+    status, before = send("GET", "/api/v1/sync/pull?limit=100", token=access_token)
+    assert status == 200
+    assert before["has_more"] is False
+
     event_id = str(uuid4())
     capture = {
         "event_id": event_id,
@@ -104,7 +108,7 @@ def test_shortcut_capture_over_http(
         "account_id": account["id"],
         "category_id": categories["results"][0]["id"],
         "amount_minor": 1250,
-        "currency": "EUR",
+        "currency": "ALL",
         "merchant": "Synthetic Shortcut test",
         "occurred_at": "2026-09-25T12:30:00+02:00",
         "card_label": "Test card",
@@ -132,3 +136,18 @@ def test_shortcut_capture_over_http(
     assert replay["status"] == "duplicate"
     assert replay["transaction"]["id"] == created["transaction"]["id"]
     assert Transaction.objects.count() == 1
+
+    cursor = quote(before["cursor"], safe="")
+    status, after = send("GET", f"/api/v1/sync/pull?cursor={cursor}&limit=100", token=access_token)
+    assert status == 200
+    changes = [
+        change
+        for change in after["changes"]
+        if change["entity_type"] == "transaction"
+        and change["entity_id"] == created["transaction"]["id"]
+    ]
+    assert len(changes) == 1
+    assert changes[0]["operation"] == "upsert"
+    assert changes[0]["data"]["source"] == "shortcut"
+    assert changes[0]["data"]["external_event_id"] == event_id
+    assert changes[0]["data"]["currency"] == "ALL"

@@ -2,7 +2,7 @@
 
 ## 2026-09-25 - Shortcut API verification
 
-The Wallet automation fires on the owner's iPhone, but its API request fails without a captured HTTP status or response. Verify the documented bearer/JSON/idempotency contract over local HTTP with synthetic data, run the existing Shortcut backend tests, and use a manual-only simulator smoke for native credential management and the defaults editor. Do not contact or mutate the deployed server with a test credential, and do not infer that a simulator can execute the real Wallet Transaction trigger. The exact deployed failure still needs a redacted request outcome or host-side diagnostic.
+The Wallet automation fires on the owner's iPhone, but its API request fails without a captured HTTP status or response. The local synthetic HTTP test now verifies capture, idempotent replay, and delivery through the authenticated sync pull. The owner explicitly supplied a disposable Shortcut token for live diagnosis: read-only checks against the configured server confirmed token acceptance, scope, tracker choices, and valid ALL-currency defaults. No live transaction was created. Run the manual-only simulator smoke for native credential management, defaults navigation, and Shortcut wire decoding. The exact iPhone POST failure still needs a redacted response or an explicitly approved live test record; a simulator cannot execute the real Wallet Transaction trigger.
 
 ## 2026-09-25 - Settings destination freeze follow-up
 

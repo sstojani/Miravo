@@ -2,7 +2,7 @@
 
 ## 2026-09-25 - Verify Shortcut requests without production mutation
 
-Use a local live HTTP server and synthetic credentials to exercise the same bearer, JSON, and idempotency headers as an Apple Shortcut. Keep a separate opt-in native Shortcut smoke for credential management and defaults navigation; ordinary iOS builds should not run the full simulator suite. Do not use a user's raw token or post a synthetic expense to the deployed ledger merely to diagnose an unknown request failure. The actual Wallet automation and deployed server still require a redacted error outcome for targeted diagnosis.
+Use a local live HTTP server and synthetic credentials to exercise the same bearer, JSON, idempotency, and sync-pull contract as an Apple Shortcut. Keep a separate opt-in native Shortcut smoke for credential management, wire decoding, and defaults navigation; ordinary iOS builds should not run the full simulator suite. When the owner explicitly supplies a disposable raw token, limit deployed-server diagnosis to read-only calls, keep the token out of source/output, and do not create a live financial record without separate approval. Valid live token/context/defaults do not establish that the iPhone automation's POST succeeds; its redacted response remains necessary for targeted diagnosis.
 
 ## 2026-09-25 - Diagnose the destination hang before changing tab architecture
 

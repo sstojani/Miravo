@@ -1,6 +1,6 @@
 # Apple Wallet Transaction Shortcut setup
 
-Status: the server credential, lookup, single-capture, and batch-capture endpoints pass local automated tests, including a synthetic request over a local HTTP connection. Native token-management tests pass under Xcode, and the Settings/Shortcut screen has opened in simulator testing; a focused defaults-navigation rerun is pending after a test-only navigation correction. These construction steps are a reproducible contract, not a claim that an importable `.shortcut` file, the deployed server, or the current iPhone Wallet automation has been verified.
+Status: the server credential, lookup, single-capture, and batch-capture endpoints pass local automated tests, including a synthetic request over local HTTP and its subsequent appearance in authenticated sync pull. Native token-management tests pass under Xcode, and the Settings/Shortcut screen has opened in simulator testing; a focused defaults-navigation/wire-decoding rerun is pending. The owner's disposable token passed read-only checks against the configured live server, but no live capture or current iPhone automation POST has been verified.
 
 On 2026-08-09, Apple’s current [Transaction trigger guide](https://support.apple.com/guide/shortcuts/transaction-trigger-apd65c67538a/ios) still documents Wallet transaction automation, and [Get Contents of URL](https://support.apple.com/guide/shortcuts/request-your-first-api-apd58d46713f/ios) still documents JSON POST bodies. Apple may vary exposed fields, labels, card-selection choices, and immediate-run behavior by iOS version, region, and payment configuration; inspect the actual Transaction input on the target iPhone.
 
@@ -101,5 +101,7 @@ More -> User account -> Sign out immediately returns to login and preserves scop
 | Missing category | Allow `needs_review=true`/null category if server policy permits, or refresh context and choose one |
 | Conversion required | Supply the complete explicit snapshot or preserve the item for app review; never guess a rate |
 | Rate limited | Keep the original payload/UUID and retry later; do not create replacement events |
+
+After a server database reset or tracker/account recreation, a newly issued token does not update IDs already saved as literal values in an older Shortcut. Fetch current context, account, and category IDs with that token and compare them with the Shortcut's POST dictionary. If the live read endpoints work but the expense is absent, capture the POST HTTP status, safe `error.code`, and request ID without sharing the bearer token or financial payload. A `created` or `duplicate` POST response means the server accepted the expense; then open Miravo and check foreground sync and the selected tracker.
 
 This automation is a capture aid, not bank reconciliation. Wallet transaction triggers do not grant the app ongoing Wallet history access.

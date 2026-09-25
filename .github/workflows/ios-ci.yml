@@ -195,6 +195,7 @@ jobs:
             -derivedDataPath DerivedData \
             -resultBundlePath DerivedData/ProjectLedgerShortcutSmoke.xcresult \
             -only-testing:ProjectLedgerTests/ShortcutCredentialTests \
+            -only-testing:ProjectLedgerTests/SyncWireModelsTests \
             -only-testing:ProjectLedgerUITests/ProjectLedgerUITests/testShortcutSettingsAndDefaultsRemainNavigableWithoutNetwork \
             test | xcbeautify
 
