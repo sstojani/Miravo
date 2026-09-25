@@ -2,7 +2,7 @@
 
 ## 2026-09-25 - Verify Shortcut requests without production mutation
 
-Use a local live HTTP server and synthetic credentials to exercise the same bearer, JSON, idempotency, and sync-pull contract as an Apple Shortcut. Keep a separate opt-in native Shortcut smoke for credential management, wire decoding, and defaults navigation; ordinary iOS builds should not run the full simulator suite. When the owner explicitly supplies a disposable raw token, limit deployed-server diagnosis to read-only calls, keep the token out of source/output, and do not create a live financial record without separate approval. Valid live token/context/defaults do not establish that the iPhone automation's POST succeeds; its redacted response remains necessary for targeted diagnosis.
+Use a local live HTTP server and synthetic credentials to exercise the same bearer, JSON, idempotency, and sync-pull contract as an Apple Shortcut. Keep a separate opt-in native Shortcut smoke for credential management, wire decoding, and defaults navigation; ordinary iOS builds should not run the full simulator suite. Keep a supplied disposable raw token out of source/output, and do not create a live financial record without separate approval. After the owner authorized exactly one labeled 1 ALL test expense, a live POST returned `201 created`, and the owner saw the record in the installed iPhone app after sync; no device UUID was needed. This establishes the server-to-app path, not the original iPhone automation's payload. Its redacted response remains necessary for targeted diagnosis.
 
 ## 2026-09-25 - Diagnose the destination hang before changing tab architecture
 
