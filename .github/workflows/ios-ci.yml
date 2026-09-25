@@ -25,46 +25,7 @@ env:
   XCODE_PATH: /Applications/Xcode_16.4.app
 
 jobs:
-  inspect-navigation:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_tests && inputs.run_navigation_smoke }}
-    runs-on: macos-15
-    permissions:
-      actions: read
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: ios-test-results
-          run-id: 36079878639
-          github-token: ${{ github.token }}
-          path: results
-      - name: Inspect failed navigation activities
-        shell: bash
-        run: |
-          set -euo pipefail
-          RESULT="$(find results -name 'ProjectLedgerNavigationSmoke.xcresult' -type d -print -quit)"
-          test -n "$RESULT"
-          xcrun xcresulttool get test-results activities \
-            --path "$RESULT" \
-            --test-id 'ProjectLedgerUITests/testMoreAndSettingsDestinationsRemainNavigable()' \
-            > activities.json
-          python3 - <<'PY'
-          import json
-
-          def walk(value):
-              if isinstance(value, dict):
-                  if isinstance(value.get('title'), str):
-                      print(value['title'])
-                  for child in value.values():
-                      walk(child)
-              elif isinstance(value, list):
-                  for child in value:
-                      walk(child)
-
-          walk(json.load(open('activities.json')))
-          PY
-
   simulator:
-    if: ${{ github.event_name != 'workflow_dispatch' || !inputs.run_tests || !inputs.run_navigation_smoke }}
     runs-on: macos-15
     timeout-minutes: 45
     steps:
@@ -189,6 +150,22 @@ jobs:
         working-directory: ios
         run: |
           set -o pipefail
+          mkdir -p DerivedData/Logs
+          (
+            for attempt in $(seq 1 90); do
+              APP_PID="$(pgrep -x Miravo | head -n 1 || true)"
+              if [ -n "$APP_PID" ]; then
+                sleep 45
+                if kill -0 "$APP_PID" 2>/dev/null; then
+                  sample "$APP_PID" 5 -file DerivedData/Logs/Miravo-navigation.sample.txt || true
+                fi
+                break
+              fi
+              sleep 2
+            done
+          ) &
+          SAMPLER_PID=$!
+          trap 'kill "$SAMPLER_PID" 2>/dev/null || true' EXIT
           xcodebuild \
             -project ProjectLedger.xcodeproj \
             -scheme ProjectLedger \

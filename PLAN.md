@@ -2,7 +2,7 @@
 
 ## 2026-09-25 - Reproduced nested Settings freeze
 
-The manual navigation smoke run `36077651111` compiled but failed after tapping More -> Settings -> Local data; its XCTest activity trail recorded that the app event loop did not become idle and the destination navigation bar never appeared. Replace the custom stack-switching container with stable native tab selection while retaining the floating pill, then rerun the focused simulator path. This remains unverified on the owner's signed-in iPhone until that build is installed and exercised.
+Manual navigation smoke runs `36077651111` and `36079878639` both compiled but hung after tapping More -> Settings -> Local data, including after a native TabView host experiment. The second activity trail ruled out that tab-host change, which has been reverted. Capture a simulator process sample during the reproducible hang, isolate the blocking call, then rerun focused navigation and Shortcut flows. The signed-in physical-device path remains unverified.
 
 ## 2026-09-24 - Focused navigation smoke coverage
 

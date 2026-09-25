@@ -1,8 +1,8 @@
 # Decision log
 
-## 2026-09-25 - Keep native navigation stacks stable beneath the floating bar
+## 2026-09-25 - Diagnose the destination hang before changing tab architecture
 
-The floating pill remains custom, but tab selection now uses native TabView with a persistent NavigationStack per tab. A manual UI test reproduced an unresponsive second-level Settings push under the animated ZStack that replaced whole NavigationStacks. Prioritize reliable nested navigation over the custom directional page slide; tab selection and the pill still animate, and the native bar stays hidden. The same focused test must pass before this is considered verified.
+More -> Settings -> Local data hangs in the clean simulator fixture. Replacing the animated ZStack with a native TabView did not change that behavior, so the tab-host experiment was reverted. Keep the existing floating navigation and inspect a process sample of the Local data destination before altering financial views or navigation architecture again.
 
 ## 2026-09-24 - Keep navigation regression testing focused and opt-in
 

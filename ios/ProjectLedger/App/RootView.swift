@@ -114,6 +114,7 @@ private struct MainTabView: View {
     let scopeKey: String
 
     @State private var selectedTab: MainTab = .overview
+    @State private var tabTransitionDirection: TabTransitionDirection = .forward
     @State private var keyboardVisible = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @EnvironmentObject private var session: SessionController
@@ -121,38 +122,20 @@ private struct MainTabView: View {
     @EnvironmentObject private var reminders: RecurringReminderController
 
     var body: some View {
-        TabView(selection: $selectedTab) {
-            NavigationStack { OverviewView(scopeKey: scopeKey) }
-                .tabItem { Label("Overview", systemImage: "chart.pie") }
-                .tag(MainTab.overview)
-            NavigationStack { TransactionsView(scopeKey: scopeKey) }
-                .tabItem { Label("Transactions", systemImage: "list.bullet.rectangle") }
-                .tag(MainTab.transactions)
-            NavigationStack {
-                QuickAddView(
-                    scopeKey: scopeKey,
-                    bottomAccessoryPadding: keyboardVisible
-                        ? 0
-                        : FloatingTabBarMetrics.quickAddClearance
-                )
-            }
-            .tabItem { Label("Add", systemImage: "plus") }
-            .tag(MainTab.add)
-            NavigationStack { PlansView(scopeKey: scopeKey) }
-                .tabItem { Label("Plans", systemImage: "calendar.badge.clock") }
-                .tag(MainTab.plans)
-            NavigationStack { MoreView(scopeKey: scopeKey) }
-                .tabItem { Label("More", systemImage: "ellipsis") }
-                .tag(MainTab.more)
+        ZStack {
+            selectedContent
+                .id(selectedTab)
+                .transition(selectedContentTransition)
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    if shouldReserveFloatingTabSpace {
+                        Color.clear
+                            .frame(height: FloatingTabBarMetrics.contentClearance)
+                            .allowsHitTesting(false)
+                    }
+                }
         }
-        .toolbar(.hidden, for: .tabBar)
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            if shouldReserveFloatingTabSpace {
-                Color.clear
-                    .frame(height: FloatingTabBarMetrics.contentClearance)
-                    .allowsHitTesting(false)
-            }
-        }
+        .clipped()
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.22), value: selectedTab)
         .overlay(alignment: .bottom) {
             if !keyboardVisible {
                 FloatingTabBar(selectedTab: selectedTab, onSelect: selectTab)
@@ -204,12 +187,48 @@ private struct MainTabView: View {
         }
     }
 
+    @ViewBuilder
+    private var selectedContent: some View {
+        switch selectedTab {
+        case .overview:
+            NavigationStack { OverviewView(scopeKey: scopeKey) }
+        case .transactions:
+            NavigationStack { TransactionsView(scopeKey: scopeKey) }
+        case .add:
+            NavigationStack {
+                QuickAddView(
+                    scopeKey: scopeKey,
+                    bottomAccessoryPadding: keyboardVisible
+                        ? 0
+                        : FloatingTabBarMetrics.quickAddClearance
+                )
+            }
+        case .plans:
+            NavigationStack { PlansView(scopeKey: scopeKey) }
+        case .more:
+            NavigationStack { MoreView(scopeKey: scopeKey) }
+        }
+    }
+
+    private var selectedContentTransition: AnyTransition {
+        if reduceMotion {
+            return .opacity
+        }
+        return .asymmetric(
+            insertion: .move(edge: tabTransitionDirection.insertionEdge)
+                .combined(with: .opacity),
+            removal: .move(edge: tabTransitionDirection.removalEdge)
+                .combined(with: .opacity)
+        )
+    }
+
     private var shouldReserveFloatingTabSpace: Bool {
         !keyboardVisible && selectedTab != .add
     }
 
     private func selectTab(_ tab: MainTab) {
         guard tab != selectedTab else { return }
+        tabTransitionDirection = tab.order > selectedTab.order ? .forward : .backward
         if reduceMotion {
             selectedTab = tab
         } else {
@@ -267,6 +286,34 @@ private enum MainTab: String, CaseIterable, Identifiable {
         case .more:
             "ellipsis"
         }
+    }
+
+    var order: Int {
+        switch self {
+        case .overview:
+            0
+        case .transactions:
+            1
+        case .add:
+            2
+        case .plans:
+            3
+        case .more:
+            4
+        }
+    }
+}
+
+private enum TabTransitionDirection {
+    case forward
+    case backward
+
+    var insertionEdge: Edge {
+        self == .forward ? .trailing : .leading
+    }
+
+    var removalEdge: Edge {
+        self == .forward ? .leading : .trailing
     }
 }
 

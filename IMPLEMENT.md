@@ -1,9 +1,9 @@
 # Implementation log
 
-## 2026-09-25 - Stable tab-hosted navigation
+## 2026-09-25 - Nested Settings freeze investigation
 
-- The first nested Settings destination hung even with an in-memory authenticated UI fixture, so it was not solely a server or restored-data delay. The app now hosts each primary NavigationStack in a stable native TabView and hides the native bar behind the existing floating pill. The custom outer stack transition was removed; the pill and keyboard-aware bottom clearance remain.
-- The temporary CI artifact-inspection hook was removed after it identified the stalled Local data push. Focused simulator and physical-device verification are still pending for this change.
+- The first nested Settings destination hung even with an in-memory authenticated UI fixture, so it was not solely a server or restored-data delay. A native TabView hosting experiment compiled but reproduced the same hang, and was reverted to preserve the established floating-pill behavior.
+- XCTest result activity extraction identified Local data as the exact tap on both runs. The next manual-only simulator run collects a short process sample during the hang; native navigation and physical-device verification remain pending.
 
 ## 2026-09-24 - Focused More and Settings navigation smoke test
 
