@@ -52,8 +52,7 @@ jobs:
             > inspection/activities.json
           xcrun xcresulttool export attachments \
             --path "$RESULT" \
-            --output-path inspection/screenshots \
-            --only-failures
+            --output-path inspection/screenshots
           find inspection -type f -print
       - uses: actions/upload-artifact@v4
         if: always()
