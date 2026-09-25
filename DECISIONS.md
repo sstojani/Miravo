@@ -1,5 +1,9 @@
 # Decision log
 
+## 2026-09-25 - Keep native navigation stacks stable beneath the floating bar
+
+The floating pill remains custom, but tab selection now uses native TabView with a persistent NavigationStack per tab. A manual UI test reproduced an unresponsive second-level Settings push under the animated ZStack that replaced whole NavigationStacks. Prioritize reliable nested navigation over the custom directional page slide; tab selection and the pill still animate, and the native bar stays hidden. The same focused test must pass before this is considered verified.
+
 ## 2026-09-24 - Keep navigation regression testing focused and opt-in
 
 The reported More/Settings failure gets one dedicated simulator smoke test instead of re-enabling the full native suite on every workflow. The test enters Insights, Settings, and the server-backed Settings destinations using stable accessibility identifiers, while GitHub push/PR jobs remain free of simulator test execution.

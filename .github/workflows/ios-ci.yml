@@ -25,54 +25,7 @@ env:
   XCODE_PATH: /Applications/Xcode_16.4.app
 
 jobs:
-  inspect-navigation:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_navigation_smoke }}
-    runs-on: macos-15
-    permissions:
-      actions: read
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: ios-test-results
-          run-id: 36077651111
-          github-token: ${{ github.token }}
-          path: results
-      - name: Inspect failed navigation activities
-        shell: bash
-        run: |
-          set -euo pipefail
-          RESULT="$(find results -name 'ProjectLedgerNavigationSmoke.xcresult' -type d -print -quit)"
-          test -n "$RESULT"
-          xcrun xcresulttool get test-results summary --path "$RESULT"
-          xcrun xcresulttool get test-results tests --path "$RESULT"
-          xcrun xcresulttool get test-results test-details \
-            --path "$RESULT" \
-            --test-id 'ProjectLedgerUITests/testMoreAndSettingsDestinationsRemainNavigable()' || true
-          xcrun xcresulttool get test-results activities \
-            --path "$RESULT" \
-            --test-id 'ProjectLedgerUITests/testMoreAndSettingsDestinationsRemainNavigable()' \
-            > activities.json || true
-          python3 - <<'PY'
-          import json
-          from pathlib import Path
-
-          path = Path('activities.json')
-          if path.exists() and path.stat().st_size:
-              def walk(value):
-                  if isinstance(value, dict):
-                      if isinstance(value.get('title'), str):
-                          print(value['title'])
-                      for child in value.values():
-                          walk(child)
-                  elif isinstance(value, list):
-                      for child in value:
-                          walk(child)
-
-              walk(json.loads(path.read_text()))
-          PY
-
   simulator:
-    if: ${{ github.event_name != 'workflow_dispatch' || !inputs.run_navigation_smoke }}
     runs-on: macos-15
     timeout-minutes: 45
     steps:

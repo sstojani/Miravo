@@ -1,5 +1,10 @@
 # Implementation log
 
+## 2026-09-25 - Stable tab-hosted navigation
+
+- The first nested Settings destination hung even with an in-memory authenticated UI fixture, so it was not solely a server or restored-data delay. The app now hosts each primary NavigationStack in a stable native TabView and hides the native bar behind the existing floating pill. The custom outer stack transition was removed; the pill and keyboard-aware bottom clearance remain.
+- The temporary CI artifact-inspection hook was removed after it identified the stalled Local data push. Focused simulator and physical-device verification are still pending for this change.
+
 ## 2026-09-24 - Focused More and Settings navigation smoke test
 
 - Added stable accessibility identifiers for the More hub and Settings destinations.

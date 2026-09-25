@@ -1,5 +1,9 @@
 # Miravo implementation plan
 
+## 2026-09-25 - Reproduced nested Settings freeze
+
+The manual navigation smoke run `36077651111` compiled but failed after tapping More -> Settings -> Local data; its XCTest activity trail recorded that the app event loop did not become idle and the destination navigation bar never appeared. Replace the custom stack-switching container with stable native tab selection while retaining the floating pill, then rerun the focused simulator path. This remains unverified on the owner's signed-in iPhone until that build is installed and exercised.
+
 ## 2026-09-24 - Focused navigation smoke coverage
 
 Added a manual-only iOS UI smoke path for the reported More/Settings navigation failure. Stable accessibility identifiers distinguish each destination, and the workflow can run only this focused test with `run_navigation_smoke=true`; ordinary pushes and pull requests remain build/source-check only.
