@@ -4,7 +4,9 @@
 
 Manual simulator runs `36077651111`, `36079878639`, and `36081242490`: **failed-native** on More -> Settings -> Local data. XCTest timed out evaluating the Local data navigation-bar query on both custom and native tab hosts. A process sample captured Settings and Local data body work plus SwiftData fetches on the main thread. Value-based Settings navigation failed earlier, at opening Settings, in `36135497205`; that experiment was reverted. A passing focused navigation rerun is required before claiming a fix. The signed-in physical-device path remains **unverified**.
 
-Physical iPhone retest of `ca09515`: **failed-native**. All four Your ledger destinations still freeze. A grouped ScrollView now replaces the Settings parent Form as the next candidate; it requires the focused manual simulator smoke and another device retest. The ordinary push/PR iOS build does not run this navigation test.
+Physical iPhone retest of `ca09515`: **failed-native**. All four Your ledger destinations still freeze. A grouped ScrollView replaced the Settings parent Form for the next isolation run. The ordinary push/PR iOS build does not run the navigation test.
+
+Focused simulator run `36152347324` on grouped ScrollView commit `ae26706`: **failed-native**. Build passed, then the navigation query timed out while the captured screen remained on Settings. Next candidate presents Settings details in a separate full-screen NavigationStack; focused simulator and iPhone outcomes remain pending.
 
 ## 2026-09-24 session/Shortcut regressions
 

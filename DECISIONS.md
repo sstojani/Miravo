@@ -4,7 +4,9 @@
 
 More -> Settings -> Local data hangs in the clean simulator fixture. Replacing the animated ZStack with a native TabView did not change that behavior, so the tab-host experiment was reverted. A process sample showed Settings and Local data body construction, synchronous SwiftData reads, and list updates on the main thread. Value-based Settings navigation then stalled earlier at Settings itself; it was reverted. Preserve the existing navigation and isolate the Local data list behavior before claiming a fix.
 
-The first targeted accessibility containment change in `ca09515` did not resolve the freeze on the owner's iPhone. All four Your ledger destinations still fail, so the shared parent Settings Form is the next isolation target. Use a grouped ScrollView for that parent while keeping the same destination views and controls; require a focused native navigation pass before treating the change as resolved.
+The first targeted accessibility containment change in `ca09515` did not resolve the freeze on the owner's iPhone. All four Your ledger destinations still fail. A grouped ScrollView parent was tried to isolate the nested Form/List push behavior while retaining the existing destinations and controls.
+
+The grouped ScrollView parent also failed the focused simulator run `36152347324`; the child push remained on Settings. The next isolation is a separate full-screen NavigationStack for Settings details, presented from the existing rows. Keep each destination's functionality and provide an explicit Settings return control. Native navigation verification is required.
 
 ## 2026-09-24 - Keep navigation regression testing focused and opt-in
 

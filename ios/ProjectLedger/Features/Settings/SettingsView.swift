@@ -12,6 +12,7 @@ struct SettingsView: View {
     @Query private var attachmentTransfers: [AttachmentTransfer]
     @State private var showingServerAddress = false
     @State private var showingServerSetup = false
+    @State private var presentedDestination: SettingsDestination?
 
     init(scopeKey: String) {
         self.scopeKey = scopeKey
@@ -57,6 +58,9 @@ struct SettingsView: View {
         .sheet(isPresented: $showingServerAddress) {
             ServerAddressSettingsView()
         }
+        .fullScreenCover(item: $presentedDestination) { destination in
+            destinationView(destination)
+        }
         .alert("Session notice", isPresented: Binding(
             get: { session.logoutWarning != nil },
             set: { if !$0 { session.logoutWarning = nil } }
@@ -77,24 +81,18 @@ struct SettingsView: View {
 
     private var ledgerSection: some View {
         settingsSection(Text("Your ledger")) {
-            settingsLink {
-                LocalDataSettingsView(scopeKey: scopeKey)
-            } label: {
+            settingsLink(.localData) {
                 Label("Trackers, accounts, and categories", systemImage: "square.stack.3d.up")
             }
             .accessibilityIdentifier("settings.localData")
             settingsDivider
             if session.hasServerConnection {
-                settingsLink {
-                    CollaborationSettingsView(scopeKey: scopeKey)
-                } label: {
+                settingsLink(.collaboration) {
                     Label("Collaboration", systemImage: "person.2")
                 }
                 .accessibilityIdentifier("settings.collaboration")
                 settingsDivider
-                settingsLink {
-                    ShortcutSettingsView(scopeKey: scopeKey)
-                } label: {
+                settingsLink(.shortcut) {
                     Label(
                         "Apple Wallet Shortcut",
                         systemImage: "bolt.horizontal.circle"
@@ -103,9 +101,7 @@ struct SettingsView: View {
                 .accessibilityIdentifier("settings.shortcut")
                 settingsDivider
             }
-            settingsLink {
-                ExportSettingsView(scopeKey: scopeKey)
-            } label: {
+            settingsLink(.exports) {
                 Label("Exports", systemImage: "square.and.arrow.down")
             }
             .accessibilityIdentifier("settings.exports")
@@ -224,9 +220,7 @@ struct SettingsView: View {
             LabeledContent("Pending operations", value: pendingCount, format: .number)
         }
         settingsDivider
-        settingsLink {
-            FailedOperationsView(scopeKey: scopeKey)
-        } label: {
+        settingsLink(.failedOperations) {
             LabeledContent("Failed operations", value: failedOutboxCount, format: .number)
         }
         .accessibilityIdentifier("settings.failedOperations")
@@ -239,9 +233,7 @@ struct SettingsView: View {
             LabeledContent("Failed attachments", value: failedAttachmentCount, format: .number)
         }
         settingsDivider
-        settingsLink {
-            SyncConflictsView(scopeKey: scopeKey)
-        } label: {
+        settingsLink(.conflicts) {
             LabeledContent("Conflicts", value: conflicts.count, format: .number)
         }
         .accessibilityIdentifier("settings.conflicts")
@@ -285,9 +277,7 @@ struct SettingsView: View {
             .disabled(sync.isRunning)
         }
         settingsDivider
-        settingsLink {
-            SyncDiagnosticsView(scopeKey: scopeKey)
-        } label: {
+        settingsLink(.diagnostics) {
             Label("Sync diagnostics and repair", systemImage: "stethoscope")
         }
         .accessibilityIdentifier("settings.diagnostics")
@@ -344,11 +334,13 @@ struct SettingsView: View {
             .padding(.vertical, 4)
     }
 
-    private func settingsLink<Destination: View, LabelContent: View>(
-        @ViewBuilder destination: () -> Destination,
+    private func settingsLink<LabelContent: View>(
+        _ destination: SettingsDestination,
         @ViewBuilder label: () -> LabelContent
     ) -> some View {
-        NavigationLink(destination: destination) {
+        Button {
+            presentedDestination = destination
+        } label: {
             HStack(spacing: 12) {
                 label()
                 Spacer(minLength: 8)
@@ -365,6 +357,34 @@ struct SettingsView: View {
 
     private var settingsDivider: some View {
         Divider().padding(.leading, 16)
+    }
+
+    private func destinationView(_ destination: SettingsDestination) -> some View {
+        NavigationStack {
+            Group {
+                switch destination {
+                case .localData:
+                    LocalDataSettingsView(scopeKey: scopeKey)
+                case .collaboration:
+                    CollaborationSettingsView(scopeKey: scopeKey)
+                case .shortcut:
+                    ShortcutSettingsView(scopeKey: scopeKey)
+                case .exports:
+                    ExportSettingsView(scopeKey: scopeKey)
+                case .failedOperations:
+                    FailedOperationsView(scopeKey: scopeKey)
+                case .conflicts:
+                    SyncConflictsView(scopeKey: scopeKey)
+                case .diagnostics:
+                    SyncDiagnosticsView(scopeKey: scopeKey)
+                }
+            }
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Settings") { presentedDestination = nil }
+                }
+            }
+        }
     }
 
     private var backgroundRefreshStatus: String {
@@ -391,6 +411,18 @@ struct SettingsView: View {
     private var failedAttachmentCount: Int {
         attachmentTransfers.filter { $0.state == .failed }.count
     }
+}
+
+private enum SettingsDestination: String, Identifiable {
+    case localData
+    case collaboration
+    case shortcut
+    case exports
+    case failedOperations
+    case conflicts
+    case diagnostics
+
+    var id: String { rawValue }
 }
 
 private struct ServerAddressSettingsView: View {
