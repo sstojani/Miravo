@@ -38,15 +38,19 @@ struct SettingsView: View {
     private var cursor: SyncCursor? { cursors.first }
 
     var body: some View {
-        Form {
-            ledgerSection
-            appearanceSection
-            privacySection
-            synchronizationSection
-            advancedSection
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: LedgerTheme.sectionSpacing) {
+                ledgerSection
+                appearanceSection
+                privacySection
+                synchronizationSection
+                advancedSection
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 24)
         }
+        .background(Color(uiColor: .systemGroupedBackground))
         .navigationTitle("Settings")
-        .accessibilityElement(children: .contain)
         .sheet(isPresented: $showingServerSetup) {
             LoginView(allowsDismiss: true)
         }
@@ -72,22 +76,23 @@ struct SettingsView: View {
     }
 
     private var ledgerSection: some View {
-        Section("Your ledger") {
-            NavigationLink {
+        settingsSection(Text("Your ledger")) {
+            settingsLink {
                 LocalDataSettingsView(scopeKey: scopeKey)
             } label: {
                 Label("Trackers, accounts, and categories", systemImage: "square.stack.3d.up")
             }
             .accessibilityIdentifier("settings.localData")
+            settingsDivider
             if session.hasServerConnection {
-                NavigationLink {
+                settingsLink {
                     CollaborationSettingsView(scopeKey: scopeKey)
                 } label: {
                     Label("Collaboration", systemImage: "person.2")
                 }
                 .accessibilityIdentifier("settings.collaboration")
-
-                NavigationLink {
+                settingsDivider
+                settingsLink {
                     ShortcutSettingsView(scopeKey: scopeKey)
                 } label: {
                     Label(
@@ -96,8 +101,9 @@ struct SettingsView: View {
                     )
                 }
                 .accessibilityIdentifier("settings.shortcut")
+                settingsDivider
             }
-            NavigationLink {
+            settingsLink {
                 ExportSettingsView(scopeKey: scopeKey)
             } label: {
                 Label("Exports", systemImage: "square.and.arrow.down")
@@ -107,66 +113,85 @@ struct SettingsView: View {
     }
 
     private var privacySection: some View {
-        Section("Privacy") {
-            Toggle(
-                "Face ID or passcode app lock",
-                isOn: Binding(
-                    get: { session.appLockEnabled },
-                    set: { session.setAppLockEnabled($0) }
+        settingsSection(Text("Privacy")) {
+            settingsRow {
+                Toggle(
+                    "Face ID or passcode app lock",
+                    isOn: Binding(
+                        get: { session.appLockEnabled },
+                        set: { session.setAppLockEnabled($0) }
+                    )
                 )
-            )
-            Text("App lock protects the user interface. iOS Data Protection and a device passcode protect local files.")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
+            }
+            settingsDivider
+            settingsRow {
+                Text("App lock protects the user interface. iOS Data Protection and a device passcode protect local files.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
         }
     }
 
     private var appearanceSection: some View {
-        Section("Appearance") {
-            Picker(
-                "App appearance",
-                selection: Binding(
-                    get: { session.appAppearance },
-                    set: { session.setAppAppearance($0) }
-                )
-            ) {
-                ForEach(AppAppearanceMode.allCases) { mode in
-                    Text(mode.title).tag(mode)
+        settingsSection(Text("Appearance")) {
+            settingsRow {
+                Picker(
+                    "App appearance",
+                    selection: Binding(
+                        get: { session.appAppearance },
+                        set: { session.setAppAppearance($0) }
+                    )
+                ) {
+                    ForEach(AppAppearanceMode.allCases) { mode in
+                        Text(mode.title).tag(mode)
+                    }
                 }
+                .pickerStyle(.segmented)
+                .labelsHidden()
             }
-            .pickerStyle(.segmented)
         }
     }
 
     private var synchronizationSection: some View {
-        Section {
-            if session.hasServerConnection {
-                synchronizationRows
-            } else {
-                Label("Local data", systemImage: "iphone")
-
-                Button {
-                    showingServerSetup = true
-                } label: {
-                    Label(
-                        "Configure server",
-                        systemImage: "externaldrive.connected.to.line.below"
-                    )
-                }
-
-                Button {
-                    showingServerAddress = true
-                } label: {
-                    Label("Server address", systemImage: "link")
+        VStack(alignment: .leading, spacing: 8) {
+            settingsSection(Text("Synchronization")) {
+                if session.hasServerConnection {
+                    synchronizationRows
+                } else {
+                    settingsRow {
+                        Label("Local data", systemImage: "iphone")
+                    }
+                    settingsDivider
+                    settingsRow {
+                        Button {
+                            showingServerSetup = true
+                        } label: {
+                            Label(
+                                "Configure server",
+                                systemImage: "externaldrive.connected.to.line.below"
+                            )
+                        }
+                    }
+                    settingsDivider
+                    settingsRow {
+                        Button {
+                            showingServerAddress = true
+                        } label: {
+                            Label("Server address", systemImage: "link")
+                        }
+                    }
                 }
             }
-        } header: {
-            Text("Synchronization")
-        } footer: {
             if session.hasServerConnection {
                 Text("Local changes remain available while offline. Failed and conflicting operations stay on this iPhone until you retry or resolve them.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 16)
             } else {
                 Text("Financial records stay on this iPhone and synchronize only with the self-hosted server you choose.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 16)
             }
         }
     }
@@ -174,67 +199,93 @@ struct SettingsView: View {
     @ViewBuilder
     private var synchronizationRows: some View {
         if sync.isRunning || cursor?.isSyncing == true {
-            HStack {
-                ProgressView()
-                Text("Synchronizing…")
+            settingsRow {
+                HStack {
+                    ProgressView()
+                    Text("Synchronizing…")
+                }
             }
+            settingsDivider
         }
-        LabeledContent(
-            "Foreground updates",
-            value: sync.realtimeConnected
-                ? String(localized: "Connected")
-                : String(localized: "Polling fallback")
-        )
-        LabeledContent(
-            "Background refresh",
-            value: backgroundRefreshStatus
-        )
-        LabeledContent("Pending operations", value: pendingCount, format: .number)
-        NavigationLink {
+        settingsRow {
+            LabeledContent(
+                "Foreground updates",
+                value: sync.realtimeConnected
+                    ? String(localized: "Connected")
+                    : String(localized: "Polling fallback")
+            )
+        }
+        settingsDivider
+        settingsRow {
+            LabeledContent("Background refresh", value: backgroundRefreshStatus)
+        }
+        settingsDivider
+        settingsRow {
+            LabeledContent("Pending operations", value: pendingCount, format: .number)
+        }
+        settingsDivider
+        settingsLink {
             FailedOperationsView(scopeKey: scopeKey)
         } label: {
             LabeledContent("Failed operations", value: failedOutboxCount, format: .number)
         }
         .accessibilityIdentifier("settings.failedOperations")
-        LabeledContent("Pending attachments", value: pendingAttachmentCount, format: .number)
-        LabeledContent("Failed attachments", value: failedAttachmentCount, format: .number)
-        NavigationLink {
+        settingsDivider
+        settingsRow {
+            LabeledContent("Pending attachments", value: pendingAttachmentCount, format: .number)
+        }
+        settingsDivider
+        settingsRow {
+            LabeledContent("Failed attachments", value: failedAttachmentCount, format: .number)
+        }
+        settingsDivider
+        settingsLink {
             SyncConflictsView(scopeKey: scopeKey)
         } label: {
             LabeledContent("Conflicts", value: conflicts.count, format: .number)
         }
         .accessibilityIdentifier("settings.conflicts")
         .disabled(conflicts.isEmpty)
-
+        settingsDivider
         if let lastSync = cursor?.lastSuccessfulSyncAt {
-            LabeledContent("Last successful sync") {
-                Text(lastSync, format: .dateTime.day().month().year().hour().minute())
+            settingsRow {
+                LabeledContent("Last successful sync") {
+                    Text(lastSync, format: .dateTime.day().month().year().hour().minute())
+                }
             }
         } else {
-            LabeledContent("Last successful sync", value: String(localized: "Not synchronized yet"))
-        }
-
-        if cursor?.bootstrapRequired != false {
-            Label("Initial server download required", systemImage: "arrow.down.circle")
-                .foregroundStyle(.secondary)
-        }
-
-        if let errorCode = cursor?.lastSafeErrorCode {
-            LabeledContent("Last sync status") {
-                Text(verbatim: errorCode)
-                    .font(.caption.monospaced())
-                    .textSelection(.enabled)
+            settingsRow {
+                LabeledContent("Last successful sync", value: String(localized: "Not synchronized yet"))
             }
         }
-
-        Button {
-            Task { await sync.synchronize(session: session) }
-        } label: {
-            Label("Synchronize now", systemImage: "arrow.triangle.2.circlepath")
+        if cursor?.bootstrapRequired != false {
+            settingsDivider
+            settingsRow {
+                Label("Initial server download required", systemImage: "arrow.down.circle")
+                    .foregroundStyle(.secondary)
+            }
         }
-        .disabled(sync.isRunning)
-
-        NavigationLink {
+        if let errorCode = cursor?.lastSafeErrorCode {
+            settingsDivider
+            settingsRow {
+                LabeledContent("Last sync status") {
+                    Text(verbatim: errorCode)
+                        .font(.caption.monospaced())
+                        .textSelection(.enabled)
+                }
+            }
+        }
+        settingsDivider
+        settingsRow {
+            Button {
+                Task { await sync.synchronize(session: session) }
+            } label: {
+                Label("Synchronize now", systemImage: "arrow.triangle.2.circlepath")
+            }
+            .disabled(sync.isRunning)
+        }
+        settingsDivider
+        settingsLink {
             SyncDiagnosticsView(scopeKey: scopeKey)
         } label: {
             Label("Sync diagnostics and repair", systemImage: "stethoscope")
@@ -243,22 +294,77 @@ struct SettingsView: View {
     }
 
     private var advancedSection: some View {
-        Section("Advanced") {
-            LabeledContent("Server") {
-                Text(
-                    session.configuredServerURL.isEmpty
-                        ? String(localized: "Not connected")
-                        : session.configuredServerURL
-                )
-                .multilineTextAlignment(.trailing)
-                .textSelection(.enabled)
-            }
-            LabeledContent("Local scope") {
-                Text(SyncDiagnosticReport.digest(scopeKey))
-                    .font(.caption.monospaced())
+        settingsSection(Text("Advanced")) {
+            settingsRow {
+                LabeledContent("Server") {
+                    Text(
+                        session.configuredServerURL.isEmpty
+                            ? String(localized: "Not connected")
+                            : session.configuredServerURL
+                    )
+                    .multilineTextAlignment(.trailing)
                     .textSelection(.enabled)
+                }
+            }
+            settingsDivider
+            settingsRow {
+                LabeledContent("Local scope") {
+                    Text(SyncDiagnosticReport.digest(scopeKey))
+                        .font(.caption.monospaced())
+                        .textSelection(.enabled)
+                }
             }
         }
+    }
+
+    private func settingsSection<Content: View>(
+        _ title: Text,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            title
+                .font(.footnote)
+                .textCase(.uppercase)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 16)
+            VStack(spacing: 0, content: content)
+                .background(
+                    Color(uiColor: .secondarySystemGroupedBackground),
+                    in: RoundedRectangle(cornerRadius: 12)
+                )
+        }
+    }
+
+    private func settingsRow<Content: View>(
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        content()
+            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 4)
+    }
+
+    private func settingsLink<Destination: View, LabelContent: View>(
+        @ViewBuilder destination: () -> Destination,
+        @ViewBuilder label: () -> LabelContent
+    ) -> some View {
+        NavigationLink(destination: destination) {
+            HStack(spacing: 12) {
+                label()
+                Spacer(minLength: 8)
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+            }
+            .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 16)
+    }
+
+    private var settingsDivider: some View {
+        Divider().padding(.leading, 16)
     }
 
     private var backgroundRefreshStatus: String {

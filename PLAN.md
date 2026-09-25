@@ -1,5 +1,9 @@
 # Miravo implementation plan
 
+## 2026-09-25 - Settings destination freeze follow-up
+
+The owner confirmed that all four Your ledger destinations still freeze on the iPhone after `ca09515`. The captured simulator screen stayed on Settings after the Local data tap. The failed destinations use Form or List, while the working Insights destination uses ScrollView. Replace the Settings parent Form with grouped scroll content, then run the focused native navigation test on that exact revision before asking for another device install. Do not treat a successful build alone as a navigation pass.
+
 ## 2026-09-25 - Reproduced nested Settings freeze
 
 Manual navigation smoke runs `36077651111`, `36079878639`, and `36081242490` hung after tapping More -> Settings -> Local data, including after a native TabView host experiment. Run `36081242490` sampled main-thread Settings and Local data rendering, SwiftData queries, and list updates. A value-based Settings destination experiment failed earlier, while opening Settings in run `36135497205`, and was reverted. Isolate Local data's list editing behavior next; the signed-in physical-device path remains unverified.
