@@ -25,43 +25,7 @@ env:
   XCODE_PATH: /Applications/Xcode_16.4.app
 
 jobs:
-  inspect-navigation:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_tests && inputs.run_navigation_smoke }}
-    runs-on: macos-15
-    permissions:
-      actions: read
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: ios-test-results
-          run-id: 36138004400
-          github-token: ${{ github.token }}
-          path: results
-      - name: Export failed navigation evidence
-        shell: bash
-        env:
-          DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
-        run: |
-          set -euo pipefail
-          RESULT="$(find results -name 'ProjectLedgerNavigationSmoke.xcresult' -type d -print -quit)"
-          test -n "$RESULT"
-          mkdir -p inspection/screenshots
-          xcrun xcresulttool get test-results activities \
-            --path "$RESULT" \
-            --test-id 'ProjectLedgerUITests/testMoreAndSettingsDestinationsRemainNavigable()' \
-            > inspection/activities.json
-          xcrun xcresulttool export attachments \
-            --path "$RESULT" \
-            --output-path inspection/screenshots
-          find inspection -type f -print
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: navigation-inspection
-          path: inspection
-
   simulator:
-    if: ${{ github.event_name != 'workflow_dispatch' || !inputs.run_tests || !inputs.run_navigation_smoke }}
     runs-on: macos-15
     timeout-minutes: 45
     steps:
@@ -191,8 +155,9 @@ jobs:
             for attempt in $(seq 1 90); do
               APP_PID="$(pgrep -x Miravo | head -n 1 || true)"
               if [ -n "$APP_PID" ]; then
-                sleep 45
+                sleep 65
                 if kill -0 "$APP_PID" 2>/dev/null; then
+                  xcrun simctl io booted screenshot DerivedData/Logs/Miravo-navigation.png || true
                   sample "$APP_PID" 5 -file DerivedData/Logs/Miravo-navigation.sample.txt || true
                 fi
                 break
