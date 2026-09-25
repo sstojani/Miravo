@@ -226,7 +226,6 @@ struct LocalDataSettingsView: View {
                     }
                 }
             }
-            .onMove(perform: reorderTrackers)
         }
     }
 
