@@ -222,6 +222,7 @@ struct ShortcutSettingsView: View {
             }
         }
         .navigationTitle("Wallet Shortcut")
+        .accessibilityElement(children: .contain)
         .task(id: scopeKey) {
             if !didChooseInitialTracker {
                 selectedTrackerID = eligibleTrackers.first?.id

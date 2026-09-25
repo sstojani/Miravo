@@ -8,6 +8,11 @@ on:
         required: false
         default: false
         type: boolean
+      run_navigation_smoke:
+        description: Run the focused More and Settings navigation UI smoke test
+        required: false
+        default: false
+        type: boolean
   pull_request:
   push:
     branches: [main]
@@ -67,7 +72,7 @@ jobs:
           fi
 
       - name: Prepare iOS Simulator for manual tests
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_tests }}
+        if: ${{ github.event_name == 'workflow_dispatch' && (inputs.run_tests || inputs.run_navigation_smoke) }}
         run: |
           set -euxo pipefail
 
@@ -140,11 +145,44 @@ jobs:
             -resultBundlePath DerivedData/ProjectLedgerTests.xcresult \
             test | xcbeautify
 
+      - name: Run navigation smoke test (manual)
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_navigation_smoke && !inputs.run_tests }}
+        working-directory: ios
+        run: |
+          set -o pipefail
+          mkdir -p DerivedData/Logs
+          (
+            for attempt in $(seq 1 90); do
+              APP_PID="$(pgrep -x Miravo | head -n 1 || true)"
+              if [ -n "$APP_PID" ]; then
+                sleep 65
+                if kill -0 "$APP_PID" 2>/dev/null; then
+                  xcrun simctl io booted screenshot DerivedData/Logs/Miravo-navigation.png || true
+                  sample "$APP_PID" 5 -file DerivedData/Logs/Miravo-navigation.sample.txt || true
+                fi
+                break
+              fi
+              sleep 2
+            done
+          ) &
+          SAMPLER_PID=$!
+          trap 'kill "$SAMPLER_PID" 2>/dev/null || true' EXIT
+          xcodebuild \
+            -project ProjectLedger.xcodeproj \
+            -scheme ProjectLedger \
+            -configuration Debug \
+            -destination "$SIMULATOR_DESTINATION" \
+            -derivedDataPath DerivedData \
+            -resultBundlePath DerivedData/ProjectLedgerNavigationSmoke.xcresult \
+            -only-testing:ProjectLedgerUITests/ProjectLedgerUITests/testMoreAndSettingsDestinationsRemainNavigable \
+            test | xcbeautify
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: ios-test-results
           path: |
             ios/DerivedData/ProjectLedgerTests.xcresult
+            ios/DerivedData/ProjectLedgerNavigationSmoke.xcresult
             ios/DerivedData/Logs
           retention-days: 14

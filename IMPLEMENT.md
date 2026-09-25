@@ -1,10 +1,24 @@
 # Implementation log
 
+## 2026-09-25 - Nested Settings freeze investigation
+
+- The first nested Settings destination hung even with an in-memory authenticated UI fixture, so it was not solely a server or restored-data delay. A native TabView hosting experiment compiled but reproduced the same hang, and was reverted to preserve the established floating-pill behavior.
+- XCTest activity extraction identified Local data as the exact tap. Manual run `36081242490` captured main-thread work in `SettingsView.body`, `LocalDataSettingsView.body`, SwiftData fetches, and SwiftUI list updates during the stall. Value-based NavigationLinks made the smoke fail earlier at Settings in `36135497205`, so they were reverted. Local data list-editing isolation and physical-device verification remain pending.
+- Narrow follow-up: replaced explicit accessibility merging on Local data rows with containment and applied the same containment boundary to settings containers and diagnostics lists. This is authored and locally contract-checked; macOS simulator and physical-device results remain pending.
+
+## 2026-09-24 - Focused More and Settings navigation smoke test
+
+- Added stable accessibility identifiers for the More hub and Settings destinations.
+- Added `testMoreAndSettingsDestinationsRemainNavigable`, covering Insights, Local Data, Collaboration, Wallet Shortcut, Exports, and Sync diagnostics from the authenticated server-session UI fixture.
+- Added the manual-only `run_navigation_smoke` GitHub Actions input. Normal push/PR jobs still do not run the native simulator suite.
+- Verification boundary: the test is authored but requires GitHub macOS/Xcode execution; Windows cannot execute the iOS simulator.
+
 This is an append-oriented, chronological record. Verification statements name the environment used.
 
 ## 2026-09-24 - Shortcut entry and prompt sign-out
 
 - The iOS CI workflow now performs a fast simulator build for pull requests and ordinary pushes. Full native unit/UI tests are opt-in through manual `workflow_dispatch` with `run_tests=true`, keeping normal build feedback short while preserving an explicit regression-test path.
+- Removed eager synchronization-diagnostics work from Settings entry and restored direct Shortcut navigation so opening Settings does not block the navigation stack on a model-actor task.
 
 - Fetched GitHub and merged main `d18161b` into a new repair branch without dropping the twelve newer local fixes.
 - Removed full synchronization from Shortcut screen entry, retry, create, and revoke. Shared Keychain refresh supplies credentials independently and rejects results after credentials are cleared/replaced.

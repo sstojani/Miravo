@@ -1,5 +1,13 @@
 # Miravo implementation plan
 
+## 2026-09-25 - Reproduced nested Settings freeze
+
+Manual navigation smoke runs `36077651111`, `36079878639`, and `36081242490` hung after tapping More -> Settings -> Local data, including after a native TabView host experiment. Run `36081242490` sampled main-thread Settings and Local data rendering, SwiftData queries, and list updates. A value-based Settings destination experiment failed earlier, while opening Settings in run `36135497205`, and was reverted. Isolate Local data's list editing behavior next; the signed-in physical-device path remains unverified.
+
+## 2026-09-24 - Focused navigation smoke coverage
+
+Added a manual-only iOS UI smoke path for the reported More/Settings navigation failure. Stable accessibility identifiers distinguish each destination, and the workflow can run only this focused test with `run_navigation_smoke=true`; ordinary pushes and pull requests remain build/source-check only.
+
 ## 2026-09-24 - Shortcut and session stability
 
 Integrated `origin/main` (`d18161b`) into `codex/shortcut-session-stability`, retaining the twelve newer local commits. Shortcut settings loads credentials independently of ledger sync, uses lazy navigation, and edits default selections as value snapshots with current-record validation at save. The sync model actor is created off the main actor. Sign out immediately hides the account, preserves scoped local records, clears credentials, and revokes the remote device session asynchronously. Shared token rotation rejects stale results after sign-out/new login.

@@ -120,6 +120,7 @@ struct LocalDataSettingsView: View {
             tagsSection
         }
         .navigationTitle("Local data")
+        .accessibilityElement(children: .contain)
         .toolbar {
             if canReorderTrackers {
                 EditButton()
@@ -452,7 +453,7 @@ private struct EntityRow: View {
             }
         }
         .opacity(archived ? 0.55 : 1)
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .contain)
     }
 }
 

@@ -1,5 +1,15 @@
 # Decision log
 
+## 2026-09-25 - Diagnose the destination hang before changing tab architecture
+
+More -> Settings -> Local data hangs in the clean simulator fixture. Replacing the animated ZStack with a native TabView did not change that behavior, so the tab-host experiment was reverted. A process sample showed Settings and Local data body construction, synchronous SwiftData reads, and list updates on the main thread. Value-based Settings navigation then stalled earlier at Settings itself; it was reverted. Preserve the existing navigation and isolate the Local data list behavior before claiming a fix.
+
+The first targeted remediation keeps settings and entity-row accessibility children contained rather than explicitly combining them. This preserves individual control discovery while reducing the SwiftUI list/accessibility merge work observed during the hang; native verification is still required before treating it as resolved.
+
+## 2026-09-24 - Keep navigation regression testing focused and opt-in
+
+The reported More/Settings failure gets one dedicated simulator smoke test instead of re-enabling the full native suite on every workflow. The test enters Insights, Settings, and the server-backed Settings destinations using stable accessibility identifiers, while GitHub push/PR jobs remain free of simulator test execution.
+
 ## 2026-09-24 - Immediate sign-out and shared credential rotation
 
 Sign-out persists signed-out state and hides the scope before networking, retains pending local data, and independently attempts bounded device-session revocation. Failure warnings apply only to that signed-out session. Keychain coalesces refresh rotation across settings/sync and compares saved credentials before replacing them, preventing replay or resurrection after logout. The separate Shortcut token remains valid unless explicitly revoked/expired.
@@ -7,6 +17,8 @@ Sign-out persists signed-out state and hides the scope before networking, retain
 Shortcut settings no longer waits for full ledger synchronization. Its sheet holds value selections and validates fresh records on save. Sync's model actor is constructed off the UI executor to keep database batches from blocking navigation. Native simulator/device regressions remain required; source checks alone cannot prove a device crash is fixed.
 
 The default iOS workflow builds without executing the native unit/UI suite. Full simulator tests are manual through `workflow_dispatch` with `run_tests` enabled, because exploratory tests should not make every ordinary compile wait for the complete suite.
+
+Settings entry must remain local and immediate: it renders its scoped SwiftData queries without launching a diagnostics refresh, and child destinations use direct links unless value routing is required.
 
 ## 2026-09-07 - Server sign-in closes the onboarding gate
 

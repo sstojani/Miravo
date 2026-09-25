@@ -98,6 +98,51 @@ final class ProjectLedgerUITests: XCTestCase {
         XCTAssertTrue(app.buttons["tab.overview"].waitForExistence(timeout: 5))
     }
 
+    func testMoreAndSettingsDestinationsRemainNavigable() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-ui-testing-authenticated", "-ui-testing-server-session"]
+        app.launch()
+
+        XCTAssertTrue(app.buttons["tab.more"].waitForExistence(timeout: 5))
+        app.buttons["tab.more"].tap()
+
+        let insights = app.buttons["more.insights"]
+        XCTAssertTrue(insights.waitForExistence(timeout: 5))
+        insights.tap()
+        XCTAssertTrue(app.navigationBars["Insights"].waitForExistence(timeout: 5))
+        app.navigationBars.buttons["More"].tap()
+
+        let settings = app.buttons["more.settings"]
+        XCTAssertTrue(settings.waitForExistence(timeout: 5))
+        settings.tap()
+        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5))
+
+        let destinations: [(identifier: String, title: String)] = [
+            ("settings.localData", "Local data"),
+            ("settings.collaboration", "Collaboration"),
+            ("settings.shortcut", "Wallet Shortcut"),
+            ("settings.exports", "Exports"),
+            ("settings.failedOperations", "Failed operations"),
+            ("settings.diagnostics", "Sync diagnostics")
+        ]
+
+        for destination in destinations {
+            let row = app.buttons[destination.identifier]
+            XCTAssertTrue(row.waitForExistence(timeout: 5), destination.identifier)
+            for _ in 0 ..< 6 where !row.isHittable {
+                app.swipeUp()
+            }
+            XCTAssertTrue(row.isHittable, destination.identifier)
+            row.tap()
+            XCTAssertTrue(
+                app.navigationBars[destination.title].waitForExistence(timeout: 5),
+                destination.title
+            )
+            app.navigationBars.buttons["Settings"].tap()
+            XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5))
+        }
+    }
+
     func testSignOutImmediatelyReturnsToSignInAndStaysSignedOutOnRelaunch() {
         let app = XCUIApplication()
         app.launchArguments = ["-ui-testing-authenticated", "-ui-testing-server-session"]

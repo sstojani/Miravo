@@ -2,7 +2,6 @@ import SwiftData
 import SwiftUI
 
 struct SettingsView: View {
-    private enum Destination: Hashable { case shortcut }
     let scopeKey: String
 
     @EnvironmentObject private var session: SessionController
@@ -47,20 +46,12 @@ struct SettingsView: View {
             advancedSection
         }
         .navigationTitle("Settings")
-        .navigationDestination(for: Destination.self) { destination in
-            switch destination {
-            case .shortcut:
-                ShortcutSettingsView(scopeKey: scopeKey)
-            }
-        }
+        .accessibilityElement(children: .contain)
         .sheet(isPresented: $showingServerSetup) {
             LoginView(allowsDismiss: true)
         }
         .sheet(isPresented: $showingServerAddress) {
             ServerAddressSettingsView()
-        }
-        .task {
-            await sync.refreshDiagnostics(scopeKey: scopeKey)
         }
         .alert("Session notice", isPresented: Binding(
             get: { session.logoutWarning != nil },
@@ -87,14 +78,18 @@ struct SettingsView: View {
             } label: {
                 Label("Trackers, accounts, and categories", systemImage: "square.stack.3d.up")
             }
+            .accessibilityIdentifier("settings.localData")
             if session.hasServerConnection {
                 NavigationLink {
                     CollaborationSettingsView(scopeKey: scopeKey)
                 } label: {
                     Label("Collaboration", systemImage: "person.2")
                 }
+                .accessibilityIdentifier("settings.collaboration")
 
-                NavigationLink(value: Destination.shortcut) {
+                NavigationLink {
+                    ShortcutSettingsView(scopeKey: scopeKey)
+                } label: {
                     Label(
                         "Apple Wallet Shortcut",
                         systemImage: "bolt.horizontal.circle"
@@ -107,6 +102,7 @@ struct SettingsView: View {
             } label: {
                 Label("Exports", systemImage: "square.and.arrow.down")
             }
+            .accessibilityIdentifier("settings.exports")
         }
     }
 
@@ -199,6 +195,7 @@ struct SettingsView: View {
         } label: {
             LabeledContent("Failed operations", value: failedOutboxCount, format: .number)
         }
+        .accessibilityIdentifier("settings.failedOperations")
         LabeledContent("Pending attachments", value: pendingAttachmentCount, format: .number)
         LabeledContent("Failed attachments", value: failedAttachmentCount, format: .number)
         NavigationLink {
@@ -206,6 +203,7 @@ struct SettingsView: View {
         } label: {
             LabeledContent("Conflicts", value: conflicts.count, format: .number)
         }
+        .accessibilityIdentifier("settings.conflicts")
         .disabled(conflicts.isEmpty)
 
         if let lastSync = cursor?.lastSuccessfulSyncAt {
@@ -241,6 +239,7 @@ struct SettingsView: View {
         } label: {
             Label("Sync diagnostics and repair", systemImage: "stethoscope")
         }
+        .accessibilityIdentifier("settings.diagnostics")
     }
 
     private var advancedSection: some View {
