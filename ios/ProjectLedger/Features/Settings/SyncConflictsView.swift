@@ -42,12 +42,13 @@ struct SyncConflictsView: View {
                                 .font(.caption.monospaced())
                                 .foregroundStyle(LedgerTheme.warning)
                         }
-                        .accessibilityElement(children: .combine)
+                        .accessibilityElement(children: .contain)
                     }
                 }
             }
         }
         .navigationTitle("Conflicts")
+        .accessibilityElement(children: .contain)
     }
 }
 

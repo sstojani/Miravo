@@ -63,6 +63,7 @@ struct SyncDiagnosticsView: View {
             }
         }
         .navigationTitle("Sync diagnostics")
+        .accessibilityElement(children: .contain)
         .task { await sync.refreshDiagnostics(scopeKey: scopeKey) }
         .confirmationDialog("Repair synchronization?", isPresented: $confirmingRepair, titleVisibility: .visible) {
             Button("Download server data again") {

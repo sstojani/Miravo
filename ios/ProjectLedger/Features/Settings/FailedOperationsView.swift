@@ -43,6 +43,7 @@ struct FailedOperationsView: View {
             }
         }
         .navigationTitle("Failed operations")
+        .accessibilityElement(children: .contain)
         .task(id: revision) {
             do {
                 operations = try await sync.failedOperations(scopeKey: scopeKey)

@@ -46,6 +46,7 @@ struct SettingsView: View {
             advancedSection
         }
         .navigationTitle("Settings")
+        .accessibilityElement(children: .contain)
         .sheet(isPresented: $showingServerSetup) {
             LoginView(allowsDismiss: true)
         }

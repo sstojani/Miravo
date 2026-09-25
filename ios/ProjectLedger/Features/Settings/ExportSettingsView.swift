@@ -124,6 +124,7 @@ struct ExportSettingsView: View {
             }
         }
         .navigationTitle("Exports")
+        .accessibilityElement(children: .contain)
         .task {
             if selectedTrackerID == nil {
                 selectedTrackerID = visibleTrackers.first?.id

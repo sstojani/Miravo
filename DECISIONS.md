@@ -4,6 +4,8 @@
 
 More -> Settings -> Local data hangs in the clean simulator fixture. Replacing the animated ZStack with a native TabView did not change that behavior, so the tab-host experiment was reverted. A process sample showed Settings and Local data body construction, synchronous SwiftData reads, and list updates on the main thread. Value-based Settings navigation then stalled earlier at Settings itself; it was reverted. Preserve the existing navigation and isolate the Local data list behavior before claiming a fix.
 
+The first targeted remediation keeps settings and entity-row accessibility children contained rather than explicitly combining them. This preserves individual control discovery while reducing the SwiftUI list/accessibility merge work observed during the hang; native verification is still required before treating it as resolved.
+
 ## 2026-09-24 - Keep navigation regression testing focused and opt-in
 
 The reported More/Settings failure gets one dedicated simulator smoke test instead of re-enabling the full native suite on every workflow. The test enters Insights, Settings, and the server-backed Settings destinations using stable accessibility identifiers, while GitHub push/PR jobs remain free of simulator test execution.

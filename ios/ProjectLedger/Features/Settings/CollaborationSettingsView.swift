@@ -152,6 +152,7 @@ struct CollaborationSettingsView: View {
             }
         }
         .navigationTitle("Collaboration")
+        .accessibilityElement(children: .contain)
         .task {
             chooseInitialTracker()
         }

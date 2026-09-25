@@ -4,6 +4,7 @@
 
 - The first nested Settings destination hung even with an in-memory authenticated UI fixture, so it was not solely a server or restored-data delay. A native TabView hosting experiment compiled but reproduced the same hang, and was reverted to preserve the established floating-pill behavior.
 - XCTest activity extraction identified Local data as the exact tap. Manual run `36081242490` captured main-thread work in `SettingsView.body`, `LocalDataSettingsView.body`, SwiftData fetches, and SwiftUI list updates during the stall. Value-based NavigationLinks made the smoke fail earlier at Settings in `36135497205`, so they were reverted. Local data list-editing isolation and physical-device verification remain pending.
+- Narrow follow-up: replaced explicit accessibility merging on Local data rows with containment and applied the same containment boundary to settings containers and diagnostics lists. This is authored and locally contract-checked; macOS simulator and physical-device results remain pending.
 
 ## 2026-09-24 - Focused More and Settings navigation smoke test
 
