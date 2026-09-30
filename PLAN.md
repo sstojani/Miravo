@@ -131,6 +131,7 @@ Current acceptance: an authenticated device can push an ordered offline tracker/
 - [x] On-device Vision OCR proposal and mandatory editable review (source/extractor tests authored; Vision/device accuracy pending).
 - [x] Authenticated private upload/download, quarantine hook, bounded streaming, tombstone sync, and authorization tests (backend passing locally; native source uncompiled).
 - [x] Offline-consistent charts/analytics and accessible summaries (backend service/API verified locally; native calculator/source/contracts authored and Linux-checked; Xcode execution pending).
+- [x] Overview top-category spending bars reuse the Insights local calculator, net refunds and split allocations, and surface incomplete currency conversion; native regression authored, macOS execution pending.
 - [x] Expiring, audited CSV/PDF/portable exports whose totals match source data (backend passing locally; native export UI/download source Linux-checked; Xcode/device execution pending).
 
 ## Milestone 10 — Production hardening and unsigned IPA

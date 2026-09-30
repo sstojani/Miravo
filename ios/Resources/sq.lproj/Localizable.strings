@@ -926,3 +926,8 @@
 "Not set" = "E pacaktuar";
 "Server managed" = "Menaxhohet nga serveri";
 "Local only" = "Vetëm lokal";
+"Spending breakdown unavailable" = "Ndarja e shpenzimeve nuk është e disponueshme";
+"The local report could not be calculated." = "Raporti lokal nuk mund të llogaritej.";
+"No converted spending this month." = "Nuk ka shpenzime të konvertuara këtë muaj.";
+"Some spending could not be converted." = "Disa shpenzime nuk mund të konvertoheshin.";
+"Top four categories shown" = "Shfaqen katër kategoritë kryesore";

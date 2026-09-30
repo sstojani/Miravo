@@ -1421,3 +1421,21 @@ Create a clean local receipt checkpoint after one final regression/secret scan. 
 
 - Backend export download behavior and cleanup command selection are **verified locally on Windows**.
 - The live server has not been inspected or mutated in this slice. Cleaning the user's existing duplicate cloud rows requires an explicit dry run against the deployed server first, then explicit approval before the confirmed cleanup command is run.
+
+## 2026-09-30 — Overview category spending
+
+### Material work
+
+- Added a compact four-row category spending bar chart to Overview for the current month and selected tracker. Labels use exact base-currency minor-unit totals, and a partial-conversion notice appears when historical rates are missing.
+- Moved the SwiftData-to-analytics mapping shared by Overview and Insights into `LocalAnalyticsSnapshotFactory`, preserving scoped records, split allocations, linked refunds, and category names.
+- Added an authored native regression for split allocations, refund netting, and cross-scope isolation; localized the new empty/error/partial states in English and Albanian.
+
+### Commands and outcomes
+
+- `python ios/check-localization-coverage.py`: **passed locally on Windows**; 863 literal UI keys covered.
+- `python ios/check-project-contract.py`: **passed locally on Windows**.
+- `git diff --check`: **passed locally on Windows**; expected working-copy CRLF warnings only.
+
+### Verification boundary
+
+- The new Swift test is **authored, not executed**. SwiftFormat, Xcode compilation, iPhone layout, VoiceOver, and large-ledger responsiveness remain **unverified until macOS/device execution**.
