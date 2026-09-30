@@ -65,6 +65,40 @@ final class ProjectLedgerUITests: XCTestCase {
         XCTAssertTrue(transactionExists)
     }
 
+    func testReferenceNavigationKeepsAddSeparate() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-ui-testing-authenticated"]
+        app.launch()
+
+        let home = app.buttons["tab.overview"]
+        let history = app.buttons["tab.transactions"]
+        let plans = app.buttons["tab.plans"]
+        let more = app.buttons["tab.more"]
+        let add = app.buttons["tab.add"]
+        XCTAssertTrue(home.waitForExistence(timeout: 5))
+        XCTAssertTrue(history.exists)
+        XCTAssertTrue(plans.exists)
+        XCTAssertTrue(more.exists)
+        XCTAssertTrue(add.exists)
+        XCTAssertGreaterThan(home.frame.width, history.frame.width)
+        XCTAssertGreaterThan(add.frame.minX, more.frame.maxX)
+
+        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        screenshot.name = "Miravo split navigation"
+        screenshot.lifetime = .keepAlways
+        self.add(screenshot)
+
+        history.tap()
+        XCTAssertTrue(app.staticTexts["Transactions"].waitForExistence(timeout: 5))
+
+        plans.tap()
+        XCTAssertTrue(app.staticTexts["Plans"].waitForExistence(timeout: 5))
+        more.tap()
+        XCTAssertTrue(app.buttons["more.settings"].waitForExistence(timeout: 5))
+        add.tap()
+        XCTAssertTrue(app.textFields["Transaction amount"].waitForExistence(timeout: 5))
+    }
+
     func testFirstLaunchOnboardingExplainsLocalFirstBehavior() throws {
         let app = XCUIApplication()
         app.launchArguments = ["-ui-testing-reset-onboarding"]

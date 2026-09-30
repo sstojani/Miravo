@@ -1,5 +1,9 @@
 # Decision log
 
+## 2026-09-30 - Separate Add from destination selection
+
+Use the supplied navigation reference for composition and motion: four destinations inside a neutral capsule, with the active destination expanding into a raised labeled segment, and Add as a separate violet circle. Keep Miravo's existing destination meanings rather than turning More into a misleading Search icon. Preserve the transparent surrounding overlay, keyboard behavior, and bottom scroll clearance; adapt surfaces to light/dark appearance and keep 44-point minimum icon targets at compact widths. Native visual and accessibility verification remain required.
+
 ## 2026-09-25 - Verify Shortcut requests without production mutation
 
 Use a local live HTTP server and synthetic credentials to exercise the same bearer, JSON, idempotency, and sync-pull contract as an Apple Shortcut. Keep a separate opt-in native Shortcut smoke for credential management, wire decoding, and defaults navigation; ordinary iOS builds should not run the full simulator suite. Keep a supplied disposable raw token out of source/output, and do not create a live financial record without separate approval. After the owner authorized exactly one labeled 1 ALL test expense, a live POST returned `201 created`, and the owner saw the record in the installed iPhone app after sync; no device UUID was needed. This establishes the server-to-app path, not the original iPhone automation's payload. Its redacted response remains necessary for targeted diagnosis.

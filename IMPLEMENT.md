@@ -1,5 +1,11 @@
 # Implementation log
 
+## 2026-09-30 - Split capsule and Add navigation
+
+- Replaced the dark five-icon floating pill with a light/dark adaptive four-destination capsule, raised expanding selected segment, and separate violet Add circle. Home/History/Plans/More retain the existing destination routing and accessibility identifiers; Add remains Quick Add. The tab transition direction now follows the visual order with Add at the right.
+- Kept the bar as a transparent overlay that hides while the keyboard is visible. Existing Quick Add action clearance and scrolling clearance remain intact. Widths are bounded for compact phones and larger layouts; English/Albanian navigation labels are localized.
+- Added an opt-in navigation UI smoke check for tab destinations, the expanded Home target, and separation of Add, with a retained screenshot attachment. It is selected only by the manual navigation-smoke workflow, not routine builds. Windows source-contract and localization coverage checks passed. Swift compilation, simulator layout, Dynamic Type, and signed-device appearance are not yet verified.
+
 ## 2026-09-25 - Shortcut API verification in progress
 
 - Added a loopback-only, synthetic-data HTTP test that logs in, creates a tracker/account and scoped Shortcut credential, fetches context/categories/accounts, posts a Wallet-format expense, and retries the same event to verify one transaction. All 12 focused backend tests pass locally with SQLite; no deployed server or real financial data was used.

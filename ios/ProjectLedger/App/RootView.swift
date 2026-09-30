@@ -139,7 +139,6 @@ private struct MainTabView: View {
         .overlay(alignment: .bottom) {
             if !keyboardVisible {
                 FloatingTabBar(selectedTab: selectedTab, onSelect: selectTab)
-                    .padding(.horizontal, 28)
                     .padding(.bottom, 10)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
@@ -252,9 +251,11 @@ private struct MainTabView: View {
 private enum MainTab: String, CaseIterable, Identifiable {
     case overview
     case transactions
-    case add
     case plans
     case more
+    case add
+
+    static var navigationTabs: [MainTab] { [.overview, .transactions, .plans, .more] }
 
     var id: String { rawValue }
 
@@ -273,16 +274,31 @@ private enum MainTab: String, CaseIterable, Identifiable {
         }
     }
 
+    var navigationLabel: LocalizedStringKey {
+        switch self {
+        case .overview:
+            "Home"
+        case .transactions:
+            "History"
+        case .plans:
+            "Plans"
+        case .more:
+            "More"
+        case .add:
+            "Add"
+        }
+    }
+
     var systemImage: String {
         switch self {
         case .overview:
-            "chart.pie"
+            "house"
         case .transactions:
-            "list.bullet.rectangle"
+            "banknote"
         case .add:
             "plus"
         case .plans:
-            "calendar.badge.clock"
+            "wallet.pass"
         case .more:
             "ellipsis"
         }
@@ -294,11 +310,11 @@ private enum MainTab: String, CaseIterable, Identifiable {
             0
         case .transactions:
             1
-        case .add:
-            2
         case .plans:
-            3
+            2
         case .more:
+            3
+        case .add:
             4
         }
     }
@@ -326,49 +342,131 @@ private struct FloatingTabBar: View {
     let selectedTab: MainTab
     let onSelect: (MainTab) -> Void
 
+    @Environment(\.colorScheme) private var colorScheme
+    @Namespace private var selectionNamespace
+
+    private let addColor = Color(red: 0.33, green: 0.20, blue: 0.97)
+
     var body: some View {
-        HStack(spacing: 18) {
-            ForEach(MainTab.allCases) { tab in
+        GeometryReader { geometry in
+            let compact = geometry.size.width < 330
+            let addDiameter: CGFloat = compact ? 56 : 64
+            let gap: CGFloat = compact ? 8 : 10
+            let capsuleWidth = geometry.size.width - addDiameter - gap
+            let itemWidth = capsuleWidth - 8
+            let selectedWidth = min(132, max(92, itemWidth * 0.40))
+            let inactiveWidth = (itemWidth - selectedWidth) / 3
+
+            HStack(spacing: gap) {
+                navigationCapsule(
+                    width: capsuleWidth,
+                    itemWidth: itemWidth,
+                    inactiveWidth: inactiveWidth,
+                    selectedWidth: selectedWidth
+                )
+
+                Button {
+                    onSelect(.add)
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 28, weight: .medium))
+                        .foregroundStyle(.white)
+                        .frame(width: addDiameter, height: addDiameter)
+                        .background(addColor, in: Circle())
+                        .overlay {
+                            Circle()
+                                .stroke(
+                                    .white.opacity(selectedTab == .add ? 0.85 : 0.14),
+                                    lineWidth: selectedTab == .add ? 2 : 1
+                                )
+                        }
+                        .shadow(color: addColor.opacity(0.28), radius: 14, y: 8)
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(MainTab.add.title)
+                .accessibilityIdentifier("tab.add")
+                .accessibilityAddTraits(
+                    selectedTab == .add ? .isSelected : AccessibilityTraits()
+                )
+            }
+            .frame(width: geometry.size.width, height: 64)
+        }
+        .frame(height: 64)
+        .frame(maxWidth: 420)
+        .padding(.horizontal, 12)
+    }
+
+    private func navigationCapsule(
+        width: CGFloat,
+        itemWidth: CGFloat,
+        inactiveWidth: CGFloat,
+        selectedWidth: CGFloat
+    ) -> some View {
+        HStack(spacing: 0) {
+            ForEach(MainTab.navigationTabs) { tab in
                 Button {
                     onSelect(tab)
                 } label: {
-                    Image(systemName: tab.systemImage)
-                        .font(.system(size: tab == .add ? 24 : 21, weight: .semibold))
-                        .symbolVariant(selectedTab == tab ? .fill : .none)
-                        .foregroundStyle(iconColor(for: tab))
-                        .frame(width: 52, height: 52)
-                        .background {
-                            if selectedTab == tab {
-                                Circle()
-                                    .fill(.white)
-                            }
+                    HStack(spacing: 6) {
+                        let iconName = selectedTab == .overview && tab == .overview
+                            ? "house.fill"
+                            : tab.systemImage
+                        Image(systemName: iconName)
+                            .font(.system(size: 20, weight: .medium))
+                            .frame(width: 22, height: 22)
+                        if selectedTab == tab {
+                            Text(tab.navigationLabel)
+                                .font(.system(size: 14, weight: .semibold))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.75)
+                                .transition(.opacity)
                         }
-                        .contentShape(Circle())
+                    }
+                    .foregroundStyle(Color.primary.opacity(selectedTab == tab ? 1 : 0.78))
+                    .frame(
+                        width: selectedTab == .add
+                            ? itemWidth / 4
+                            : (selectedTab == tab ? selectedWidth : inactiveWidth),
+                        height: 56
+                    )
+                    .background {
+                        if selectedTab == tab {
+                            Capsule()
+                                .fill(selectedSurface)
+                                .overlay {
+                                    Capsule()
+                                        .stroke(Color.primary.opacity(0.05), lineWidth: 1)
+                                }
+                                .shadow(color: .black.opacity(0.09), radius: 7, y: 2)
+                                .matchedGeometryEffect(id: "selectedTab", in: selectionNamespace)
+                        }
+                    }
+                    .contentShape(Capsule())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(tab.title)
                 .accessibilityIdentifier("tab.\(tab.rawValue)")
-                .accessibilityAddTraits(selectedTab == tab ? .isSelected : AccessibilityTraits())
+                .accessibilityAddTraits(
+                    selectedTab == tab ? .isSelected : AccessibilityTraits()
+                )
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 8)
-        .background(
+        .padding(4)
+        .frame(width: width, height: 64)
+        .background {
             Capsule()
-                .fill(Color.black.opacity(0.92))
-                .shadow(color: .black.opacity(0.28), radius: 18, y: 8)
-        )
-        .overlay {
-            Capsule()
-                .stroke(Color.white.opacity(0.10), lineWidth: 1)
+                .fill(Color(uiColor: .secondarySystemBackground))
+                .overlay {
+                    Capsule()
+                        .stroke(Color.primary.opacity(0.07), lineWidth: 1)
+                }
+                .shadow(color: .black.opacity(0.15), radius: 18, y: 8)
         }
     }
 
-    private func iconColor(for tab: MainTab) -> Color {
-        if selectedTab == tab {
-            return .black
-        }
-        return .white.opacity(0.72)
+    private var selectedSurface: Color {
+        colorScheme == .dark ? Color(uiColor: .tertiarySystemBackground) : .white
     }
 }
 

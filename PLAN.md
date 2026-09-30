@@ -1,5 +1,9 @@
 # Miravo implementation plan
 
+## 2026-09-30 - Reference-inspired bottom navigation
+
+Replace the single five-icon dark pill with a four-destination adaptive capsule and a separate violet Add circle. The active destination expands into a raised icon-and-label segment; Home, History, Plans, and More retain their existing views and accessibility IDs. Keep the surrounding overlay transparent, hide it with the keyboard, and preserve bottom content clearance. Verify local source/localization checks, then run a native build and review compact-width, light/dark, Dynamic Type, and Quick Add behavior on an iPhone before calling the visual design complete.
+
 ## 2026-09-25 - Shortcut API verification
 
 The Wallet automation fires on the owner's iPhone, but its API request fails without a captured HTTP status or response. The local synthetic HTTP test verifies capture, idempotent replay, and delivery through authenticated sync pull. With the owner's explicitly supplied disposable token, live read checks confirmed token acceptance, scope, tracker choices, and valid ALL-currency defaults. The owner then authorized one labeled 1 ALL test expense; the live Shortcut POST returned `201 created` with `source=shortcut`, and the owner confirmed it appeared in the installed iPhone app after sync. No device UUID is needed for Shortcut capture. Run the manual-only simulator smoke for native credential management, defaults navigation, and Shortcut wire decoding. The original iPhone automation's POST failure still needs its redacted response or action configuration; a simulator cannot execute the real Wallet Transaction trigger.

@@ -180,6 +180,7 @@ jobs:
             -derivedDataPath DerivedData \
             -resultBundlePath DerivedData/ProjectLedgerNavigationSmoke.xcresult \
             -only-testing:ProjectLedgerUITests/ProjectLedgerUITests/testMoreAndSettingsDestinationsRemainNavigable \
+            -only-testing:ProjectLedgerUITests/ProjectLedgerUITests/testReferenceNavigationKeepsAddSeparate \
             test | xcbeautify
 
       - name: Run Shortcut smoke test (manual)
