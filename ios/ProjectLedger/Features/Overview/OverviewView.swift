@@ -7,6 +7,8 @@ struct OverviewView: View {
     @Query private var rawTransactions: [LedgerTransaction]
     @Query private var rawTrackers: [LocalTracker]
     @Query private var rawAccounts: [LocalAccount]
+    @Query private var rawCategories: [LocalCategory]
+    @Query private var rawAllocations: [LocalCategoryAllocation]
     @Query private var rawOutbox: [OutboxMutation]
 
     init(scopeKey: String) {
@@ -23,6 +25,8 @@ struct OverviewView: View {
             filter: #Predicate { $0.scopeKey == scopeKey },
             sort: \LocalAccount.name
         )
+        _rawCategories = Query(filter: #Predicate { $0.scopeKey == scopeKey })
+        _rawAllocations = Query(filter: #Predicate { $0.scopeKey == scopeKey })
         _rawOutbox = Query(
             filter: #Predicate { $0.scopeKey == scopeKey },
             sort: \OutboxMutation.createdAt
@@ -63,7 +67,10 @@ struct OverviewView: View {
 
     private var monthTransactions: [LedgerTransaction] {
         guard let trackerID = selectedTracker?.id,
-              let interval = Calendar.current.dateInterval(of: .month, for: .now)
+              let interval = AnalyticsRangePreset.thisMonth.interval(
+                  asOf: .now,
+                  calendar: AnalyticsReportingCalendar.make()
+              )
         else {
             return []
         }
@@ -100,6 +107,40 @@ struct OverviewView: View {
             )
         }
         .sorted { $0.currency < $1.currency }
+    }
+
+    private var spendingSnapshotResult: Result<LocalAnalyticsSnapshot, Error>? {
+        guard let tracker = selectedTracker else { return nil }
+        let now = Date()
+        let calendar = AnalyticsReportingCalendar.make()
+        guard let interval = AnalyticsRangePreset.thisMonth.interval(asOf: now, calendar: calendar)
+        else { return nil }
+        let currentRecords = rawTransactions.filter {
+            $0.trackerID == tracker.id && interval.contains($0.occurredAt)
+        }
+        guard currentRecords.contains(where: {
+            ($0.kind == .expense || $0.kind == .refund) &&
+                ($0.status == .posted || $0.status == .reconciled) &&
+                $0.deletedAt == nil
+        }) else { return nil }
+        let originalIDs = Set(currentRecords.compactMap(\.refundOfID))
+        let reportRecords = rawTransactions.filter {
+            $0.trackerID == tracker.id &&
+                (interval.contains($0.occurredAt) || originalIDs.contains($0.id))
+        }
+        return Result {
+            try LocalAnalyticsSnapshotFactory.calculate(
+                tracker: tracker,
+                reportingCurrencyCode: tracker.baseCurrencyCode,
+                reportingCurrencyExponent: tracker.baseCurrencyExponent,
+                range: .thisMonth,
+                transactions: reportRecords,
+                categories: rawCategories,
+                allocations: rawAllocations,
+                asOf: now,
+                calendar: calendar
+            )
+        }
     }
 
     private func safeSum(_ values: [Int64]) -> Int64? {
@@ -164,6 +205,20 @@ struct OverviewView: View {
                     }
                 }
 
+                if let spendingSnapshotResult {
+                    switch spendingSnapshotResult {
+                    case let .success(snapshot):
+                        SpendingCategoriesCard(snapshot: snapshot, categories: rawCategories)
+                    case .failure:
+                        ContentUnavailableView(
+                            "Spending breakdown unavailable",
+                            systemImage: "exclamationmark.triangle",
+                            description: Text("The local report could not be calculated.")
+                        )
+                        .ledgerCard()
+                    }
+                }
+
                 if !trackerAccounts.isEmpty {
                     Text("Accounts")
                         .font(.title2.bold())
@@ -212,6 +267,109 @@ struct OverviewView: View {
             lastSuccessfulSyncAt: diagnostics.lastSuccessfulSyncAt,
             lastSafeErrorCode: diagnostics.lastSafeErrorCode
         )
+    }
+}
+
+private struct SpendingCategoriesCard: View {
+    let snapshot: LocalAnalyticsSnapshot
+    let categories: [LocalCategory]
+
+    private var leadingCategories: [LocalAnalyticsBreakdownItem] {
+        Array(snapshot.categories.filter { $0.amountMinor > 0 }.sorted {
+            if $0.amountMinor != $1.amountMinor { return $0.amountMinor > $1.amountMinor }
+            return $0.name < $1.name
+        }.prefix(4))
+    }
+
+    var body: some View {
+        if !leadingCategories.isEmpty || snapshot.isPartial {
+            VStack(alignment: .leading, spacing: LedgerTheme.contentSpacing) {
+                Text("Spending by category")
+                    .font(.headline)
+
+                if let largest = leadingCategories.first?.amountMinor {
+                    ForEach(leadingCategories) { item in
+                        VStack(alignment: .leading, spacing: 6) {
+                            ViewThatFits(in: .horizontal) {
+                                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                                    Text(categoryName(item))
+                                        .font(.subheadline.weight(.medium))
+                                        .lineLimit(1)
+                                        .fixedSize(horizontal: true, vertical: false)
+                                    Spacer(minLength: 4)
+                                    Text(formatted(item.amountMinor))
+                                        .font(.subheadline.monospacedDigit())
+                                        .lineLimit(1)
+                                }
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(categoryName(item))
+                                        .font(.subheadline.weight(.medium))
+                                    Text(formatted(item.amountMinor))
+                                        .font(.subheadline.monospacedDigit())
+                                }
+                            }
+                            GeometryReader { geometry in
+                                Capsule()
+                                    .fill(Color(uiColor: .tertiarySystemFill))
+                                    .overlay(alignment: .leading) {
+                                        Capsule()
+                                            .fill(categoryColor(item))
+                                            .frame(width: max(
+                                                4,
+                                                geometry.size.width * CGFloat(
+                                                    Double(item.amountMinor) / Double(largest)
+                                                )
+                                            ))
+                                    }
+                            }
+                            .frame(height: 8)
+                            .accessibilityHidden(true)
+                        }
+                        .accessibilityElement(children: .combine)
+                    }
+                } else {
+                    Text("No converted spending this month.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+
+                if snapshot.categories.filter({ $0.amountMinor > 0 }).count > 4 {
+                    Text("Top four categories shown")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                if snapshot.isPartial {
+                    Label(
+                        "Some spending could not be converted.",
+                        systemImage: "exclamationmark.triangle"
+                    )
+                    .font(.caption)
+                    .foregroundStyle(LedgerTheme.warning)
+                }
+            }
+            .ledgerCard()
+        }
+    }
+
+    private func categoryName(_ item: LocalAnalyticsBreakdownItem) -> String {
+        item.name.isEmpty ? String(localized: "Uncategorized") : item.name
+    }
+
+    private func formatted(_ amountMinor: Int64) -> String {
+        (try? Money(
+            minorUnits: amountMinor,
+            currencyCode: snapshot.reportingCurrencyCode,
+            exponent: snapshot.reportingCurrencyExponent
+        ))?.formatted(locale: .current) ?? "—"
+    }
+
+    private func categoryColor(_ item: LocalAnalyticsBreakdownItem) -> Color {
+        guard let id = UUID(uuidString: item.id),
+              let category = categories.first(where: { $0.id == id }),
+              let color = Color(ledgerHex: category.colorHex)
+        else { return LedgerTheme.accent }
+        return color
     }
 }
 

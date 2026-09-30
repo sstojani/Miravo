@@ -926,3 +926,8 @@
 "Not set" = "Not set";
 "Server managed" = "Server managed";
 "Local only" = "Local only";
+"Spending breakdown unavailable" = "Spending breakdown unavailable";
+"The local report could not be calculated." = "The local report could not be calculated.";
+"No converted spending this month." = "No converted spending this month.";
+"Some spending could not be converted." = "Some spending could not be converted.";
+"Top four categories shown" = "Top four categories shown";
