@@ -1,5 +1,9 @@
 # Miravo implementation plan
 
+## 2026-09-30 - Dependency audit repair
+
+Raise the production PyJWT minimum to 2.15.1 and refresh the frozen lockfile for PyJWT and urllib3, which enters through the development-only audit tooling. Verify the lock, rerun `pip-audit`, and exercise backend authentication and Shortcut requests. The remaining Windows-only attachment permission assertion needs Linux CI verification after the branch push.
+
 ## 2026-09-30 - Reference-inspired bottom navigation
 
 Replace the single five-icon dark pill with a four-destination adaptive capsule and a separate violet Add circle. The active destination expands into a raised icon-and-label segment; Home, History, Plans, and More retain their existing views and accessibility IDs. Keep the surrounding overlay transparent, hide it with the keyboard, and preserve bottom content clearance. Verify local source/localization checks, then run a native build and review compact-width, light/dark, Dynamic Type, and Quick Add behavior on an iPhone before calling the visual design complete.

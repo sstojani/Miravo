@@ -1,5 +1,9 @@
 # Decision log
 
+## 2026-09-30 - Patch audited JWT and HTTP dependencies
+
+Require PyJWT 2.15.1 or newer at the production dependency boundary. Update the frozen lock for urllib3 to 2.8.0 without adding it as a direct runtime dependency: it is pulled in by the development-only `pip-audit` tool through `requests`. Keep the audit blocking in CI rather than suppressing its findings. Validate auth behavior with focused tests and let Linux CI confirm the platform-specific attachment permission test.
+
 ## 2026-09-30 - Separate Add from destination selection
 
 Use the supplied navigation reference for composition and motion: four destinations inside a neutral capsule, with the active destination expanding into a raised labeled segment, and Add as a separate violet circle. Keep Miravo's existing destination meanings rather than turning More into a misleading Search icon. Preserve the transparent surrounding overlay, keyboard behavior, and bottom scroll clearance; adapt surfaces to light/dark appearance and keep 44-point minimum icon targets at compact widths. Native visual and accessibility verification remain required.

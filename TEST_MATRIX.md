@@ -1,5 +1,9 @@
 # Acceptance and test matrix
 
+## 2026-09-30 dependency audit repair
+
+The frozen lock selects PyJWT 2.15.1 and urllib3 2.8.0. On local Windows, lock consistency and `pip-audit` pass with no known vulnerabilities, and 16 focused auth/Shortcut tests pass. The full backend run has 111 passing tests and one POSIX file-mode assertion failing on Windows (`0666` versus expected `0600`); Linux GitHub CI is **unverified**.
+
 ## 2026-09-30 navigation reference
 
 The four-destination capsule plus separate Add control is **implemented** in SwiftUI. A manual-only UI smoke test now checks initial target geometry, all tab destinations, and attaches a simulator screenshot; it has not yet run. Local project-contract and localization-coverage checks pass; width calculations retain at least 44-point destination targets at 320-point viewport width. GitHub macOS compilation, simulator screenshots, keyboard/Quick Add interaction, Dynamic Type, VoiceOver, and owner iPhone visual acceptance remain **unverified**.

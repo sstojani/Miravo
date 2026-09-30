@@ -1,5 +1,10 @@
 # Implementation log
 
+## 2026-09-30 - Patched audit dependencies
+
+- Raised the runtime PyJWT lower bound from 2.10.1 to 2.15.1 and regenerated only PyJWT (2.13.0 to 2.15.1) and transitive development dependency urllib3 (2.7.0 to 2.8.0) in `uv.lock`. CI's frozen install now selects both patched releases.
+- Local Windows verification: `uv lock --check --offline` passed; `uv run pip-audit` found no known vulnerabilities; focused authentication and Shortcut API tests passed (16). The full backend suite reached 111 passed and one unrelated failure: a POSIX `0600` file-mode assertion reads `0666` on Windows. Linux CI remains unverified.
+
 ## 2026-09-30 - Split capsule and Add navigation
 
 - Replaced the dark five-icon floating pill with a light/dark adaptive four-destination capsule, raised expanding selected segment, and separate violet Add circle. Home/History/Plans/More retain the existing destination routing and accessibility identifiers; Add remains Quick Add. The tab transition direction now follows the visual order with Add at the right.
