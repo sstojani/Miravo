@@ -210,6 +210,7 @@ struct TransactionsView: View {
                     }
                 }
                 .listStyle(.plain)
+                .floatingNavigationScrollClearance()
             }
         }
         .navigationTitle(

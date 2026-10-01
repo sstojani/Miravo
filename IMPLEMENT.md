@@ -1439,3 +1439,26 @@ Create a clean local receipt checkpoint after one final regression/secret scan. 
 ### Verification boundary
 
 - The new Swift test is **authored, not executed**. SwiftFormat, Xcode compilation, iPhone layout, VoiceOver, and large-ledger responsiveness remain **unverified until macOS/device execution**.
+
+## 2026-10-01 — Overview activity chart and scrollable floating-nav clearance
+
+### Material work
+
+- Replaced the Overview's ranked category bars with a colored Swift Charts cumulative spending/income graph for the selected tracker's current month. The existing scoped local analytics snapshot still supplies all figures; the view sums integer minor units with overflow detection, displays exact formatted totals, and keeps the highest day, top spending category, and missing-conversion notice readable as text. Income-only months now qualify for the graph.
+- Replaced the tab host's transparent layout inset and the Plans-only tail spacer with a shared `.scrollContent` bottom margin. Applied it to Overview, Transactions, Plans, More, Settings, Insights, transaction details, and User account while the floating navigation is visible; Quick Add retains its separate save-control spacing and keyboard behavior.
+- Authored a manual-only UI regression that scrolls Plans to its last card and asserts that the final text ends above the floating tab control. The manual navigation-smoke workflow includes it; normal push/PR builds still do not run UI tests.
+- Updated English and Albanian UI strings, plan, decision log, and test matrix for the revised behavior.
+
+### Commands and outcomes
+
+- `python ios/check-localization-coverage.py`: **passed locally on Windows**; 866 literal UI keys covered with English/Albanian parity.
+- `python ios/check-project-contract.py`: **passed locally on Windows**.
+- `git diff --check`: **passed locally on Windows**; Git printed only line-ending conversion notices.
+
+### Verification boundary
+
+- The new UI smoke is **authored, not executed**. This Windows host has no SwiftFormat, Xcode, or iOS simulator, so Swift formatting, native compilation, scroll positions, chart rendering, VoiceOver, and iPhone visual acceptance remain **unverified**.
+
+### CI lint follow-up
+
+- The first macOS run failed SwiftFormat's `environmentEntry` rule in `LedgerTheme.swift` before Xcode compilation. Replaced the manual `EnvironmentKey` and accessor with an iOS 18 `@Entry` environment property without changing its default value or callers. A macOS formatter/build rerun is required; this correction is not yet natively verified.

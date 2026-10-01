@@ -156,6 +156,7 @@ struct InsightsView: View {
             }
             .padding()
         }
+        .floatingNavigationScrollClearance()
         .navigationTitle("Insights")
         .task { normalizeSelections(resetCurrency: false) }
         .onChange(of: availableTrackers.map(\.id)) { _, _ in

@@ -50,6 +50,7 @@ struct SettingsView: View {
             .padding(.horizontal, 20)
             .padding(.vertical, 24)
         }
+        .floatingNavigationScrollClearance()
         .background(Color(uiColor: .systemGroupedBackground))
         .navigationTitle("Settings")
         .sheet(isPresented: $showingServerSetup) {

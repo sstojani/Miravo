@@ -126,13 +126,10 @@ private struct MainTabView: View {
             selectedContent
                 .id(selectedTab)
                 .transition(selectedContentTransition)
-                .safeAreaInset(edge: .bottom, spacing: 0) {
-                    if shouldReserveFloatingTabSpace {
-                        Color.clear
-                            .frame(height: FloatingTabBarMetrics.contentClearance)
-                            .allowsHitTesting(false)
-                    }
-                }
+                .environment(
+                    \.floatingNavigationClearance,
+                    shouldReserveFloatingTabSpace ? LedgerTheme.floatingNavigationClearance : 0
+                )
         }
         .clipped()
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.22), value: selectedTab)
@@ -335,7 +332,6 @@ private enum TabTransitionDirection {
 
 private enum FloatingTabBarMetrics {
     static let quickAddClearance: CGFloat = 88
-    static let contentClearance: CGFloat = 104
 }
 
 private struct FloatingTabBar: View {
@@ -526,6 +522,7 @@ private struct MoreView: View {
                 .accessibilityIdentifier("more.settings")
             }
         }
+        .floatingNavigationScrollClearance()
         .navigationTitle("More")
         .sheet(isPresented: $showingSignIn) {
             LoginView(allowsDismiss: true)
@@ -604,6 +601,7 @@ private struct AccountSettingsView: View {
                 .accessibilityIdentifier("account.signOut")
             }
         }
+        .floatingNavigationScrollClearance()
         .navigationTitle("User account")
         .alert("Session notice", isPresented: Binding(
             get: { session.logoutWarning != nil },
