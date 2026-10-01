@@ -99,6 +99,27 @@ final class ProjectLedgerUITests: XCTestCase {
         XCTAssertTrue(app.textFields["Transaction amount"].waitForExistence(timeout: 5))
     }
 
+    func testPlansCanScrollFinalCardAboveFloatingNavigation() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-ui-testing-authenticated"]
+        app.launch()
+
+        let plans = app.buttons["tab.plans"]
+        XCTAssertTrue(plans.waitForExistence(timeout: 5))
+        plans.tap()
+        XCTAssertTrue(app.staticTexts["Plans"].waitForExistence(timeout: 5))
+
+        for _ in 0 ..< 10 {
+            app.swipeUp()
+        }
+
+        let finalContent = app.staticTexts[
+            "Add guests or synchronize tracker members in Settings before splitting expenses."
+        ]
+        XCTAssertTrue(finalContent.exists)
+        XCTAssertLessThan(finalContent.frame.maxY + 16, plans.frame.minY)
+    }
+
     func testFirstLaunchOnboardingExplainsLocalFirstBehavior() throws {
         let app = XCUIApplication()
         app.launchArguments = ["-ui-testing-reset-onboarding"]

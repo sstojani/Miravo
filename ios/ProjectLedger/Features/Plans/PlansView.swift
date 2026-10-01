@@ -101,8 +101,6 @@ struct PlansView: View {
         }
     }
 
-    private var floatingNavigationTailClearance: CGFloat { 150 }
-
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: LedgerTheme.contentSpacing) {
@@ -168,12 +166,10 @@ struct PlansView: View {
                     SplitBalancesSection(scopeKey: scopeKey, tracker: selectedTracker)
                 }
 
-                Color.clear
-                    .frame(height: floatingNavigationTailClearance)
-                    .allowsHitTesting(false)
             }
             .padding()
         }
+        .floatingNavigationScrollClearance()
         .navigationTitle("Plans")
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {

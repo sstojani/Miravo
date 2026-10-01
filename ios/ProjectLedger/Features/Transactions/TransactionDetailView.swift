@@ -280,6 +280,7 @@ struct TransactionDetailView: View {
                 }
             }
         }
+        .floatingNavigationScrollClearance()
         .navigationTitle("Transaction")
         .toolbar {
             if transaction.deletedAt == nil, canEdit, linkedSettlement == nil {

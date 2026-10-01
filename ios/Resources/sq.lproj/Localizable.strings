@@ -928,6 +928,10 @@
 "Local only" = "Vetëm lokal";
 "Spending breakdown unavailable" = "Ndarja e shpenzimeve nuk është e disponueshme";
 "The local report could not be calculated." = "Raporti lokal nuk mund të llogaritej.";
-"No converted spending this month." = "Nuk ka shpenzime të konvertuara këtë muaj.";
-"Some spending could not be converted." = "Disa shpenzime nuk mund të konvertoheshin.";
-"Top four categories shown" = "Shfaqen katër kategoritë kryesore";
+"Monthly activity" = "Aktiviteti mujor";
+"Monthly activity unavailable" = "Aktiviteti mujor nuk është i disponueshëm";
+"Cumulative spending chart" = "Grafiku i shpenzimeve kumulative";
+"Cumulative income chart" = "Grafiku i të ardhurave kumulative";
+"Highest day" = "Dita me vlerën më të lartë";
+"Top category" = "Kategoria kryesore";
+"Some transactions could not be converted." = "Disa transaksione nuk mund të konvertoheshin.";

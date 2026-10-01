@@ -9,6 +9,7 @@ enum LedgerTheme {
     static let smallSpacing: CGFloat = 8
     static let contentSpacing: CGFloat = 16
     static let sectionSpacing: CGFloat = 24
+    static let floatingNavigationClearance: CGFloat = 132
 }
 
 struct LedgerCard: ViewModifier {
@@ -26,9 +27,32 @@ struct LedgerCard: ViewModifier {
     }
 }
 
+private struct FloatingNavigationClearanceKey: EnvironmentKey {
+    static let defaultValue: CGFloat = 0
+}
+
+extension EnvironmentValues {
+    var floatingNavigationClearance: CGFloat {
+        get { self[FloatingNavigationClearanceKey.self] }
+        set { self[FloatingNavigationClearanceKey.self] = newValue }
+    }
+}
+
+private struct FloatingNavigationScrollClearance: ViewModifier {
+    @Environment(\.floatingNavigationClearance) private var clearance
+
+    func body(content: Content) -> some View {
+        content.contentMargins(.bottom, clearance, for: .scrollContent)
+    }
+}
+
 extension View {
     func ledgerCard() -> some View {
         modifier(LedgerCard())
+    }
+
+    func floatingNavigationScrollClearance() -> some View {
+        modifier(FloatingNavigationScrollClearance())
     }
 }
 

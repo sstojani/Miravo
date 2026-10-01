@@ -1,3 +1,4 @@
+import Charts
 import SwiftData
 import SwiftUI
 
@@ -109,7 +110,7 @@ struct OverviewView: View {
         .sorted { $0.currency < $1.currency }
     }
 
-    private var spendingSnapshotResult: Result<LocalAnalyticsSnapshot, Error>? {
+    private var activitySnapshotResult: Result<LocalAnalyticsSnapshot, Error>? {
         guard let tracker = selectedTracker else { return nil }
         let now = Date()
         let calendar = AnalyticsReportingCalendar.make()
@@ -119,7 +120,7 @@ struct OverviewView: View {
             $0.trackerID == tracker.id && interval.contains($0.occurredAt)
         }
         guard currentRecords.contains(where: {
-            ($0.kind == .expense || $0.kind == .refund) &&
+            ($0.kind == .expense || $0.kind == .refund || $0.kind == .income) &&
                 ($0.status == .posted || $0.status == .reconciled) &&
                 $0.deletedAt == nil
         }) else { return nil }
@@ -205,13 +206,13 @@ struct OverviewView: View {
                     }
                 }
 
-                if let spendingSnapshotResult {
-                    switch spendingSnapshotResult {
+                if let activitySnapshotResult {
+                    switch activitySnapshotResult {
                     case let .success(snapshot):
-                        SpendingCategoriesCard(snapshot: snapshot, categories: rawCategories)
+                        MonthlyActivityCard(snapshot: snapshot, categories: rawCategories)
                     case .failure:
                         ContentUnavailableView(
-                            "Spending breakdown unavailable",
+                            "Monthly activity unavailable",
                             systemImage: "exclamationmark.triangle",
                             description: Text("The local report could not be calculated.")
                         )
@@ -251,6 +252,7 @@ struct OverviewView: View {
             }
             .padding()
         }
+        .floatingNavigationScrollClearance()
         .refreshable {
             await sync.synchronize(session: session)
         }
@@ -270,78 +272,157 @@ struct OverviewView: View {
     }
 }
 
-private struct SpendingCategoriesCard: View {
+private enum ActivityMetric: String, CaseIterable, Identifiable {
+    case spending
+    case income
+
+    var id: String { rawValue }
+
+    var title: LocalizedStringKey {
+        switch self {
+        case .spending: "Spending"
+        case .income: "Income"
+        }
+    }
+
+    var color: Color {
+        self == .spending ? LedgerTheme.negative : LedgerTheme.positive
+    }
+}
+
+private struct ActivityChartPoint: Identifiable {
+    let id: Int
+    let date: Date
+    let cumulativeMinor: Int64
+}
+
+private struct MonthlyActivityCard: View {
     let snapshot: LocalAnalyticsSnapshot
     let categories: [LocalCategory]
+    @State private var metric = ActivityMetric.spending
 
-    private var leadingCategories: [LocalAnalyticsBreakdownItem] {
-        Array(snapshot.categories.filter { $0.amountMinor > 0 }.sorted {
+    private var topCategory: LocalAnalyticsBreakdownItem? {
+        snapshot.categories.filter { $0.amountMinor > 0 }.sorted {
             if $0.amountMinor != $1.amountMinor { return $0.amountMinor > $1.amountMinor }
             return $0.name < $1.name
-        }.prefix(4))
+        }.first
+    }
+
+    private var totalMinor: Int64 {
+        metric == .spending ? snapshot.spendingMinor : snapshot.incomeMinor
+    }
+
+    private var peakDayMinor: Int64 {
+        max(0, snapshot.trend.map {
+            metric == .spending ? $0.spendingMinor : $0.incomeMinor
+        }.max() ?? 0)
+    }
+
+    private var chartPoints: [ActivityChartPoint]? {
+        var cumulativeMinor: Int64 = 0
+        var points: [ActivityChartPoint] = []
+        for (index, day) in snapshot.trend.enumerated() {
+            let amountMinor = metric == .spending ? day.spendingMinor : day.incomeMinor
+            let (next, overflow) = cumulativeMinor.addingReportingOverflow(amountMinor)
+            guard !overflow else { return nil }
+            cumulativeMinor = next
+            points.append(ActivityChartPoint(
+                id: index,
+                date: day.bucketStart,
+                cumulativeMinor: cumulativeMinor
+            ))
+        }
+        return points
     }
 
     var body: some View {
-        if !leadingCategories.isEmpty || snapshot.isPartial {
+        if snapshot.recordCount > 0 || snapshot.isPartial {
             VStack(alignment: .leading, spacing: LedgerTheme.contentSpacing) {
-                Text("Spending by category")
+                Text("Monthly activity")
                     .font(.headline)
-
-                if let largest = leadingCategories.first?.amountMinor {
-                    ForEach(leadingCategories) { item in
-                        VStack(alignment: .leading, spacing: 6) {
-                            ViewThatFits(in: .horizontal) {
-                                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                                    Text(categoryName(item))
-                                        .font(.subheadline.weight(.medium))
-                                        .lineLimit(1)
-                                        .fixedSize(horizontal: true, vertical: false)
-                                    Spacer(minLength: 4)
-                                    Text(formatted(item.amountMinor))
-                                        .font(.subheadline.monospacedDigit())
-                                        .lineLimit(1)
-                                }
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(categoryName(item))
-                                        .font(.subheadline.weight(.medium))
-                                    Text(formatted(item.amountMinor))
-                                        .font(.subheadline.monospacedDigit())
-                                }
-                            }
-                            GeometryReader { geometry in
-                                Capsule()
-                                    .fill(Color(uiColor: .tertiarySystemFill))
-                                    .overlay(alignment: .leading) {
-                                        Capsule()
-                                            .fill(categoryColor(item))
-                                            .frame(width: max(
-                                                4,
-                                                geometry.size.width * CGFloat(
-                                                    Double(item.amountMinor) / Double(largest)
-                                                )
-                                            ))
-                                    }
-                            }
-                            .frame(height: 8)
-                            .accessibilityHidden(true)
-                        }
-                        .accessibilityElement(children: .combine)
+                Picker("Monthly activity", selection: $metric) {
+                    ForEach(ActivityMetric.allCases) { option in
+                        Text(option.title).tag(option)
                     }
+                }
+                .pickerStyle(.segmented)
+
+                Text(formatted(totalMinor))
+                    .font(.title2.bold().monospacedDigit())
+                    .foregroundStyle(metric.color)
+                    .minimumScaleFactor(0.75)
+                    .lineLimit(1)
+
+                if let chartPoints, !chartPoints.isEmpty {
+                    Chart(chartPoints) { point in
+                        AreaMark(
+                            x: .value("Date", point.date),
+                            y: .value("Amount", Int(point.cumulativeMinor))
+                        )
+                        .interpolationMethod(.stepEnd)
+                        .foregroundStyle(LinearGradient(
+                            colors: [metric.color.opacity(0.30), metric.color.opacity(0.02)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        ))
+                        LineMark(
+                            x: .value("Date", point.date),
+                            y: .value("Amount", Int(point.cumulativeMinor))
+                        )
+                        .interpolationMethod(.stepEnd)
+                        .foregroundStyle(metric.color)
+                        .lineStyle(StrokeStyle(lineWidth: 2.5))
+                    }
+                    .chartYAxis(.hidden)
+                    .chartXAxis {
+                        AxisMarks(values: .automatic(desiredCount: 3)) {
+                            AxisGridLine()
+                            AxisValueLabel(format: .dateTime.month(.abbreviated).day())
+                        }
+                    }
+                    .frame(height: 168)
+                    .accessibilityLabel(
+                        metric == .spending
+                            ? String(localized: "Cumulative spending chart")
+                            : String(localized: "Cumulative income chart")
+                    )
+                    .accessibilityValue(formatted(totalMinor))
                 } else {
-                    Text("No converted spending this month.")
+                    Text("The local report could not be calculated.")
                         .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(LedgerTheme.warning)
                 }
 
-                if snapshot.categories.filter({ $0.amountMinor > 0 }).count > 4 {
-                    Text("Top four categories shown")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                Divider()
+
+                LabeledContent("Highest day") {
+                    Text(formatted(peakDayMinor))
+                        .font(.subheadline.monospacedDigit())
+                }
+
+                if metric == .spending, let topCategory {
+                    LabeledContent("Top category") {
+                        VStack(alignment: .trailing, spacing: 2) {
+                            HStack(spacing: 5) {
+                                Image(systemName: "circle.fill")
+                                    .font(.caption2)
+                                    .foregroundStyle(categoryColor(topCategory))
+                                    .accessibilityHidden(true)
+                                Text(categoryName(topCategory))
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.8)
+                            }
+                            Text(formatted(topCategory.amountMinor))
+                                .font(.caption.monospacedDigit())
+                                .foregroundStyle(.secondary)
+                        }
+                        .font(.subheadline)
+                    }
                 }
 
                 if snapshot.isPartial {
                     Label(
-                        "Some spending could not be converted.",
+                        "Some transactions could not be converted.",
                         systemImage: "exclamationmark.triangle"
                     )
                     .font(.caption)
