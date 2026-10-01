@@ -4,6 +4,8 @@
 
 Replace the current-month category bars with a colored cumulative activity chart for spending and income, backed by the existing local analytics snapshot. Keep exact base-currency totals, a highest-day amount, the top spending category, and partial-conversion disclosure. Replace the Plans-only tail spacer and main-tab layout inset with a shared scroll-content bottom margin across the main destinations, so the last row can move fully above the transparent floating navigation overlay. Run Windows localization/source checks, then a focused macOS build and opt-in navigation smoke before claiming simulator behavior; review light/dark, Dynamic Type, and short/long ledgers on the owner's iPhone.
 
+The first macOS run stopped at SwiftFormat's `environmentEntry` rule for the new clearance value. Use the iOS 18 `@Entry` declaration and rerun the formatter/build before native verification advances.
+
 ## 2026-09-30 - Dependency audit repair
 
 Raise the production PyJWT minimum to 2.15.1 and refresh the frozen lockfile for PyJWT and urllib3, which enters through the development-only audit tooling. Verify the lock, rerun `pip-audit`, and exercise backend authentication and Shortcut requests. The remaining Windows-only attachment permission assertion needs Linux CI verification after the branch push.

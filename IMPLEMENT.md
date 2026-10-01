@@ -1458,3 +1458,7 @@ Create a clean local receipt checkpoint after one final regression/secret scan. 
 ### Verification boundary
 
 - The new UI smoke is **authored, not executed**. This Windows host has no SwiftFormat, Xcode, or iOS simulator, so Swift formatting, native compilation, scroll positions, chart rendering, VoiceOver, and iPhone visual acceptance remain **unverified**.
+
+### CI lint follow-up
+
+- The first macOS run failed SwiftFormat's `environmentEntry` rule in `LedgerTheme.swift` before Xcode compilation. Replaced the manual `EnvironmentKey` and accessor with an iOS 18 `@Entry` environment property without changing its default value or callers. A macOS formatter/build rerun is required; this correction is not yet natively verified.

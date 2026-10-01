@@ -27,15 +27,8 @@ struct LedgerCard: ViewModifier {
     }
 }
 
-private struct FloatingNavigationClearanceKey: EnvironmentKey {
-    static let defaultValue: CGFloat = 0
-}
-
 extension EnvironmentValues {
-    var floatingNavigationClearance: CGFloat {
-        get { self[FloatingNavigationClearanceKey.self] }
-        set { self[FloatingNavigationClearanceKey.self] = newValue }
-    }
+    @Entry var floatingNavigationClearance: CGFloat = 0
 }
 
 private struct FloatingNavigationScrollClearance: ViewModifier {
